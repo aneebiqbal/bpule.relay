@@ -1,6 +1,7 @@
 import type { ActivityType } from '@/lib/domain/types'
 import type { AuthorizedIdentity } from '@/lib/auth/workspace'
 import type { WarningThresholds } from '@/lib/org-clock'
+import { activityLabel } from '@/lib/accountability/default-targets'
 import { computePace } from '@/lib/rep-day/pacing'
 
 /**
@@ -36,17 +37,6 @@ export interface ProfileToday {
   targets: ProfileTodayTarget[]
   /** Earliest responsibility start for the person — the NEW signal. */
   assignedAt: string | null
-}
-
-const METRIC_LABELS: Record<ActivityType, string> = {
-  prospect_extracted: 'Prospects',
-  connection_request: 'Connections',
-  dm: 'DMs',
-  email: 'Emails',
-  followup: 'Follow-ups',
-  application: 'Proposals',
-  proposal: 'Qualified',
-  other: 'Other',
 }
 
 /** Null when there is no target to be behind on — unknown is not zero. */
@@ -195,7 +185,7 @@ export function buildProfilesToday(
       const activityType = target.activityType as ActivityType
       entry.targets.push({
         activityType,
-        label: METRIC_LABELS[activityType] ?? target.activityType,
+        label: activityLabel(activityType),
         targetCount: target.targetCount,
         completedCount: target.completedCount,
         remaining: target.remaining,

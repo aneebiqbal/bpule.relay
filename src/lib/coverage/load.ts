@@ -566,8 +566,12 @@ export async function loadRepCoverage(
   // grouped by person, so a two-channel person renders once on Rep Home.
   const own = groupProfilesByPerson(plan.profiles.filter((profile) => profile.primaryRepId === repId))
   const ownIds = new Set(own.map((profile) => profile.profileId))
+  // Expired coverage is not execution: Rep Home must not keep offering a
+  // profile whose cover window has passed.
   const coveringIds = new Set(
-    facts.activeCoverage.filter((row) => row.coveringRepId === repId).map((row) => row.profileId),
+    facts.activeCoverage
+      .filter((row) => row.coveringRepId === repId && !row.expired)
+      .map((row) => row.profileId),
   )
 
   const byId = new Map(plan.profiles.map((profile) => [profile.profileId, profile]))

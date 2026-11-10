@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
 import { Dialog, DialogActions } from '@/components/ui/dialog'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import type { RepCoverageView } from '@/lib/coverage/load'
 import type { CoverageProfileResult } from '@/lib/coverage/engine'
 import {
@@ -373,7 +374,7 @@ function ResponsibilityCard({
           <p className="truncate text-[14px] font-medium text-ink">{profile.name}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {profile.channels.map((channel) => (
-              <V4Chip key={channel} tone="neutral">{channel}</V4Chip>
+              <ChannelBadge key={channel} channel={channel} />
             ))}
           </div>
         </div>

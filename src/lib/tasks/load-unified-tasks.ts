@@ -1,6 +1,9 @@
 import type { RelayTodayAction } from '@/lib/tasks/relay-today-action'
 import type { AuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
+import { isCoverageActiveOn } from '@/lib/coverage/access'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { orgToday } from '@/lib/org-clock'
 import {
   listAssignedTaskRows,
   listLatestTaskComments,
@@ -63,21 +66,40 @@ export async function loadUnifiedTasks(input: {
     profileIds.length
       ? client
           .from('coverage_assignments')
-          .select('profile_id, covering_rep_id')
+          .select('profile_id, covering_rep_id, effective_from, effective_until')
           .eq('organization_id', auth.orgId)
           .eq('status', 'ACTIVE')
           .in('profile_id', profileIds)
           .limit(500)
-      : Promise.resolve({ data: [] as Array<{ profile_id: string; covering_rep_id: string }> }),
+      : Promise.resolve({
+          data: [] as Array<{
+            profile_id: string
+            covering_rep_id: string
+            effective_from: string
+            effective_until: string | null
+          }>,
+        }),
   ])
+
+  // Coverage expiry is computed, not persisted: an ACTIVE row past its until
+  // date must not hand execution to the covering rep.
+  const policy = await loadOperatingPolicy(auth.orgId, client)
+  const businessDate = orgToday(policy)
 
   const primaryRepByProfile = new Map<string, string>()
   const executionRepByProfile = new Map<string, string>()
   for (const row of (coverageRes.data ?? []) as Array<{ profile_id: string; rep_id: string; role: string }>) {
     if (row.role === 'PRIMARY') primaryRepByProfile.set(row.profile_id, row.rep_id)
   }
-  for (const row of (activeCoverageRes.data ?? []) as Array<{ profile_id: string; covering_rep_id: string }>) {
-    // First active row wins; there is a unique active coverage per profile.
+  for (const row of (activeCoverageRes.data ?? []) as Array<{
+    profile_id: string
+    covering_rep_id: string
+    effective_from: string
+    effective_until: string | null
+  }>) {
+    if (!isCoverageActiveOn({ effectiveFrom: row.effective_from, effectiveUntil: row.effective_until }, businessDate)) {
+      continue
+    }
     if (!executionRepByProfile.has(row.profile_id)) executionRepByProfile.set(row.profile_id, row.covering_rep_id)
   }
   // With no active coverage the primary is the execution rep.

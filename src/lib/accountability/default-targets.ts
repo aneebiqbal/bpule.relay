@@ -41,12 +41,13 @@ const EMAIL_PACK: DefaultDailyTarget[] = [
   { activityType: 'prospect_extracted', targetCount: 15 },
 ]
 
-// One Upwork apply IS one proposal — there is no separate "proposal" action
-// a rep can take that isn't already counted as an application. Having two
-// targets for the same business action would make the "proposals" row a
-// permanently dead 0/N in Daily Jobs. Single target, single truth.
+// Upwork tracks two distinct actions: submitting an application
+// (UPWORK_APPLIED) and preparing a proposal (UPWORK_PROPOSAL_PREPARED). Both
+// are real work a rep does, so both are targetable — the pack is the single
+// authority every target surface reads.
 const UPWORK_PACK: DefaultDailyTarget[] = [
   { activityType: 'application', targetCount: 10 },
+  { activityType: 'proposal', targetCount: 2 },
 ]
 
 export function defaultTargetsForChannel(channel: RevenueIdentityChannel): DefaultDailyTarget[] {

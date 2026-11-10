@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { cn } from 'cn'
 import { useActiveIdentity } from '@/components/workspace/active-identity-provider'
+import { channelLabel } from '@/lib/profiles/channel'
 import type { RepRole } from '@/lib/domain/types'
 import type { WorkspaceIdentity } from '@/lib/workspace/active-identity'
 
@@ -63,7 +64,7 @@ export function ProfileSwitcher({ role, compact, className }: ProfileSwitcherPro
               <p className="truncate text-[13px] font-medium text-ink">{activeIdentity.identityName}</p>
               <p className="truncate text-[10px] text-stone">
                 {[
-                  activeIdentity.channel.toUpperCase(),
+                  channelLabel(activeIdentity.channel),
                   identities.length > 1 ? `${identities.length} profiles assigned` : null,
                 ]
                   .filter(Boolean)
@@ -109,7 +110,7 @@ export function ProfileSwitcher({ role, compact, className }: ProfileSwitcherPro
                         <div className="min-w-0">
                           <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
                           <p className={cn('truncate text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
-                            {[identity.title, identity.channel.toUpperCase()].filter(Boolean).join(' · ')}
+                            {[identity.title, channelLabel(identity.channel)].filter(Boolean).join(' · ')}
                           </p>
                         </div>
                       </button>

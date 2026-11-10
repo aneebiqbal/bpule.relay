@@ -7,6 +7,7 @@ import { cn } from 'cn'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DailyJobs, jobsFromTargets } from '@/components/rep/daily-jobs'
 import { normalizeExternalUrl } from '@/lib/profiles/display'
+import { channelLabel } from '@/lib/profiles/channel'
 
 interface TargetView {
   targetId: string
@@ -102,7 +103,7 @@ export function ResponsibilityWorkspaceDetail({
             {identity.identityName}
           </h1>
           <p className="text-[13px] text-graphite">
-            {identity.title || 'No title set'} · {identity.channel.toUpperCase()}
+            {identity.title || 'No title set'} · {channelLabel(identity.channel)}
           </p>
           <p className="mt-0.5 text-[11px] text-stone">Assigned to you</p>
           {profileUrl && (

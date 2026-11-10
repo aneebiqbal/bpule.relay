@@ -185,6 +185,29 @@ describe('buildProfilesToday', () => {
     expect(row.context).toContain('linkedin')
   })
 
+  it('labels Upwork applications and proposals distinctly — never swaps them', () => {
+    const profiles = buildProfilesToday(
+      [identity({ assignmentId: 'a1', revenueIdentityId: 'ri-1', profileId: 'p1', channel: 'upwork' })],
+      [
+        identityRow({
+          revenueIdentityId: 'ri-1',
+          channel: 'upwork',
+          targets: [
+            { activityType: 'application', targetCount: 10, completedCount: 0, remaining: 10 },
+            { activityType: 'proposal', targetCount: 2, completedCount: 0, remaining: 2 },
+          ],
+        }),
+      ],
+      0.5,
+      THRESHOLDS,
+    )
+
+    const labels = profiles[0].targets.map((target) => target.label)
+    expect(labels).toContain('Applications')
+    expect(labels).toContain('Proposals')
+    expect(labels).not.toContain('Qualified')
+  })
+
   it('keeps an identity with no linked profile as its own profile key', () => {
     const profiles = buildProfilesToday(
       [identity({ assignmentId: 'a1', revenueIdentityId: 'ri-orphan', profileId: null })],

@@ -13,6 +13,8 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { cn } from 'cn'
 import { V4Chip, V4Empty, V4Panel, V4StatStrip } from '@/components/v4/primitives'
+import { ChannelBadge } from '@/components/ui/channel-badge'
+import { channelLabel } from '@/lib/profiles/channel'
 import type { TeamProfileDirectoryRow } from '@/lib/team/profiles'
 import { AddProfileWizard } from './add-profile-wizard'
 
@@ -204,7 +206,7 @@ function TeamProfilesTableInner({
           <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)} aria-label="Filter by channel" className="h-9 rounded-lg border border-line bg-bone-raised px-2 text-[12px] text-ink">
             <option value="">All channels</option>
             {channels.map((channel) => (
-              <option key={channel} value={channel} className="capitalize">{channel}</option>
+              <option key={channel} value={channel}>{channelLabel(channel)}</option>
             ))}
           </select>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by status" className="h-9 rounded-lg border border-line bg-bone-raised px-2 text-[12px] text-ink">
@@ -247,7 +249,11 @@ function TeamProfilesTableInner({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-[13px] font-medium text-ink">{profile.profileName}</p>
-                  <p className="text-[11px] text-stone">{profile.channels.join(' · ') || '—'}</p>
+                  <p className="flex flex-wrap gap-1 text-[11px] text-stone">
+                    {profile.channels.length > 0
+                      ? profile.channels.map((channel, index) => <ChannelBadge key={`${profile.profileId}-${index}`} channel={channel} />)
+                      : '—'}
+                  </p>
                 </div>
                 <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>
               </div>
@@ -256,7 +262,7 @@ function TeamProfilesTableInner({
                   {profile.channelDetails.map((channel) => (
                     <li key={channel.identityId} className="flex items-center justify-between gap-2 text-[12px]">
                       <span className="min-w-0 truncate text-graphite">
-                        <span className="capitalize text-ink">{channel.channel}</span>
+                        <ChannelBadge channel={channel.channel} />
                         {channel.primaryRepName ? ` · ${channel.primaryRepName}` : ' · No primary'}
                         {channel.backups.length > 0 ? ` · Backups: ${channel.backups.join(', ')}` : ''}
                       </span>
@@ -302,7 +308,11 @@ function PersonRow({ profile }: { profile: TeamProfileDirectoryRow }) {
       <tr className="border-b border-line/60 align-top last:border-0">
         <td className="px-4 py-3 text-[13px] font-medium text-ink">{profile.profileName}</td>
         <td className="px-4 py-3 text-[12px] text-graphite">
-          {profile.channels.join(' · ') || '—'}
+          <span className="flex flex-wrap gap-1">
+            {profile.channels.length > 0
+              ? profile.channels.map((channel, index) => <ChannelBadge key={`${profile.profileId}-${index}`} channel={channel} />)
+              : '—'}
+          </span>
         </td>
         <td className="px-4 py-3">
           <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
@@ -334,7 +344,7 @@ function PersonRow({ profile }: { profile: TeamProfileDirectoryRow }) {
               {profile.channelDetails.map((channel) => (
                 <li key={channel.identityId} className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
                   <span className="min-w-0 text-graphite">
-                    <span className="capitalize text-ink">{channel.channel}</span>
+                    <ChannelBadge channel={channel.channel} />
                     {channel.primaryRepName ? ` · Primary ${channel.primaryRepName}` : ' · No primary'}
                     {channel.backups.length > 0 ? ` · Backups ${channel.backups.join(', ')}` : ''}
                   </span>
@@ -400,9 +410,12 @@ function RepInverse({ profiles }: { profiles: TeamProfileDirectoryRow[] }) {
               <ul className="mt-2 space-y-1">
                 {entry.rows.map((row) => (
                   <li key={row.profileId} className="flex items-center justify-between gap-2 text-[12px]">
-                    <span className="min-w-0 truncate text-graphite">
-                      {row.profileName}
-                      <span className="text-stone"> · {row.channels.join(' · ') || 'No channel'}</span>
+                    <span className="flex min-w-0 flex-wrap items-center gap-1 text-graphite">
+                      <span className="truncate">{row.profileName}</span>
+                      <span className="text-stone">·</span>
+                      {row.channels.length > 0
+                        ? row.channels.map((channel, index) => <ChannelBadge key={`${row.profileId}-${index}`} channel={channel} />)
+                        : <span className="text-stone">No channel</span>}
                     </span>
                     <span className="shrink-0 tabular-nums text-ink">
                       {row.completedCount} / {row.targetCount}

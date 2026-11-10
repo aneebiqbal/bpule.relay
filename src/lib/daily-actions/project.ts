@@ -8,11 +8,11 @@
  */
 import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
 import type { RepCoverageView } from '@/lib/coverage/load'
+import { channelLabel } from '@/lib/profiles/channel'
 import { compareDailyActions, URGENCY_RANK, type DailyAction } from './types'
 
-function channelLabel(channel: string | null | undefined): string {
-  if (!channel) return 'Any channel'
-  return channel === 'upwork' ? 'Upwork' : channel === 'linkedin' ? 'LinkedIn' : channel
+function actionChannel(channel: string | null | undefined): string {
+  return channel ? channelLabel(channel) : 'Any channel'
 }
 
 function profileLabel(profileName: string | null | undefined, companyName: string | null | undefined): string {
@@ -61,8 +61,8 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
     }
   }
   const channelFor = (task: { profileId?: string | null; channel?: string | null }): string => {
-    if (task.channel) return channelLabel(task.channel)
-    return channelLabel(task.profileId ? channelByIdentity.get(task.profileId) : undefined)
+    if (task.channel) return actionChannel(task.channel)
+    return actionChannel(task.profileId ? channelByIdentity.get(task.profileId) : undefined)
   }
 
   const tasks = input.data.unifiedTasks ?? []
@@ -142,7 +142,7 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
   // ── Target shortfall, per profile ──────────────────────────────────────────
   for (const profile of input.data.profilesToday ?? []) {
     if (profile.remaining <= 0) continue
-    const label = profile.name ? `${profile.name} · ${channelLabel(profile.channels[0])}` : 'Profile'
+    const label = profile.name ? `${profile.name} · ${actionChannel(profile.channels[0])}` : 'Profile'
     actions.push({
       id: `target:${profile.profileId}`,
       type: 'TARGET',
@@ -150,7 +150,7 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
       urgencyRank: URGENCY_RANK.P5,
       source: 'Targets',
       profile: label,
-      channel: channelLabel(profile.channels[0]),
+      channel: actionChannel(profile.channels[0]),
       subject: `${profile.remaining} of ${profile.targetCount} actions remaining`,
       reason: profile.targets
         .filter((t) => t.remaining > 0)
@@ -169,7 +169,7 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
   if (coverage) {
     for (const profile of [...coverage.own, ...coverage.covering]) {
       const label = profile.name
-        ? `${profile.name} · ${channelLabel(profile.channels[0])}`
+        ? `${profile.name} · ${actionChannel(profile.channels[0])}`
         : 'Profile'
       if (profile.status === 'UNCOVERED' || !profile.primaryIsAvailable) {
         actions.push({
@@ -179,7 +179,7 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
           urgencyRank: URGENCY_RANK.P0,
           source: 'Coverage',
           profile: label,
-          channel: channelLabel(profile.channels[0]),
+          channel: actionChannel(profile.channels[0]),
           subject: profile.primaryIsAvailable
             ? 'Profile has no operator'
             : `${profile.primaryRepName ?? 'Primary'} is unavailable`,
@@ -189,9 +189,12 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
               : profile.recommendationReasons[0] ?? 'No confirmed operator',
           age: profile.activeCoverageUntil ? `until ${profile.activeCoverageUntil}` : 'Open',
           dueAt: null,
-          destination: '/team/coverage',
+          // The coverage panel lives on the dashboard; there is no /team/coverage.
+          destination: '/dashboard',
           blocking: true,
-          owner: profile.primaryRepName ?? 'Unassigned',
+          // The current operator is the covering rep when cover is active —
+          // never the primary who is away.
+          owner: profile.activeCoveringRepName ?? profile.primaryRepName ?? 'Unassigned',
         })
       }
     }
@@ -208,7 +211,7 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
         urgencyRank: URGENCY_RANK.P4,
         source: 'Readiness',
         profile: name,
-        channel: channelLabel(
+        channel: actionChannel(
           (coverage.own.find((p) => p.profileId === row.profileId)?.channels[0])
             ?? (coverage.covering.find((p) => p.profileId === row.profileId)?.channels[0]),
         ),

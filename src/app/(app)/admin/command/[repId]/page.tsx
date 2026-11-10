@@ -6,6 +6,7 @@ import { loadRepDayDetail } from '@/lib/rep-day/team'
 import { formatDuration } from '@/lib/org-clock'
 import { repDayStateLabel, type RepDayState } from '@/lib/rep-day/state-machine'
 import { DashHeader, EmptyNote, Meter, Panel, Pill } from '@/components/dashboard/kit'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 
 export const dynamic = 'force-dynamic'
 
@@ -119,7 +120,7 @@ export default async function RepDayPage({
               {detail.identities.map((identity) => (
                 <li key={identity.id} className="flex items-center justify-between gap-2 text-[12px]">
                   <span className="min-w-0 truncate text-ink">{identity.name}</span>
-                  <Pill>{identity.channel}</Pill>
+                  <ChannelBadge channel={identity.channel} />
                 </li>
               ))}
             </ul>

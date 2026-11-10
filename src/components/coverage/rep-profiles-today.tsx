@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
 import { Dialog, DialogActions } from '@/components/ui/dialog'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import { V4Avatar, V4Chip, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import { ProfileSwitcher } from '@/components/shell/profile-switcher'
 import type { RepCoverageView } from '@/lib/coverage/load'
@@ -202,7 +203,9 @@ export function RepProfilesToday({
         {current && (
           <div className="rounded-xl bg-bone px-4 py-3 ring-1 ring-line/70">
             <p className="text-[13px] font-medium text-ink">{current.name}</p>
-            <p className="text-[12px] text-graphite">{current.channels.join(' · ')}</p>
+            <p className="flex flex-wrap gap-1 text-[12px] text-graphite">
+              {current.channels.map((channel) => <ChannelBadge key={channel} channel={channel} />)}
+            </p>
             {queue.length > 1 && (
               <p className="mt-1 text-[11px] text-stone">
                 {index + 1} of {queue.length}
@@ -280,7 +283,11 @@ function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: str
           <V4Avatar name={profile.name} size="md" />
           <div className="min-w-0">
             <p className="truncate text-[13px] font-medium text-ink">{profile.name}</p>
-            <p className="text-[11px] text-stone">{profile.channels.join(' · ') || 'No channel'}</p>
+            <p className="flex flex-wrap gap-1 text-[11px] text-stone">
+              {profile.channels.length > 0
+                ? profile.channels.map((channel) => <ChannelBadge key={channel} channel={channel} />)
+                : 'No channel'}
+            </p>
             <p className="mt-0.5 text-[11px] text-graphite">{ownershipLine(card, coveringUntil)}</p>
           </div>
         </div>

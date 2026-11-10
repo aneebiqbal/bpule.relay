@@ -27,6 +27,7 @@ import {
   buildAdminV3Pipeline,
 } from '@/lib/admin/v3-command-present'
 import { V3StageStrip } from '@/components/v3/primitives'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import {
   V4Avatar,
   V4Chip,
@@ -522,9 +523,7 @@ export function V4AdminHome({
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <p className="truncate text-[13px] font-medium text-ink">{row.name}</p>
                           {row.channels.map((channel) => (
-                            <span key={channel} className="text-[10px] text-stone">
-                              {channel}
-                            </span>
+                            <ChannelBadge key={channel} channel={channel} />
                           ))}
                         </div>
                         <p className="truncate text-[11px] text-stone">

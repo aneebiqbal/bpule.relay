@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation'
 import { cn } from 'cn'
 import { V4Panel } from '@/components/v4/primitives'
 import { UploadBatchUploader } from '@/components/profile-intelligence/upload-batch'
+import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
+import { ChannelBadge } from '@/components/ui/channel-badge'
+import { channelLabel, normalizeChannel } from '@/lib/profiles/channel'
 import { pollBatch } from '@/lib/profile-intelligence/batch-poller'
 
 type Step = 'source' | 'review' | 'channels' | 'assign' | 'targets' | 'ready'
@@ -41,24 +44,17 @@ const STEPS: Array<{ key: Step; label: string }> = [
   { key: 'ready', label: 'Review' },
 ]
 
-/** Channel-aware target templates — the same canonical activity types. */
-const CHANNEL_TARGETS: Record<string, Array<{ activityType: string; label: string; default: number }>> = {
-  linkedin: [
-    { activityType: 'prospect_extracted', label: 'Prospects', default: 30 },
-    { activityType: 'connection_request', label: 'Connections', default: 20 },
-    { activityType: 'dm', label: 'Messages', default: 33 },
-    { activityType: 'followup', label: 'Follow-ups', default: 5 },
-  ],
-  upwork: [
-    { activityType: 'prospect_extracted', label: 'Jobs reviewed', default: 10 },
-    { activityType: 'application', label: 'Proposals', default: 7 },
-    { activityType: 'followup', label: 'Follow-ups', default: 3 },
-  ],
-  email: [
-    { activityType: 'email', label: 'Emails sent', default: 30 },
-    { activityType: 'dm', label: 'Replies handled', default: 10 },
-    { activityType: 'followup', label: 'Follow-ups', default: 5 },
-  ],
+/**
+ * Channel-aware target templates. The canonical pack in
+ * `lib/accountability/default-targets` is the single authority — this only
+ * shapes it for the form, so a new profile can never seed a stale pack.
+ */
+function channelTargets(channel: string | null | undefined): Array<{ activityType: string; label: string; default: number }> {
+  return defaultTargetsForChannel(normalizeChannel(channel)).map((row) => ({
+    activityType: row.activityType,
+    label: activityLabel(row.activityType),
+    default: row.targetCount,
+  }))
 }
 
 interface ReviewField {
@@ -230,7 +226,7 @@ export function AddProfileWizard({
     try {
       const requests: Array<Promise<unknown>> = []
       for (const identity of result.identities) {
-        for (const item of CHANNEL_TARGETS[identity.channel] ?? []) {
+        for (const item of channelTargets(identity.channel)) {
           const count = targets[identity.id]?.[item.activityType] ?? item.default
           if (count <= 0) continue
           requests.push(
@@ -439,11 +435,11 @@ export function AddProfileWizard({
                       }
                       className="size-4 accent-orange"
                     />
-                    <span className="text-[13px] font-medium text-ink capitalize">{channel.channel}</span>
+                    <ChannelBadge channel={channel.channel} />
                   </label>
                   {channel.enabled && (
                     <div className="grid gap-3 border-t border-line/70 px-4 py-3 sm:grid-cols-2">
-                      <Field label={`${channel.channel} identity name`} value={channel.identityName} onChange={(value) => setChannels((prev) => prev.map((item) => (item.channel === channel.channel ? { ...item, identityName: value } : item)))} />
+                      <Field label={`${channelLabel(channel.channel)} identity name`} value={channel.identityName} onChange={(value) => setChannels((prev) => prev.map((item) => (item.channel === channel.channel ? { ...item, identityName: value } : item)))} />
                       <Field label="Title" value={channel.title} onChange={(value) => setChannels((prev) => prev.map((item) => (item.channel === channel.channel ? { ...item, title: value } : item)))} />
                     </div>
                   )}
@@ -520,13 +516,13 @@ export function AddProfileWizard({
             </p>
             <div className="space-y-3">
               {result.identities.map((identity) => {
-                const template = CHANNEL_TARGETS[identity.channel] ?? []
+                const template = channelTargets(identity.channel)
                 if (template.length === 0) return null
                 const values = targets[identity.id] ?? {}
                 return (
                   <fieldset key={identity.id} className="rounded-xl ring-1 ring-line">
                     <legend className="ml-3 rounded-full bg-bone px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-graphite">
-                      {identity.channel}
+                      <ChannelBadge channel={identity.channel} />
                     </legend>
                     <div className="grid gap-3 p-4 sm:grid-cols-2">
                       {template.map((item) => (
@@ -584,7 +580,9 @@ export function AddProfileWizard({
               <>
                 <div className="rounded-xl bg-bone px-4 py-4 ring-1 ring-line">
                   <p className="text-[15px] font-medium text-ink">{fullName || result.identities[0]?.identityName}</p>
-                  <p className="mt-0.5 text-[12px] text-graphite">{result.identities.map((identity) => identity.channel).join(' · ')}</p>
+                  <p className="mt-0.5 flex flex-wrap gap-1 text-[12px] text-graphite">
+                    {result.identities.map((identity) => <ChannelBadge key={identity.id} channel={identity.channel} />)}
+                  </p>
                   <p className="mt-3 text-[12px] text-graphite">Assigned to <span className="font-medium text-ink">{selectedRep?.name}</span></p>
                 </div>
                 <ul className="space-y-1.5">

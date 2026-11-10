@@ -229,7 +229,9 @@ describe('COVERED_PROFILE_ACTIONS_VISIBLE / BACKUP_ONLY_ACTIONS_HIDDEN', () => {
     const coverage = actions.find((a) => a.type === 'COVERAGE')
     expect(coverage).toBeDefined()
     expect(coverage?.urgency).toBe('P0')
-    expect(coverage?.owner).toBe('Dawood')
+    // The current operator is the covering rep, never the primary who is away.
+    expect(coverage?.owner).toBe('Madiha')
+    expect(coverage?.destination).toBe('/dashboard')
   })
 
   it('caps the list at the requested limit (default 5)', () => {

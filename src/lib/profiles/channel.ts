@@ -17,3 +17,15 @@ export function normalizeChannel(value: string | null | undefined): RevenueIdent
   if (key === 'email' || key === 'e_mail') return 'email'
   return 'other'
 }
+
+/** The one channel-name authority. Never render a raw lowercase channel. */
+export const CHANNEL_LABELS: Record<RevenueIdentityChannel, string> = {
+  linkedin: 'LinkedIn',
+  upwork: 'Upwork',
+  email: 'Email',
+  other: 'Other',
+}
+
+export function channelLabel(value: string | null | undefined): string {
+  return CHANNEL_LABELS[normalizeChannel(value)]
+}

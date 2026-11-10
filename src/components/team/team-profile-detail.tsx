@@ -20,6 +20,8 @@ import { CoverageActions, type CoveragePending } from '@/components/coverage/cov
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { RequestUpdateButton } from '@/components/operations/request-update-button'
 import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
+import { ChannelBadge } from '@/components/ui/channel-badge'
+import { channelLabel, normalizeChannel } from '@/lib/profiles/channel'
 import type { ActivityType } from '@/lib/domain/types'
 import type { ProfileOperatingModel, ProfileChannelModel } from '@/lib/profiles/operating-model'
 
@@ -80,12 +82,7 @@ export function TeamProfileDetailView({
           {model.headline && <p className="mt-1 text-[13px] text-graphite">{model.headline}</p>}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {model.channels.map((channel) => (
-              <span
-                key={channel.identityId}
-                className="rounded-full bg-bone px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-graphite ring-1 ring-line"
-              >
-                {channel.channel}
-              </span>
+              <ChannelBadge key={channel.identityId} channel={channel.channel} />
             ))}
             <span className="text-[12px] text-stone">{model.businessDate}</span>
           </div>
@@ -171,7 +168,7 @@ function OverviewTab({
           <p className="mt-2 text-[14px] font-medium text-ink">
             {model.channels.length === 0
               ? <span className="text-status-warning">No channels</span>
-              : model.channels.map((channel) => channel.channel).join(' · ')}
+              : <span className="flex flex-wrap gap-1">{model.channels.map((channel) => <ChannelBadge key={channel.identityId} channel={channel.channel} />)}</span>}
           </p>
         </V4Panel>
         <V4Panel>
@@ -199,9 +196,7 @@ function OverviewTab({
           <ul className="mt-3 space-y-2">
             {model.channels.map((channel) => (
               <li key={channel.identityId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-                <span className="w-20 text-[11px] font-medium uppercase tracking-[0.12em] text-stone">
-                  {channel.channel}
-                </span>
+                <ChannelBadge channel={channel.channel} />
                 <span className="min-w-0 flex-1 text-ink">
                   {channel.primaryRepName ?? <span className="text-status-warning">No operator</span>}
                 </span>
@@ -227,7 +222,7 @@ function OverviewTab({
           <ul className="mt-3 space-y-2 text-[13px]">
             {model.coverageExceptions.map((row) => (
               <li key={row.identityId} className="flex items-center justify-between gap-3">
-                <span className="text-ink">{row.channel}</span>
+                <ChannelBadge channel={row.channel} />
                 <span className="text-status-warning">{row.reason}</span>
               </li>
             ))}
@@ -252,9 +247,7 @@ function OverviewTab({
                   className="flex items-center justify-between gap-3 py-2.5 text-[13px] hover:underline"
                 >
                   <span className="min-w-0 flex-1 truncate text-ink">{task.title}</span>
-                  {task.channel && (
-                    <span className="text-[11px] uppercase tracking-[0.12em] text-stone">{task.channel}</span>
-                  )}
+                  {task.channel && <ChannelBadge channel={task.channel} />}
                   <span className={cn('text-[11px]', task.status === 'WAITING' ? 'text-status-warning' : 'text-graphite')}>
                     {task.status}
                   </span>
@@ -326,7 +319,7 @@ function ChannelBlock({
     <V4Panel>
       <V4PanelHeader
         eyebrow="Channel"
-        title={channel.channel}
+        title={<ChannelBadge channel={channel.channel} />}
         hint={channel.identityName}
         action={
           <Link
@@ -454,12 +447,7 @@ function ChannelTargetsEditor({
 }) {
   const router = useRouter()
   const existing = new Map(channel.targets.map((target) => [target.activityType, target]))
-  const pack = defaultTargetsForChannel(
-    (['linkedin', 'upwork', 'email'].includes(channel.channel) ? channel.channel : 'linkedin') as
-      | 'linkedin'
-      | 'upwork'
-      | 'email',
-  )
+  const pack = defaultTargetsForChannel(normalizeChannel(channel.channel))
   const rows = [
     ...pack.map((row) => ({
       activityType: row.activityType,
@@ -697,7 +685,7 @@ function ExecutionTab({ model }: { model: ProfileOperatingModel }) {
         <V4Panel key={channel.identityId}>
           <V4PanelHeader
             eyebrow="Execution"
-            title={channel.channel}
+            title={<ChannelBadge channel={channel.channel} />}
             hint={`${channel.today.completed} / ${channel.today.target} complete`}
           />
           {channel.targets.length > 0 ? (
@@ -705,7 +693,7 @@ function ExecutionTab({ model }: { model: ProfileOperatingModel }) {
               {channel.targets.map((target) => (
                 <div key={target.activityType} className="rounded-lg bg-bone px-3 py-2 ring-1 ring-line/70">
                   <dt className="text-[10px] uppercase tracking-[0.12em] text-stone">
-                    {target.activityType.replace(/_/g, ' ')}
+                    {activityLabel(target.activityType as ActivityType)}
                   </dt>
                   <dd className="mt-0.5 tabular-nums text-ink">
                     {target.completedCount} / {target.targetCount}
@@ -722,7 +710,7 @@ function ExecutionTab({ model }: { model: ProfileOperatingModel }) {
               href={`/workspace/${channel.identityId}`}
               className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"
             >
-              Open {channel.channel} workspace
+              Open {channelLabel(channel.channel)} workspace
             </Link>
           </div>
         </V4Panel>

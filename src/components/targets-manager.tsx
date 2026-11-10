@@ -10,6 +10,8 @@ import { Select } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
 import { activityLabel, formatDefaultPack, type DefaultDailyTarget } from '@/lib/accountability/default-targets'
+import { ChannelBadge } from '@/components/ui/channel-badge'
+import { channelLabel } from '@/lib/profiles/channel'
 import { buildTeamTargetOverview } from '@/lib/accountability/target-overview'
 import { DEFAULT_WEIGHTS } from '@/lib/performance/execution-score'
 import { DashHeader, Initials, Panel, Pill, StatTile } from '@/components/dashboard/kit'
@@ -22,14 +24,9 @@ const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
   { value: 'followup', label: 'Follow-ups' },
   { value: 'application', label: 'Applications' },
   { value: 'proposal', label: 'Proposals' },
+  { value: 'prospect_extracted', label: 'Prospects captured' },
   { value: 'other', label: 'Other' },
 ]
-
-const CHANNEL_LABEL: Record<string, string> = {
-  linkedin: 'LinkedIn',
-  upwork: 'Upwork',
-  email: 'Email',
-}
 
 interface TargetsPayload {
   targets?: DailyTarget[]
@@ -239,7 +236,7 @@ export function TargetsManager() {
                 <Select id="target-identity" value={form.revenueIdentityId} onChange={(e) => selectIdentity(e.target.value)}>
                   <option value="">Select identity…</option>
                   {visibleIdentities.map((identity) => (
-                    <option key={identity.id} value={identity.id}>{identity.identityName} · {identity.channel}</option>
+                    <option key={identity.id} value={identity.id}>{identity.identityName} · {channelLabel(identity.channel)}</option>
                   ))}
                 </Select>
               </div>
@@ -328,10 +325,8 @@ export function TargetsManager() {
                   {person.lanes.map((lane) => (
                     <div key={`${person.repId}-${lane.identityId}`} className="grid gap-2 rounded-lg border border-line/70 bg-bone/60 p-2.5 sm:grid-cols-[180px_1fr] sm:items-center">
                       <div className="min-w-0">
-                        <p className="truncate text-[12px] font-medium text-ink">
-                          {lane.identityName}
-                          <span className="text-stone"> · {CHANNEL_LABEL[lane.channel] ?? lane.channel}</span>
-                        </p>
+                        <p className="truncate text-[12px] font-medium text-ink">{lane.identityName}</p>
+                        <ChannelBadge channel={lane.channel} className="mt-1" />
                         <p className="text-[11px] text-stone">
                           {lane.actionsPerDay}/day
                           {lane.profileId && (

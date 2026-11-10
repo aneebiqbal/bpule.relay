@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
-import { normalizeChannel } from '@/lib/profiles/channel'
+import { ChannelBadge } from '@/components/ui/channel-badge'
+import { channelLabel, normalizeChannel } from '@/lib/profiles/channel'
 import type { RepOperatingPlan, OperatingResponsibility } from '@/lib/operations/rep-operating-plan'
 
 /**
@@ -105,7 +106,7 @@ export function RepOperatingPlanView({
                   {rows.map((row) => (
                     <li key={row.identityId} className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-[13px] text-ink">{row.channel}</p>
+                        <p className="text-[13px] text-ink"><ChannelBadge channel={row.channel} /></p>
                         <p className="text-[11px] text-stone">
                           Covering for {row.coveragePrimaryRepId ?? 'the primary'}
                           {row.coverageUntil ? ` · until ${row.coverageUntil}` : ''}
@@ -129,7 +130,7 @@ export function RepOperatingPlanView({
           <ul className="mt-2 space-y-1">
             {plan.needsSetup.map((item) => (
               <li key={item.identityId} className="text-[13px] text-graphite">
-                {item.personName} · {item.channel} — {item.reason}
+                {item.personName} · <ChannelBadge channel={item.channel} /> — {item.reason}
               </li>
             ))}
           </ul>
@@ -179,7 +180,7 @@ function ResponsibilityRow({
     <li className="rounded-lg border border-line bg-bone px-3 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[13px] text-ink">{row.channel}</p>
+          <p className="text-[13px] text-ink"><ChannelBadge channel={row.channel} /></p>
           <p className="text-[11px] text-stone">
             {row.readiness ? 'Ready' : row.isNew ? 'NEW · access not confirmed' : 'Access not confirmed'}
             {row.target > 0 ? ` · ${row.remaining} of ${row.target} left` : ' · No daily target'}
@@ -344,7 +345,7 @@ function AssignDialog({
             <option value="">Select a channel…</option>
             {channels.map((identity) => (
               <option key={identity.id} value={identity.id}>
-                {identity.channel} · {identity.identityName}
+                {channelLabel(identity.channel)} · {identity.identityName}
               </option>
             ))}
           </select>
@@ -462,7 +463,7 @@ function TransferDialog({
   }
 
   return (
-    <Dialog title={`Transfer ${row.personName} · ${row.channel}`} onClose={onClose}>
+    <Dialog title={`Transfer ${row.personName} · ${channelLabel(row.channel)}`} onClose={onClose}>
       <div className="space-y-3">
         <p className="text-[13px] text-graphite">
           Primary moves from this rep to the selected rep. The daily target pack moves with it; lead and
@@ -557,7 +558,7 @@ function RemoveDialog({
   }
 
   return (
-    <Dialog title={`Remove ${row.personName} · ${row.channel}`} onClose={onClose}>
+    <Dialog title={`Remove ${row.personName} · ${channelLabel(row.channel)}`} onClose={onClose}>
       <div className="space-y-3">
         <p className="text-[13px] text-graphite">
           Remove this responsibility from the rep? The primary assignment and daily targets are deactivated.

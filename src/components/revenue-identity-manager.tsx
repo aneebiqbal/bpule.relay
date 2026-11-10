@@ -552,7 +552,7 @@ export function RevenueIdentityManager() {
         <Dialog open onClose={() => setAssignDialog(null)} title="Assign to someone">
           <div className="space-y-3 p-5">
             <p className="text-[12px] text-graphite">
-              They also get the standard daily pack for this channel: 30 connections, 30 DMs and 30 follow-ups on LinkedIn; 30 emails and 25 follow-ups on Email; or 10 applications and 10 proposals on Upwork. Existing numbers are kept.
+              They also get the standard daily pack for this channel: 30 connections, 30 DMs, 3 follow-ups and 15 prospects captured on LinkedIn; 25 emails, 3 follow-ups and 15 prospects captured on Email; or 10 applications and 2 proposals on Upwork. Existing numbers are kept.
             </p>
             <Select value={selectedRep} onChange={(e) => setSelectedRep(e.target.value)} aria-label="Person">
               <option value="">Select a person…</option>

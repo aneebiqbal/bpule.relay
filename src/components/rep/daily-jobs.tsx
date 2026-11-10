@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useHotkeys } from 'react-hotkeys-hook'
 import {
   Briefcase,
+  FileText,
   Mail,
   MessageSquare,
   Reply,
@@ -35,6 +36,7 @@ const ORDER = [
   'followup',
   'email',
   'application',
+  'proposal',
 ]
 
 const COPY: Record<string, { title: string; short: string; hint: string; href: string; button: string; icon: LucideIcon }> = {
@@ -85,6 +87,14 @@ const COPY: Record<string, { title: string; short: string; hint: string; href: s
     href: '/upwork',
     button: 'Apply',
     icon: Briefcase,
+  },
+  proposal: {
+    title: 'Upwork proposals',
+    short: 'Proposal',
+    hint: 'Write the proposal for an accepted job.',
+    href: '/upwork',
+    button: 'Write proposal',
+    icon: FileText,
   },
 }
 

@@ -15,6 +15,7 @@ import { cn } from 'cn'
 import type { CoverageStatusView } from '@/lib/coverage/load'
 import type { CoverageApprovalItem } from '@/lib/coverage/engine'
 import { Dialog, DialogActions } from '@/components/ui/dialog'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import { Button } from '@/components/ui/button'
 import {
   V4Avatar,
@@ -33,7 +34,7 @@ const STATUS_TONE: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'n
 
 const STATUS_LABEL: Record<string, string> = {
   COVERED: 'Covered',
-  BACKUP_ACTIVE: 'Backup active',
+  BACKUP_ACTIVE: 'Temporary cover',
   AT_RISK: 'At risk',
   UNCOVERED: 'Uncovered',
 }
@@ -243,14 +244,14 @@ export function AdminCoveragePanel({
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium text-ink">
                         {item.profileName}
-                        <span className="ml-2 text-[11px] font-normal uppercase tracking-[0.12em] text-stone">
-                          {item.channels.join(' + ')}
+                        <span className="ml-2 inline-flex gap-1">
+                          {item.channels.map((channel) => <ChannelBadge key={channel} channel={channel} />)}
                         </span>
                       </p>
                       <p className="mt-0.5 text-[12px] text-graphite">
                         {item.kind === 'RESTORE_PRIMARY'
-                          ? `${item.fromRepName} → ${item.toRepName}`
-                          : `${item.fromRepName} → ${item.toRepName}`}
+                          ? `Restore primary: ${item.fromRepName} → ${item.toRepName}`
+                          : `Temporary cover: ${item.fromRepName} → ${item.toRepName}`}
                         {' · '}
                         {item.reason}
                       </p>
