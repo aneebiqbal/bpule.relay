@@ -1278,7 +1278,8 @@ export interface IdentityAssignment {
 export interface RevenueIdentityWithAssignment extends RevenueIdentity {
   assignmentId: string
   assignedBy: string | null
-  assignedAt: string
+  /** Null for temporary coverage rows that have no assignment timestamp. */
+  assignedAt: string | null
   /** `assigned` = primary ownership; `coverage` = active temporary cover. */
   access: 'assigned' | 'coverage'
 }

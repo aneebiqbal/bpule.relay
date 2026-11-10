@@ -1,5 +1,6 @@
 import { createServerSupabase } from '@/lib/supabase/server'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { getInboxCountsForRepIds } from '@/lib/operations/inbox-counts'
 /**
  * Team day — the canonical server-side contract for the Command Centre.
  *
@@ -190,13 +191,6 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
     .from('identity_assignments')
     .select('rep_id, revenue_identity_id')
     .eq('organization_id', ctx.orgId)
-  const repliedQuery = supabase
-    .from('leads')
-    .select('id, owner_rep_id, status')
-    .eq('organization_id', ctx.orgId)
-    .eq('status', 'replied')
-    .eq('archived', false)
-    .limit(SCAN_LIMIT)
   const pipelineQuery = supabase
     .from('leads')
     .select('owner_rep_id')
@@ -212,11 +206,10 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
     .lt('occurred_at', range.end)
     .limit(SCAN_LIMIT)
 
-  const [repsResult, daysResult, assignmentsResult, repliedResult, pipelineResult, actionsResult] = await Promise.all([
+  const [repsResult, daysResult, assignmentsResult, pipelineResult, actionsResult] = await Promise.all([
     scope === 'all' ? repQuery : repQuery.in('id', [...scope]),
     scope === 'all' ? dayQuery : dayQuery.in('rep_id', [...scope]),
     scope === 'all' ? assignmentQuery : assignmentQuery.in('rep_id', [...scope]),
-    repliedQuery,
     pipelineQuery,
     actionsQuery,
   ])
@@ -283,60 +276,16 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
     return map
   }
 
-  // Canonical Inbox waiting state: the latest meaningful message is the client's.
-  // The app stamps lead status 'replied' on every inbound, so the replied scan is
-  // the canonical candidate set; the conversation timestamps decide.
-  const repliedRows = (repliedResult.data ?? []) as Array<{ id: string; owner_rep_id: string | null; status: string }>
-  const stateRows = repliedRows.length > 0
-    ? await chunkedIn<{
-        lead_id: string
-        stage: string | null
-        last_sent_at: string | null
-        last_reply_at: string | null
-        next_followup_at: string | null
-        won_at: string | null
-        lost_at: string | null
-      }>(
-        repliedRows.map((row) => row.id),
-        (chunk) =>
-          supabase
-            .from('conversation_states')
-            .select('lead_id, stage, last_sent_at, last_reply_at, next_followup_at, won_at, lost_at')
-            .in('lead_id', chunk),
-      )
-    : []
-  const stateByLead = new Map(stateRows.map((row) => [row.lead_id, row]))
-  const repliesByRep = new Map<string, number>()
-  for (const row of repliedRows) {
-    if (!row.owner_rep_id) continue
-    const state = stateByLead.get(row.id)
-    const derived = deriveConversationRow(
-      {
-        id: row.id,
-        contactName: null,
-        company: null,
-        companyKey: null,
-        ownerRepId: row.owner_rep_id,
-        profileName: null,
-        status: row.status,
-      },
-      state
-        ? {
-            stage: state.stage,
-            lastSentAt: state.last_sent_at,
-            lastReplyAt: state.last_reply_at,
-            nextFollowupAt: state.next_followup_at,
-            wonAt: state.won_at,
-            lostAt: state.lost_at,
-          }
-        : null,
-      null,
-      asOf.getTime(),
-    )
-    if (derived?.state === 'waiting_on_rep') {
-      repliesByRep.set(row.owner_rep_id, (repliesByRep.get(row.owner_rep_id) ?? 0) + 1)
-    }
-  }
+  // Canonical Inbox counts for the scoped reps — one batched derivation over
+  // deriveConversationRow, never a status-based scan.
+  const scopedRepIdList = (repsResult.data ?? []).map((row) => row.id as string)
+  const inboxCounts = scopedRepIdList.length
+    ? await getInboxCountsForRepIds(supabase, {
+        orgId: ctx.orgId,
+        repIds: scopedRepIdList,
+        businessDate,
+      }).catch(() => new Map<string, { needsReply: number; followups: number }>())
+    : new Map<string, { needsReply: number; followups: number }>()
   const pipelineByRep = countByRep(pipelineResult.data as Array<Record<string, unknown>> | null)
 
   const actionsByRep = new Map<string, number>()
@@ -400,7 +349,7 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
       commitmentProgress,
       requiredRemaining,
       minutesRemaining: (row?.minutes_remaining as number) ?? derived.minutesRemaining,
-      repliesWaiting: repliesByRep.get(repId) ?? 0,
+      repliesWaiting: inboxCounts.get(repId)?.needsReply ?? 0,
       actionsToday: actionsByRep.get(repId) ?? 0,
       pipelineCreated: pipelineByRep.get(repId) ?? 0,
       lastActivityAt: lastActivityByRep.get(repId) ?? null,

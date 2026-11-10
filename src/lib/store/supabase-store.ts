@@ -6707,7 +6707,7 @@ export class SupabaseStore implements ScoutStore {
 
     return executable.map((row) => ({
       ...this.mapRevenueIdentity(identityById.get(row.id) ?? {}),
-      assignmentId: row.assignmentId,
+      assignmentId: row.assignmentId ?? row.coverageAssignmentId ?? `identity:${row.id}`,
       assignedBy: row.assignedBy,
       assignedAt: row.assignedAt,
       access: row.access === 'coverage' ? 'coverage' : 'assigned',
