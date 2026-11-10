@@ -215,6 +215,19 @@ describe('CHANNEL_BADGE_PARITY', () => {
   })
 })
 
+describe('INBOX_COVERAGE_CONTEXT', () => {
+  it('the chat queue resolves the covering rep and primary for the sending profile', () => {
+    const source = read('src/lib/operations/chat-queue.ts')
+    expect(source).toMatch(/coveringRepName/)
+    expect(source).toMatch(/primaryRepName/)
+    expect(source).toMatch(/isCoverageActiveOn/)
+  })
+
+  it('the thread header states the working status', () => {
+    expect(read('src/components/chats/thread-header.tsx')).toMatch(/Temporary cover for/)
+  })
+})
+
 describe('COVERAGE_NOTIFICATION_CONTEXT', () => {
   it('coverage notifications name the profile, channel and the other rep', () => {
     const source = read('src/lib/coverage/actions.ts')

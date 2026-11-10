@@ -19,6 +19,9 @@ import { leadBelongsToAnyWorkspace } from '@/lib/workspace/active-identity'
 import { deriveConversationRow, type ConversationRow } from '@/lib/operations/conversations'
 import { sourceBucket, type OpsSource } from '@/lib/operations/filters'
 import { pipelineGroupForStage } from '@/lib/operations/reports'
+import { isCoverageActiveOn } from '@/lib/coverage/access'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { orgToday } from '@/lib/org-clock'
 
 export const CHAT_VIEWS = [
   { value: 'waiting_me', label: 'Needs reply', managerOnly: false },
@@ -52,6 +55,10 @@ export interface ChatRow extends ConversationRow {
   needsReview: boolean
   unassigned: boolean
   priority: ChatPriority
+  /** Active covering rep for the sending profile, when coverage is running. */
+  coveringRepName?: string | null
+  /** Primary owner of the sending profile. */
+  primaryRepName?: string | null
 }
 
 const PROPOSAL_INTENTS = new Set(['pricing'])
@@ -317,8 +324,8 @@ export async function loadChatQueue(
   const ownerIds = [...new Set(leads.map((l) => l.owner_rep_id).filter(Boolean))] as string[]
   const [states, identities, reps] = await Promise.all([
     loadStates(client, query.orgId, leads.map((l) => l.id)),
-    chunkedIn<{ id: string; identity_name: string }>(identityIds, (chunk) =>
-      client.from('revenue_identities').select('id, identity_name').eq('organization_id', query.orgId).in('id', chunk),
+    chunkedIn<{ id: string; identity_name: string; profile_id: string | null }>(identityIds, (chunk) =>
+      client.from('revenue_identities').select('id, identity_name, profile_id').eq('organization_id', query.orgId).in('id', chunk),
     ).catch(() => []),
     chunkedIn<{ id: string; name: string }>(ownerIds, (chunk) =>
       client.from('reps').select('id, name').eq('organization_id', query.orgId).in('id', chunk),
@@ -326,7 +333,61 @@ export async function loadChatQueue(
   ])
   const stateBy = new Map(states.map((s) => [s.lead_id, s]))
   const identityName = new Map(identities.map((i) => [i.id, i.identity_name]))
+  const identityProfile = new Map(identities.map((i) => [i.id, i.profile_id]))
   const repName = new Map(reps.map((r) => [r.id, r.name]))
+
+  // Coverage context: who is working each sending profile now, and who owns it.
+  // A covering rep must be able to see why the profile is available to them.
+  const profileIds = [...new Set(identities.map((i) => i.profile_id).filter((id): id is string => Boolean(id)))]
+  const policy = await loadOperatingPolicy(query.orgId, client)
+  const businessDate = orgToday(policy)
+  const [coverageRes, primaryRes] = profileIds.length
+    ? await Promise.all([
+        client
+          .from('coverage_assignments')
+          .select('profile_id, primary_rep_id, covering_rep_id, effective_from, effective_until')
+          .eq('organization_id', query.orgId)
+          .eq('status', 'ACTIVE')
+          .in('profile_id', profileIds)
+          .limit(500),
+        client
+          .from('profile_coverage')
+          .select('profile_id, rep_id')
+          .eq('organization_id', query.orgId)
+          .eq('active', true)
+          .eq('role', 'PRIMARY')
+          .in('profile_id', profileIds)
+          .limit(500),
+      ])
+    : [
+        { data: [] as Array<{ profile_id: string; primary_rep_id: string; covering_rep_id: string; effective_from: string; effective_until: string | null }> },
+        { data: [] as Array<{ profile_id: string; rep_id: string }> },
+      ]
+
+  const coveringByProfile = new Map<string, { coveringRepId: string; primaryRepId: string }>()
+  for (const row of (coverageRes.data ?? []) as Array<{
+    profile_id: string
+    primary_rep_id: string
+    covering_rep_id: string
+    effective_from: string
+    effective_until: string | null
+  }>) {
+    if (!isCoverageActiveOn({ effectiveFrom: row.effective_from, effectiveUntil: row.effective_until }, businessDate)) continue
+    if (!coveringByProfile.has(row.profile_id)) {
+      coveringByProfile.set(row.profile_id, { coveringRepId: row.covering_rep_id, primaryRepId: row.primary_rep_id })
+    }
+  }
+  const primaryByProfile = new Map<string, string>()
+  for (const row of (primaryRes.data ?? []) as Array<{ profile_id: string; rep_id: string }>) {
+    if (!primaryByProfile.has(row.profile_id)) primaryByProfile.set(row.profile_id, row.rep_id)
+  }
+  const coverageRepIds = [...new Set([...coveringByProfile.values()].flatMap((row) => [row.coveringRepId, row.primaryRepId]))]
+  const coverageReps = coverageRepIds.length
+    ? await chunkedIn<{ id: string; name: string }>(coverageRepIds, (chunk) =>
+        client.from('reps').select('id, name').eq('organization_id', query.orgId).in('id', chunk),
+      ).catch(() => [])
+    : []
+  const coverageRepName = new Map(coverageReps.map((r) => [r.id, r.name]))
 
   const all: ChatRow[] = []
   for (const lead of leads) {
@@ -349,6 +410,9 @@ export async function loadChatQueue(
     )
     if (!base) continue
     const clientIntent = s?.intent ?? null
+    const senderProfileId = lead.revenue_identity_id ? identityProfile.get(lead.revenue_identity_id) ?? null : null
+    const cover = senderProfileId ? coveringByProfile.get(senderProfileId) : undefined
+    const primaryRepId = senderProfileId ? primaryByProfile.get(senderProfileId) : undefined
     all.push({
       ...base,
       href: `/chats?lead=${lead.id}`,
@@ -357,6 +421,8 @@ export async function loadChatQueue(
       sourceRaw: lead.source,
       direction: lead.direction === 'inbound' ? 'inbound' : 'outbound',
       profileId: lead.revenue_identity_id,
+      coveringRepName: cover ? coverageRepName.get(cover.coveringRepId) ?? null : null,
+      primaryRepName: primaryRepId ? coverageRepName.get(primaryRepId) ?? repName.get(primaryRepId) ?? null : null,
       clientIntent,
       preview: null,
       previewFrom: null,

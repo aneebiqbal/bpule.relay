@@ -76,6 +76,15 @@ export function ThreadHeader({
               <span>
                 Owner: <span className="text-graphite">{row.ownerName ?? 'Unassigned'}</span>
               </span>
+              {row.coveringRepName && row.primaryRepName && (
+                <span>
+                  Working status:{' '}
+                  <span className="text-graphite">
+                    Temporary cover for {row.primaryRepName}
+                    {row.coveringRepName === row.ownerName ? '' : ` · ${row.coveringRepName}`}
+                  </span>
+                </span>
+              )}
               {leadCreatedAt && (
                 <span>
                   Lead created: <span className="text-graphite">{formatDate(leadCreatedAt)}</span>
