@@ -55,6 +55,7 @@ export function AdminCoveragePanel({
   const [restoreTasks, setRestoreTasks] = useState<Array<{ id: string; title: string; status: string }>>([])
   const [restoreSelected, setRestoreSelected] = useState<Set<string>>(new Set())
   const [restoreLoading, setRestoreLoading] = useState(false)
+  const [reviewItem, setReviewItem] = useState<CoverageApprovalItem | null>(null)
 
   async function openRestore(item: CoverageApprovalItem) {
     setRestoreItem(item)
@@ -283,7 +284,7 @@ export function AdminCoveragePanel({
                     disabled={busy}
                     onClick={() => {
                       if (item.kind !== 'RESTORE_PRIMARY') {
-                        approve([{ profileId: item.profileId, kind: item.kind }])
+                        setReviewItem(item)
                         return
                       }
                       // Manual restore: the admin decides which open tasks return.
@@ -296,7 +297,7 @@ export function AdminCoveragePanel({
                         : 'bg-solid text-on-solid',
                     )}
                   >
-                    {item.kind === 'RESTORE_PRIMARY' ? 'Restore primary' : 'Approve coverage'}
+                    {item.kind === 'RESTORE_PRIMARY' ? 'Restore primary' : 'Review coverage'}
                   </button>
                 </div>
               </li>
@@ -345,6 +346,60 @@ export function AdminCoveragePanel({
           </ul>
         )}
       </div>
+
+      <Dialog
+        open={reviewItem !== null}
+        onClose={() => setReviewItem(null)}
+        title="Temporary coverage review"
+        description="Confirm the temporary operator. Primary ownership never changes."
+        className="max-w-lg"
+      >
+        {reviewItem && (
+          <div className="space-y-3">
+            <dl className="space-y-2 rounded-lg bg-bone px-3 py-2.5 ring-1 ring-line/70">
+              <CoverageReviewRow label="Profile" value={reviewItem.profileName} />
+              <CoverageReviewRow label="Primary owner" value={reviewItem.fromRepName} />
+              <CoverageReviewRow label="Temporary operator" value={reviewItem.toRepName} />
+              <CoverageReviewRow
+                label="Duration"
+                value={reviewItem.effectiveUntil ? `Until ${reviewItem.effectiveUntil}` : 'Until the primary returns'}
+              />
+              <CoverageReviewRow
+                label="Open profile tasks"
+                value={`${reviewItem.workPackage.tasks} will move to ${reviewItem.toRepName}`}
+              />
+              <CoverageReviewRow
+                label="Personal tasks"
+                value={`${reviewItem.personalTaskCount} stay with ${reviewItem.fromRepName}`}
+              />
+            </dl>
+            <p className="text-[12px] text-stone">
+              {reviewItem.reason}. Completed work stays attributed to the covering rep.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setReviewItem(null)}
+                className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-graphite"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  const item = reviewItem
+                  setReviewItem(null)
+                  approve([{ profileId: item.profileId, kind: item.kind }])
+                }}
+                className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-50"
+              >
+                Activate coverage
+              </button>
+            </div>
+          </div>
+        )}
+      </Dialog>
 
       <Dialog
         open={restoreItem !== null}
@@ -427,6 +482,15 @@ function StatusFact({ label, value, tone }: { label: string; value: number; tone
     <div className="rounded-xl bg-bone px-3 py-2.5 ring-1 ring-line/70">
       <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">{label}</p>
       <p className={cn('mt-1 text-[18px] font-medium leading-none tabular-nums', tone)}>{value}</p>
+    </div>
+  )
+}
+
+function CoverageReviewRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3 text-[13px]">
+      <dt className="shrink-0 text-[11px] uppercase tracking-[0.12em] text-stone">{label}</dt>
+      <dd className="min-w-0 text-right text-ink">{value}</dd>
     </div>
   )
 }

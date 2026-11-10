@@ -639,12 +639,17 @@ function RemoveDialog({
     <Dialog title={`Remove ${row.personName} · ${channelLabel(row.channel)}`} onClose={onClose}>
       <div className="space-y-3">
         <p className="text-[13px] text-graphite">
-          Remove this responsibility from the rep? The primary assignment and daily targets are deactivated.
-          Leads, messages and history are preserved.
+          Remove this responsibility from {repId ? 'the rep' : 'the rep'}? This ends execution ownership.
         </p>
-        {row.target > 0 && (
-          <p className="text-[12px] text-stone">Active target: {row.target} actions/day</p>
-        )}
+        <ul className="space-y-0.5 rounded-lg bg-bone px-3 py-2.5 text-[12px] text-graphite ring-1 ring-line/70">
+          <li>The primary assignment is deactivated</li>
+          {row.target > 0 && <li>The active daily target ({row.target}/day) ends</li>}
+          <li>The readiness requirement ends</li>
+          <li>Leads, messages and completed work are preserved</li>
+        </ul>
+        <p className="text-[11px] text-stone">
+          Removing a daily plan is different — it keeps the assignment and the profile executable.
+        </p>
         {error && <p role="alert" className="text-[12px] text-status-danger">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-graphite">

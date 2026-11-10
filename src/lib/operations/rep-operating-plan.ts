@@ -169,7 +169,10 @@ export async function loadRepOperatingPlan(
     const target = targets.reduce((sum, entry) => sum + entry.targetCount, 0)
     const completed = targets.reduce((sum, entry) => sum + entry.completedCount, 0)
     const assignedAt = executableRow.assignedAt
-    const isNew = !executableRow || (assignedAt !== null && assignedAt >= range.start)
+    // NEW is derived from events, never a manual flag: it expires once access is
+    // confirmed, the rep has started work, or the first operating day ends.
+    const readiness = profileId ? readyProfileIds.has(profileId) : false
+    const isNew = assignedAt !== null && assignedAt >= range.start && !readiness && completed === 0
     responsibilities.push({
       identityId: row.id as string,
       identityName: (row.identity_name as string) ?? 'Unnamed',
@@ -180,7 +183,7 @@ export async function loadRepOperatingPlan(
       role: executableRow.access === 'coverage' ? 'coverage' : 'primary',
       coverageUntil: executableRow.coverageEffectiveUntil ?? null,
       coveragePrimaryRepId: executableRow.coveragePrimaryRepId ?? null,
-      readiness: profileId ? readyProfileIds.has(profileId) : false,
+      readiness,
       targets,
       target,
       completed,

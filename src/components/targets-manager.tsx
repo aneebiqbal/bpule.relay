@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Dialog } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { activityLabel, formatDefaultPack, type DefaultDailyTarget } from '@/lib/accountability/default-targets'
 import { ChannelBadge } from '@/components/ui/channel-badge'
@@ -56,6 +57,7 @@ export function TargetsManager() {
   const [draftCounts, setDraftCounts] = useState<Record<string, number>>({})
   const [missingDrafts, setMissingDrafts] = useState<Record<string, number>>({})
   const [repFilter, setRepFilter] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/targets', { cache: 'no-store' })
@@ -358,7 +360,7 @@ export function TargetsManager() {
                               <button type="button" onClick={() => void patchTarget(activity.id, { active: !activity.active })} className="rounded p-1 text-stone hover:bg-bone hover:text-ink" title={activity.active ? 'Pause' : 'Resume'} aria-label={activity.active ? 'Pause target' : 'Resume target'}>
                                 {activity.active ? <Pause className="size-3" /> : <Play className="size-3" />}
                               </button>
-                              <button type="button" onClick={() => void deleteTarget(activity.id)} className="rounded p-1 text-stone hover:bg-bone hover:text-status-danger" title="Delete" aria-label="Delete target">
+                              <button type="button" onClick={() => setConfirmDeleteId(activity.id)} className="rounded p-1 text-stone hover:bg-bone hover:text-status-danger" title="Remove daily plan" aria-label="Remove daily plan">
                                 <Trash2 className="size-3" />
                               </button>
                             </div>
@@ -405,7 +407,7 @@ export function TargetsManager() {
             {orphanTargets.map((t) => (
               <li key={t.id} className="flex items-center justify-between px-4 py-2.5 sm:px-5">
                 <p className="text-[12px] text-graphite"><span className="font-medium text-ink">{activityLabel(t.activityType)}</span> · {t.targetCount}/day · {repsById.get(t.repId)?.name ?? 'Unknown'}</p>
-                <button type="button" onClick={() => void deleteTarget(t.id)} className="rounded p-1 text-stone hover:text-status-danger" aria-label="Delete target"><Trash2 className="size-3.5" /></button>
+                <button type="button" onClick={() => setConfirmDeleteId(t.id)} className="rounded p-1 text-stone hover:text-status-danger" aria-label="Remove daily plan"><Trash2 className="size-3.5" /></button>
               </li>
             ))}
           </ul>
@@ -419,6 +421,67 @@ export function TargetsManager() {
         </summary>
         <PerformanceConfigSection />
       </details>
+
+      <Dialog
+        open={confirmDeleteId !== null}
+        onClose={() => setConfirmDeleteId(null)}
+        title="Remove daily plan"
+        description="This removes one target lane. The assignment stays and the profile stays executable."
+        className="max-w-lg"
+      >
+        {confirmDeleteId && (() => {
+          const target = targets.find((row) => row.id === confirmDeleteId)
+          if (!target) return null
+          const identity = identityById.get(target.revenueIdentityId)
+          const rep = repsById.get(target.repId)
+          return (
+            <div className="space-y-3">
+              <dl className="space-y-2 rounded-lg bg-bone px-3 py-2.5 ring-1 ring-line/70">
+                <div className="flex items-start justify-between gap-3 text-[13px]">
+                  <dt className="shrink-0 text-[11px] uppercase tracking-[0.12em] text-stone">Person</dt>
+                  <dd className="min-w-0 text-right text-ink">{identity?.identityName ?? 'Unknown'}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-3 text-[13px]">
+                  <dt className="shrink-0 text-[11px] uppercase tracking-[0.12em] text-stone">Channel</dt>
+                  <dd className="min-w-0 text-right text-ink">{identity ? <ChannelBadge channel={identity.channel} /> : '—'}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-3 text-[13px]">
+                  <dt className="shrink-0 text-[11px] uppercase tracking-[0.12em] text-stone">Rep</dt>
+                  <dd className="min-w-0 text-right text-ink">{rep?.name ?? 'Unknown'}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-3 text-[13px]">
+                  <dt className="shrink-0 text-[11px] uppercase tracking-[0.12em] text-stone">Lane</dt>
+                  <dd className="min-w-0 text-right text-ink">{activityLabel(target.activityType)} · {target.targetCount}/day</dd>
+                </div>
+              </dl>
+              <p className="text-[12px] text-stone">
+                Removing the responsibility is different — it ends execution ownership. This only removes the daily plan.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-graphite"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    const id = confirmDeleteId
+                    setConfirmDeleteId(null)
+                    void deleteTarget(id)
+                  }}
+                  className="rounded-lg bg-[#a8342a] px-3 py-1.5 text-[12px] font-medium text-white transition-transform active:scale-[0.98] disabled:opacity-50"
+                >
+                  Remove daily plan
+                </button>
+              </div>
+            </div>
+          )
+        })()}
+      </Dialog>
     </div>
   )
 }
