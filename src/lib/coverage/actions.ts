@@ -486,6 +486,43 @@ export async function configureCoverage(input: {
   )
   if (insertError) return { ok: false, error: insertError.message }
 
+  // Reconfiguring the chain must not leave orphan eligibility behind: a rep who
+  // is neither the new primary nor a new backup loses their assignment too.
+  // The account owner (`profiles.rep_id`) keeps theirs — ownership is not a role.
+  const { data: profileRow } = await client
+    .from('profiles')
+    .select('rep_id')
+    .eq('id', input.profileId)
+    .eq('organization_id', input.organizationId)
+    .maybeSingle()
+  const ownerRepId = (profileRow?.rep_id as string | null) ?? null
+  const keep = new Set([input.primaryRepId, ...input.backups.map((backup) => backup.repId), ...(ownerRepId ? [ownerRepId] : [])])
+
+  const { data: profileIdentities } = await client
+    .from('revenue_identities')
+    .select('id')
+    .eq('organization_id', input.organizationId)
+    .eq('profile_id', input.profileId)
+    .limit(200)
+  const identityIds = (profileIdentities ?? []).map((row) => row.id as string)
+  if (identityIds.length > 0) {
+    const { data: staleAssignments } = await client
+      .from('identity_assignments')
+      .select('rep_id, revenue_identity_id')
+      .eq('organization_id', input.organizationId)
+      .in('revenue_identity_id', identityIds)
+      .limit(500)
+    for (const row of staleAssignments ?? []) {
+      if (keep.has(row.rep_id as string)) continue
+      await client
+        .from('identity_assignments')
+        .delete()
+        .eq('organization_id', input.organizationId)
+        .eq('revenue_identity_id', row.revenue_identity_id)
+        .eq('rep_id', row.rep_id)
+    }
+  }
+
   await client.from('coverage_events').insert({
     organization_id: input.organizationId,
     profile_id: input.profileId,
