@@ -343,7 +343,8 @@ describe('domainForPathname', () => {
 
   it('keeps conversation surfaces under Inbox', () => {
     expect(domainForPathname('/chats')).toBe('inbox')
-    expect(domainForPathname('/inbound')).toBe('inbox')
+    // /inbound was retired as a second Inbox and now redirects to /chats.
+    expect(domainForPathname('/inbound')).toBeNull()
     expect(domainForPathname('/archive')).toBe('sales')
   })
 

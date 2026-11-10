@@ -99,7 +99,8 @@ describe('V3_NO_PARALLEL_SELECTED_NAV', () => {
     ]
     expect(secondaryItems('inbox', rep).map((i) => i.href)).toEqual(queues)
     expect(secondaryItems('inbox', admin).map((i) => i.href)).toEqual(queues)
-    expect(domainForPathname('/inbound')).toBe('inbox')
+    // /inbound was retired as a second Inbox; it redirects to /chats.
+    expect(domainForPathname('/inbound')).toBeNull()
     expect(domainForPathname('/relay')).toBeNull()
   })
 })
