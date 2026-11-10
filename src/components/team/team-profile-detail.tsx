@@ -21,6 +21,7 @@ import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { RequestUpdateButton } from '@/components/operations/request-update-button'
 import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { ChannelBadge } from '@/components/ui/channel-badge'
+import { ResponsibilityStatus } from '@/components/ui/responsibility-status'
 import { channelLabel, normalizeChannel } from '@/lib/profiles/channel'
 import type { ActivityType } from '@/lib/domain/types'
 import type { ProfileOperatingModel, ProfileChannelModel } from '@/lib/profiles/operating-model'
@@ -198,7 +199,7 @@ function OverviewTab({
               <li key={channel.identityId} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
                 <ChannelBadge channel={channel.channel} />
                 <span className="min-w-0 flex-1 text-ink">
-                  {channel.primaryRepName ?? <span className="text-status-warning">No operator</span>}
+                  {channel.primaryRepName ?? <ResponsibilityStatus status="UNASSIGNED" />}
                 </span>
                 <span className="text-graphite">
                   {channel.backups.length > 0
@@ -229,7 +230,7 @@ function OverviewTab({
             {model.readinessExceptions.map((row) => (
               <li key={`${row.repId}:${row.repName}`} className="flex items-center justify-between gap-3">
                 <span className="text-ink">{row.repName}</span>
-                <span className="text-status-warning">Access not confirmed</span>
+                <ResponsibilityStatus status="ACCESS_NEEDED" />
               </li>
             ))}
           </ul>

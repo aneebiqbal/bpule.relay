@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { ChannelBadge } from '@/components/ui/channel-badge'
+import { ResponsibilityStatus } from '@/components/ui/responsibility-status'
 import { channelLabel, normalizeChannel } from '@/lib/profiles/channel'
 import type { RepOperatingPlan, OperatingResponsibility } from '@/lib/operations/rep-operating-plan'
 
@@ -112,9 +113,7 @@ export function RepOperatingPlanView({
                           {row.coverageUntil ? ` · until ${row.coverageUntil}` : ''}
                         </p>
                       </div>
-                      <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-graphite">
-                        Temporary
-                      </span>
+                      <ResponsibilityStatus status="TEMPORARY" />
                     </li>
                   ))}
                 </ul>
@@ -182,7 +181,8 @@ function ResponsibilityRow({
         <div className="min-w-0">
           <p className="text-[13px] text-ink"><ChannelBadge channel={row.channel} /></p>
           <p className="text-[11px] text-stone">
-            {row.readiness ? 'Ready' : row.isNew ? 'NEW · access not confirmed' : 'Access not confirmed'}
+            {row.isNew && <span className="mr-1 font-medium text-status-info">NEW</span>}
+            {row.readiness ? 'Ready' : 'Access not confirmed'}
             {row.target > 0 ? ` · ${row.remaining} of ${row.target} left` : ' · No daily target'}
           </p>
         </div>

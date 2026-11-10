@@ -16,6 +16,7 @@ import { ChevronRight } from 'lucide-react'
 import { cn } from 'cn'
 import { Dialog, DialogActions } from '@/components/ui/dialog'
 import { ChannelBadge } from '@/components/ui/channel-badge'
+import { ResponsibilityStatus } from '@/components/ui/responsibility-status'
 import type { RepCoverageView } from '@/lib/coverage/load'
 import type { CoverageProfileResult } from '@/lib/coverage/engine'
 import {
@@ -379,9 +380,9 @@ function ResponsibilityCard({
           </div>
         </div>
         {kind === 'covering' ? (
-          <V4Chip tone="warning">Covering</V4Chip>
+          <ResponsibilityStatus status="TEMPORARY" />
         ) : (
-          <V4Chip tone="info">Yours</V4Chip>
+          <ResponsibilityStatus status="PRIMARY" />
         )}
       </div>
 

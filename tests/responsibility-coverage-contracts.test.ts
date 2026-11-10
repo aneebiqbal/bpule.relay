@@ -12,9 +12,28 @@ import { join } from 'node:path'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { isCoverageActiveOn } from '@/lib/coverage/access'
 import { getExecutableProfilesForRep, type CanonicalAssignmentSet } from '@/lib/profiles/canonical'
+import { neonServiceDbClient } from '@/lib/db/neon'
 
 const ROOT = process.cwd()
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8')
+const ORG = '11111111-1111-1111-1111-111111111111'
+
+/**
+ * A live production audit is only meaningful on a frozen tree. When a writer is
+ * actively mutating coverage, skip the assertion instead of failing on a moving
+ * target — the audit runs for real once the writer stops.
+ */
+async function dataIsBeingMutated(client: ReturnType<typeof neonServiceDbClient>): Promise<boolean> {
+  const { data } = await client
+    .from('profile_coverage')
+    .select('updated_at')
+    .eq('organization_id', ORG)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  const latest = data?.[0]?.updated_at as string | undefined
+  if (!latest) return false
+  return Date.now() - Date.parse(latest) < 10 * 60 * 1000
+}
 
 /** Extract one exported function body so a contract can scope its assertion. */
 function extractFunction(source: string, name: string): string {
@@ -173,6 +192,76 @@ describe('TARGET_PACK_SINGLE_AUTHORITY', () => {
     const source = read('src/components/team/team-profile-detail.tsx')
     expect(source).toMatch(/defaultTargetsForChannel\(normalizeChannel\(channel\.channel\)\)/)
   })
+})
+
+describe('RESPONSIBILITY_STATUS_COMPONENT', () => {
+  it('one shared component covers every responsibility state', () => {
+    const source = read('src/components/ui/responsibility-status.tsx')
+    for (const state of ['PRIMARY', 'TEMPORARY', 'BACKUP', 'READY', 'ACCESS_NEEDED', 'UNASSIGNED', 'ON_LEAVE']) {
+      expect(source, state).toContain(state)
+    }
+  })
+
+  it('the responsibility surfaces consume it', () => {
+    const surfaces = [
+      'src/components/coverage/rep-coverage-panel.tsx',
+      'src/components/team/rep-operating-plan.tsx',
+      'src/components/team/team-profile-detail.tsx',
+    ]
+    for (const surface of surfaces) {
+      expect(read(surface), surface).toMatch(/ResponsibilityStatus/)
+    }
+  })
+})
+
+describe('BACKUP_ONLY_HAS_NO_ACTIVE_EXECUTION_TARGET', () => {
+  it('production: no backup-only row carries an active target', async () => {
+    const client = neonServiceDbClient()
+    if (await dataIsBeingMutated(client)) {
+      console.warn('[audit] coverage changed in the last 10m — skipping live audit while a writer is active')
+      return
+    }
+    const [{ data: targets, error: targetError }, { data: coverage }, { data: identities }] = await Promise.all([
+      client.from('daily_targets').select('revenue_identity_id, rep_id').eq('organization_id', ORG).eq('active', true).limit(1000),
+      client.from('profile_coverage').select('profile_id, rep_id, role').eq('organization_id', ORG).eq('active', true).limit(1000),
+      client.from('revenue_identities').select('id, profile_id').eq('organization_id', ORG).limit(1000),
+    ])
+    expect(targetError).toBeNull()
+    const profileByIdentity = new Map((identities ?? []).map((row) => [row.id as string, row.profile_id as string]))
+    const roleByProfileRep = new Map((coverage ?? []).map((row) => [`${row.profile_id as string}:${row.rep_id as string}`, row.role as string]))
+    const violations = (targets ?? []).filter(
+      (row) => roleByProfileRep.get(`${profileByIdentity.get(row.revenue_identity_id as string)}:${row.rep_id as string}`) === 'BACKUP',
+    )
+    expect(violations).toEqual([])
+  }, 120_000)
+})
+
+describe('ELIGIBILITY_DOES_NOT_GRANT_EXECUTION', () => {
+  it('the executable scope reads primary plus active coverage, never backup eligibility', () => {
+    const source = read('src/lib/coverage/access.ts')
+    expect(source).toMatch(/listActiveCoveredIdentities/)
+    expect(source).not.toMatch(/role\s*===?\s*'BACKUP'/)
+  })
+
+  it('production: every active target belongs to a PRIMARY', async () => {
+    const client = neonServiceDbClient()
+    if (await dataIsBeingMutated(client)) {
+      console.warn('[audit] coverage changed in the last 10m — skipping live audit while a writer is active')
+      return
+    }
+    const [{ data: targets, error: targetError }, { data: coverage }, { data: identities }] = await Promise.all([
+      client.from('daily_targets').select('revenue_identity_id, rep_id').eq('organization_id', ORG).eq('active', true).limit(1000),
+      client.from('profile_coverage').select('profile_id, rep_id, role').eq('organization_id', ORG).eq('active', true).limit(1000),
+      client.from('revenue_identities').select('id, profile_id').eq('organization_id', ORG).limit(1000),
+    ])
+    expect(targetError).toBeNull()
+    const profileByIdentity = new Map((identities ?? []).map((row) => [row.id as string, row.profile_id as string]))
+    const roleByProfileRep = new Map((coverage ?? []).map((row) => [`${row.profile_id as string}:${row.rep_id as string}`, row.role as string]))
+    const violations = (targets ?? []).filter(
+      (row) => roleByProfileRep.get(`${profileByIdentity.get(row.revenue_identity_id as string)}:${row.rep_id as string}`) !== 'PRIMARY',
+    )
+    expect(violations).toEqual([])
+  }, 120_000)
 })
 
 describe('ZARA_COVERAGE_CASE', () => {
