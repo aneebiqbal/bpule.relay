@@ -173,7 +173,8 @@ async function HeaderStatus({ repId }: { repId: string }) {
   return (
     <span className="ml-2 inline-flex flex-wrap align-middle items-center gap-2">
       <span className="text-[12px] text-graphite">
-        Last activity {relativeTime(row.lastActivityAt, Date.now())} · Target {Math.round(row.targetPct)}%
+        Working today · {row.completedToday} / {row.totalTarget ?? 0} completed
+        {row.totalTarget ? ` · ${Math.max(0, row.totalTarget - row.completedToday)} remaining` : ''}
       </span>
       <span className="sr-only">Status:</span>
       <RepStatusBadge status={row.status} />

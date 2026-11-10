@@ -179,9 +179,12 @@ function ResponsibilityRow({
     <li className="rounded-lg border border-line bg-bone px-3 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[13px] text-ink"><ChannelBadge channel={row.channel} /></p>
+          <p className="flex flex-wrap items-center gap-1 text-[13px] text-ink">
+            <ChannelBadge channel={row.channel} />
+            <ResponsibilityStatus status="PRIMARY" />
+            {row.isNew && <span className="text-[11px] font-medium text-status-info">NEW</span>}
+          </p>
           <p className="text-[11px] text-stone">
-            {row.isNew && <span className="mr-1 font-medium text-status-info">NEW</span>}
             {row.readiness ? 'Ready' : 'Access not confirmed'}
             {row.target > 0 ? ` · ${row.remaining} of ${row.target} left` : ' · No daily target'}
           </p>
