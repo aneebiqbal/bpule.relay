@@ -30,7 +30,9 @@ import {
 import { canInterveneOnRep, repInScope } from '@/lib/operations/scope'
 import { OPS_RANGES, opsHref, parseOpsFilters, rangeWindow, type OpsFilters as Filters } from '@/lib/operations/filters'
 import { loadRepBasics, buildRepAttention, type RepBasics } from '@/lib/operations/rep-360'
-import { countConversationViews, loadConversationRows } from '@/lib/operations/conversations'
+import { getInboxCountsForRepIds } from '@/lib/operations/inbox-counts'
+import { loadConversationRows } from '@/lib/operations/conversations'
+import { currentInstant, orgDate } from '@/lib/org-clock'
 import { ACTIVITY_EVENT_FILTERS, loadTimeline } from '@/lib/operations/activity'
 import { loadUnifiedTasks } from '@/lib/tasks/load-unified-tasks'
 import { countOverdueUnifiedTasks, isOverdue } from '@/lib/tasks/rank-unified-tasks'
@@ -472,13 +474,17 @@ async function WorkTab({
   view: string | null
 }) {
   const now = Date.now()
-  const [tasks, conversations] = await Promise.all([
+  const [tasks, inbox] = await Promise.all([
     loadUnifiedTasks({ auth: ctx.auth, derivedActions: [], forRepId: repId, includeCompleted: true }),
-    loadConversationRows(ctx.client, { orgId: ctx.auth.orgId, repIds: [repId] }, now).catch(() => []),
+    getInboxCountsForRepIds(ctx.client, {
+      orgId: ctx.auth.orgId,
+      repIds: [repId],
+      businessDate: orgDate(currentInstant(), await loadOperatingPolicy(ctx.auth.orgId).then((p) => p.timezone).catch(() => 'UTC')),
+    }).catch(() => new Map<string, { needsReply: number; waitingOnClient: number; followups: number }>()),
   ])
   // The "Assigned overdue" metric deep-links here; honour it instead of ignoring it.
   const visibleTasks = view === 'overdue' ? tasks.filter((task) => isOverdue(task, now)) : tasks
-  const counts = countConversationViews(conversations)
+  const repInbox = inbox.get(repId)
   const base = `/team/${repId}`
   return (
     <div className="space-y-4">
@@ -488,9 +494,9 @@ async function WorkTab({
       >
         <MetricStrip
           metrics={[
-            { label: 'Replies to send', value: counts.waiting_me, href: `/chats?rep=${repId}` },
-            { label: 'Follow-ups due', value: counts.followups, href: `/chats?rep=${repId}` },
-            { label: 'Meetings to prepare', value: counts.meetings, href: `/chats?rep=${repId}` },
+            { label: 'Replies to send', value: repInbox?.needsReply ?? 0, href: `/chats?rep=${repId}&view=waiting_me` },
+            { label: 'Waiting on clients', value: repInbox?.waitingOnClient ?? 0, href: `/chats?rep=${repId}&view=waiting_them` },
+            { label: 'Follow-ups due', value: repInbox?.followups ?? 0, href: `/chats?rep=${repId}&view=followups` },
             { label: 'Assigned overdue', value: countOverdueUnifiedTasks(tasks, now), href: `${base}?tab=work&view=overdue` },
           ]}
         />
