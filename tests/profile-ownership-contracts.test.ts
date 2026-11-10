@@ -125,9 +125,9 @@ describe('PROFILE_EXECUTION_GLOBAL_PARITY', () => {
     expect(detail).toMatch(/Execution/)
   })
 
-  it('production: every assignment is a primary, a backup, or the account owner', async () => {
+  it('production: every active primary holds eligibility (execution requires assignment)', async () => {
     const client = neonServiceDbClient()
-    const [{ data: assignments }, { data: coverage }, { data: identities }, { data: profiles }] = await Promise.all([
+    const [{ data: assignments }, { data: coverage }, { data: identities }] = await Promise.all([
       client.from('identity_assignments').select('rep_id, revenue_identity_id').eq('organization_id', ORG).limit(500),
       client
         .from('profile_coverage')
@@ -136,27 +136,19 @@ describe('PROFILE_EXECUTION_GLOBAL_PARITY', () => {
         .eq('active', true)
         .limit(500),
       client.from('revenue_identities').select('id, profile_id').eq('organization_id', ORG).limit(500),
-      client.from('profiles').select('id, rep_id').eq('organization_id', ORG).limit(500),
     ])
-    const primaryByProfile = new Map(
-      (coverage ?? []).filter((row) => row.role === 'PRIMARY').map((row) => [row.profile_id as string, row.rep_id as string]),
-    )
-    const backupByProfileRep = new Set(
-      (coverage ?? []
-      ).filter((row) => row.role === 'BACKUP').map((row) => `${row.profile_id as string}:${row.rep_id as string}`),
-    )
-    const ownerByProfile = new Map((profiles ?? []).map((row) => [row.id as string, row.rep_id as string]))
     const profileByIdentity = new Map((identities ?? []).map((row) => [row.id as string, row.profile_id as string]))
-    for (const row of assignments ?? []) {
-      const profileId = profileByIdentity.get(row.revenue_identity_id as string)
-      // A channel with no linked person is a separate data-quality issue
-      // (see the null-profile identity audit); it has no coverage role to hold.
-      if (!profileId) continue
-      const hasRole =
-        primaryByProfile.get(profileId) === row.rep_id ||
-        backupByProfileRep.has(`${profileId}:${row.rep_id}`) ||
-        ownerByProfile.get(profileId) === row.rep_id
-      expect(hasRole, `assignment ${row.revenue_identity_id} (${row.rep_id})`).toBe(true)
+    const eligibility = new Set(
+      (assignments ?? []).map((row) => `${profileByIdentity.get(row.revenue_identity_id as string)}:${row.rep_id as string}`),
+    )
+    // Execution (PRIMARY) must always have a matching eligibility row. The
+    // reverse is deliberately not required: an assignment is eligibility and
+    // coverage writes must never remove it.
+    for (const row of (coverage ?? []).filter((entry) => entry.role === 'PRIMARY')) {
+      expect(
+        eligibility.has(`${row.profile_id as string}:${row.rep_id as string}`),
+        `primary ${row.profile_id} (${row.rep_id}) has no assignment`,
+      ).toBe(true)
     }
   }, 120_000)
 })
