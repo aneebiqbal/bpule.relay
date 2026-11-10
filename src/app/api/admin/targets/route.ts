@@ -65,17 +65,21 @@ export async function GET() {
     )
     // Only executable responsibility appears as current work. Backup eligibility
     // and stale lanes never show up in the daily-plan editor.
-    const executableTargets = targets.filter((target) => {
-      const profileId = profileIdByIdentity.get(target.revenueIdentityId)
+    const isExecutable = (identityId: string, repId: string) => {
+      const profileId = profileIdByIdentity.get(identityId)
       if (!profileId) return false
-      const key = `${profileId}:${target.repId}`
+      const key = `${profileId}:${repId}`
       return primaryByProfileRep.has(key) || coveredByProfileRep.has(key)
-    })
+    }
+    const executableTargets = targets.filter((target) => isExecutable(target.revenueIdentityId, target.repId))
+    const executableAssignments = assignments.filter((assignment) =>
+      isExecutable(assignment.revenueIdentityId, assignment.repId),
+    )
 
     return NextResponse.json({
       targets: executableTargets,
       identities,
-      assignments,
+      assignments: executableAssignments,
       reps,
       defaults: {
         email: defaultTargetsForChannel('email'),
