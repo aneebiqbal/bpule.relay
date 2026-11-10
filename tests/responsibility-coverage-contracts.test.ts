@@ -89,8 +89,9 @@ describe('PRIMARY_OWNER_PRESERVED_DURING_COVERAGE', () => {
   it('activating coverage never writes the primary chain or eligibility', () => {
     const approve = extractFunction(read('src/lib/coverage/actions.ts'), 'approveCoveragePlan')
     expect(approve).toMatch(/coverage_assignments/)
-    expect(approve).not.toMatch(/profile_coverage/)
-    expect(approve).not.toMatch(/identity_assignments/)
+    // Eligibility is READ to guard activation; it is never written here.
+    expect(approve).not.toMatch(/from\('profile_coverage'\)[\s\S]{0,300}\.(insert|update|upsert|delete)/)
+    expect(approve).not.toMatch(/from\('identity_assignments'\)[\s\S]{0,300}\.(insert|update|upsert|delete)/)
   })
 })
 
@@ -257,6 +258,8 @@ describe('WHO_WORKS_WHAT', () => {
       activeCoveringRepId: null,
       activeCoveringRepName: null,
       activeCoverageUntil: null,
+      activeOperators: [],
+      activeCoverageMode: null,
       status: 'COVERED',
       recommendation: 'NONE',
       recommendedRepId: null,
@@ -459,7 +462,7 @@ describe('COVERAGE_NOTIFICATION_CONTEXT', () => {
   it('coverage notifications name the profile, channel and the other rep', () => {
     const source = read('src/lib/coverage/actions.ts')
     expect(source).toMatch(/Temporary responsibility assigned/)
-    expect(source).toMatch(/covering for \$\{primaryName\}/)
+    expect(source).toMatch(/(covering this profile for|alongside) \$\{primaryName\}/)
     expect(source).toMatch(/Your ownership is unchanged/)
     expect(source).toMatch(/is restored to you/)
   })
