@@ -141,12 +141,22 @@ function capitalizedTerms(text: string): string[] {
   return [...new Set(out)]
 }
 
-export function evaluateCoverLetter(text: string, job: ApplicationJobContext, profile: ApplicationProfileContext): CoverLetterEvaluation {
+/** True when the text carries two or more generic marketing shapes. */
+export function hasGenericShape(text: string): boolean {
+  return GENERIC_SHAPES.filter((re) => re.test(text)).length >= 2
+}
+
+export function evaluateCoverLetter(
+  text: string,
+  job: ApplicationJobContext,
+  profile: ApplicationProfileContext,
+  wordBand: [number, number] = COVER_LETTER_WORDS,
+): CoverLetterEvaluation {
   const issues: GateIssue[] = []
   const t = text.replace(/[—–]/g, '-').replace(/!/g, '.').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').replace(/[ \t]{2,}/g, ' ').trim()
   const wc = words(t).length
-  if (wc < COVER_LETTER_WORDS[0]) issues.push({ code: 'TOO_SHORT', message: `${wc} words — under ${COVER_LETTER_WORDS[0]}`, severity: 'block' })
-  if (wc > COVER_LETTER_WORDS[1]) issues.push({ code: 'TOO_LONG', message: `${wc} words — over ${COVER_LETTER_WORDS[1]}`, severity: 'block' })
+  if (wc < wordBand[0]) issues.push({ code: 'TOO_SHORT', message: `${wc} words — under ${wordBand[0]}`, severity: 'block' })
+  if (wc > wordBand[1]) issues.push({ code: 'TOO_LONG', message: `${wc} words — over ${wordBand[1]}`, severity: 'block' })
 
   for (const re of BANNED_OPENERS) if (re.test(t)) { issues.push({ code: 'GENERIC_OPENER', message: 'Opens like every other proposal', severity: 'block' }); break }
   for (const re of BANNED_PHRASES) { const m = t.match(re); if (m) issues.push({ code: 'BANNED_PHRASE', message: `Banned phrase: "${m[0]}"`, severity: 'block' }) }

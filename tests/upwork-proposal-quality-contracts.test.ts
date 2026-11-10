@@ -140,7 +140,7 @@ describe('UPWORK_STANDARD_SENDABLE', () => {
     const source = read(GENERATE)
     expect(source).toMatch(/generationMode === 'premium' \? 'premium' : 'standard'/)
     // The gate is unconditional — standard is never exempt.
-    expect(source).toMatch(/const letterGate = evaluateCoverLetter\(humanized\.text, jobCtx, profileCtx\)/)
+    expect(source).toMatch(/const letterGate = evaluateCoverLetter\(humanized\.text, jobCtx, profileCtx, wordBand\)/)
   })
 })
 

@@ -5,7 +5,7 @@ import { createScoutStore } from '@/lib/store'
 import { generate } from '@/lib/ai/runtime'
 import { injectStyleCard } from '@/lib/style/inject'
 import { sanitizeDraft } from '@/lib/facts/sanitize'
-import { evaluateCoverLetter, evaluateScreeningAnswers, COVER_LETTER_WORDS } from '@/lib/upwork/application-gate'
+import { evaluateCoverLetter, evaluateScreeningAnswers, hasGenericShape, COVER_LETTER_WORDS } from '@/lib/upwork/application-gate'
 import { AI_TELL_PHRASES, BANNED_PHRASES } from '@/lib/writing/engine'
 import { checkHumanization, rewriteToHumanize } from '@/lib/ai/humanization'
 import { rankProfilesForOpportunity, recommendBestProfile } from '@/lib/profile-match'
@@ -291,6 +291,17 @@ export async function POST(
     '- If asked about availability/hours, be explicit',
     '- If asked about approach, give a concrete methodology',
     '',
+    '### EXAMPLE SHAPE (illustrative only — never copy these words or facts):',
+    '"I\'ve spent recent years on exactly this kind of integration work. At one',
+    'previous client I debugged the callback and token-refresh path across several',
+    'identity providers, so the provider-specific edge cases are familiar territory.',
+    'I\'d start by tracing the callback flow for each provider, then look at',
+    'retries and session state before changing anything. Which provider is failing',
+    'most often right now?"',
+    'It works because it names the exact problem, cites one real project, gives a',
+    'concrete first step and asks one earned question — no generic marketing.',
+    '',
+
     '### SELF-CHECK (rate before outputting):',
     '- Does the opening prove I read their specific job — without restating it?',
     '- Is the proof the strongest relevant evidence, not the most metadata?',
@@ -462,9 +473,10 @@ export async function POST(
   // Humanization pass (§23): only when the draft shows a structural tell.
   // It may change phrasing, structure, rhythm and length — never facts.
   const humanization = checkHumanization(sanitized.text)
-  const humanized = humanization.passed
-    ? sanitized
-    : { ...sanitized, text: rewriteToHumanize(sanitized.text, humanization.flaggedTells) }
+  const needsHumanize = !humanization.passed || hasGenericShape(sanitized.text)
+  const humanized = needsHumanize
+    ? { ...sanitized, text: rewriteToHumanize(sanitized.text, humanization.flaggedTells) }
+    : sanitized
 
   // Deterministic quality gate (the model's self-check is advisory only).
   const profileCtx = {
@@ -473,7 +485,7 @@ export async function POST(
     allowedNumbers: [...toAllowedNumbers(generationContext), ...facts.flatMap((f) => (`${f.value}`.match(/\d[\d,.]*\s*(?:%|k|x|\+)?/gi) ?? []).map((n) => n.replace(/\s+/g, '').toLowerCase()))],
   }
   const jobCtx = { title: job.title, description: job.description, skills: job.requiredSkills ?? [], screeningQuestions }
-  const letterGate = evaluateCoverLetter(humanized.text, jobCtx, profileCtx)
+  const letterGate = evaluateCoverLetter(humanized.text, jobCtx, profileCtx, wordBand)
   const answersGate = evaluateScreeningAnswers(best.questionAnswers ?? [], jobCtx, profileCtx, letterGate.text)
   // Unsupported claims are checked in the proposal AND in every screening
   // answer — an invented price or timeline in an answer is still an invention.
