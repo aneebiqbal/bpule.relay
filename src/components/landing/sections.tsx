@@ -191,7 +191,7 @@ export function ContextSection() {
                   <span className={cn(
                     'shrink-0 rounded-full px-1.5 py-0.5 text-mono-medium text-[8px] uppercase tracking-[0.1em]',
                     row.stage === 'NOW' && 'bg-orange text-on-accent',
-                    row.stage === 'NEXT' && 'bg-orange/10 text-orange',
+                    row.stage === 'NEXT' && 'bg-orange/10 text-orange-ink',
                     row.stage === 'TODAY' && 'bg-bone text-graphite',
                     row.stage === 'LATER' && 'bg-bone text-stone',
                   )}>

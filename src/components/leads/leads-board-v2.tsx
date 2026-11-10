@@ -451,7 +451,7 @@ function StatCard({ icon, label, value, accent }: {
     <div className="rounded-xl border border-line bg-bone-raised/30 px-4 py-3 flex items-center gap-3">
       <div className={cn(
         'flex items-center justify-center rounded-lg p-2',
-        accent === 'orange' ? 'bg-orange/10 text-orange' :
+        accent === 'orange' ? 'bg-orange/10 text-orange-ink' :
         accent === 'red' ? 'bg-red-50 text-red-500' :
         accent === 'stone' ? 'bg-stone-100 text-stone-500' :
         'bg-cobalt/10 text-cobalt'

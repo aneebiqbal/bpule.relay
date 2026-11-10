@@ -16,7 +16,7 @@ interface IdentityLite {
 
 const CHANNEL: Record<string, { label: string; short: string; cls: string }> = {
   linkedin: { label: 'LinkedIn', short: 'in', cls: 'bg-cobalt/10 text-cobalt' },
-  email: { label: 'Email', short: '@', cls: 'bg-orange/10 text-orange' },
+  email: { label: 'Email', short: '@', cls: 'bg-orange/10 text-orange-ink' },
   upwork: { label: 'Upwork', short: 'U', cls: 'bg-status-success/10 text-status-success' },
   other: { label: 'Other', short: '•', cls: 'bg-bone text-graphite' },
 }

@@ -61,7 +61,7 @@ export function ArchivedLeadsList({ leads }: { leads: ArchivedLeadRow[] }) {
                 setBusyId(null)
               }
             }}
-            className="inline-flex items-center gap-1 rounded-lg bg-orange/10 px-2.5 py-1 text-[11px] font-medium text-orange transition-colors hover:bg-orange/20 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-lg bg-orange/10 px-2.5 py-1 text-[11px] font-medium text-orange-ink transition-colors hover:bg-orange/20 disabled:opacity-50"
           >
             <RotateCcw className="size-3" /> {busyId === lead.id ? 'Restoring…' : 'Restore'}
           </button>

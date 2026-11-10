@@ -46,7 +46,7 @@ export function DecisionExplainability({
             Why Relay chose this
           </span>
           {score != null && (
-            <span className="rounded-full bg-orange/10 px-1.5 py-0.5 text-[9px] font-medium text-orange">
+            <span className="rounded-full bg-orange/10 px-1.5 py-0.5 text-[9px] font-medium text-orange-ink">
               {score}/100
             </span>
           )}

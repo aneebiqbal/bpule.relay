@@ -40,8 +40,8 @@ const STATUS_CHIP: Record<UpworkJobStatus, { label: string; cls: string }> = {
   SAVED: { label: 'Saved', cls: 'bg-bone text-graphite ring-line' },
   DRAFT_READY: { label: 'Draft ready', cls: 'bg-cobalt/10 text-cobalt ring-cobalt/20' },
   APPLIED: { label: 'Applied', cls: 'bg-status-success/10 text-status-success ring-status-success/20' },
-  CLIENT_REPLIED: { label: 'Client replied', cls: 'bg-orange/10 text-orange-light ring-orange/20' },
-  INTERVIEW: { label: 'Interview', cls: 'bg-orange/10 text-orange-light ring-orange/20' },
+  CLIENT_REPLIED: { label: 'Client replied', cls: 'bg-orange/10 text-orange-ink ring-orange/20' },
+  INTERVIEW: { label: 'Interview', cls: 'bg-orange/10 text-orange-ink ring-orange/20' },
   WON: { label: 'Won', cls: 'bg-status-success/15 text-status-success ring-status-success/20' },
   LOST: { label: 'Lost', cls: 'bg-status-danger/10 text-status-danger ring-status-danger/20' },
   ARCHIVED: { label: 'Archived', cls: 'bg-bone text-stone ring-line' },
@@ -196,7 +196,7 @@ export function UpworkDashboardView({
                         <p className="text-[11px] text-stone">{ageLabel(job)}</p>
                       </div>
                       {action && (
-                        <span className="hidden rounded-full bg-orange/10 px-2.5 py-1 text-[11px] font-medium text-orange-light sm:inline-flex">
+                        <span className="hidden rounded-full bg-orange/10 px-2.5 py-1 text-[11px] font-medium text-orange-ink sm:inline-flex">
                           {action}
                         </span>
                       )}

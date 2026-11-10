@@ -152,7 +152,7 @@ export function ProfileDetail({ profileId, canImport = false, isAdmin = false }:
           <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange-light">Best At</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {profile.primarySkills?.map((s) => (
-              <span key={s} className="rounded bg-orange/10 px-2 py-0.5 text-[11px] text-orange">{s}</span>
+              <span key={s} className="rounded bg-orange/10 px-2 py-0.5 text-[11px] text-orange-ink">{s}</span>
             ))}
             {profile.technologies?.filter((t) => !profile.primarySkills?.includes(t)).map((t) => (
               <span key={t} className="rounded border border-orange/10 px-2 py-0.5 text-[11px] text-graphite">{t}</span>

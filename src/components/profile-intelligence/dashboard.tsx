@@ -73,7 +73,7 @@ export function ProfileIntelligenceDashboard({ orgId, isAdmin, canManage = isAdm
       {canManage && (
         <details className="group rounded-xl border border-line bg-bone-raised" open={openUpload}>
           <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 marker:hidden">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-orange/10 text-orange" aria-hidden="true">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-orange/10 text-orange-ink" aria-hidden="true">
               <Upload className="size-4" />
             </span>
             <span className="min-w-0 flex-1">
