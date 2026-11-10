@@ -149,21 +149,24 @@ describe('ADMIN V4 command present', () => {
         followupsToday: 0,
         meetingsToday: 0,
         winsToday: 0,
-        proposalsToday: 0,
+        draftsGeneratedToday: 0,
+        applicationsToday: 0,
       },
       { completed: 179, replies: 3, followups: 18, meetings: 0, wins: 0, proposals: 1, newLeads: 82 },
       22,
     )
-    expect(rows).toHaveLength(8)
+    expect(rows).toHaveLength(9)
     const completed = rows.find((row) => row.key === 'completed')!
     expect(completed.today).toBe(22)
     expect(completed.yesterday).toBe(179)
     expect(completed.delta).toBe(-157)
     const leads = rows.find((row) => row.key === 'newLeads')!
     expect(leads.delta).toBe(-71)
-    const proposals = rows.find((row) => row.key === 'proposals')!
-    expect(proposals.today).toBe(0)
-    expect(proposals.yesterday).toBe(1)
-    expect(proposals.delta).toBe(-1)
+    const drafts = rows.find((row) => row.key === 'proposals')!
+    expect(drafts.today).toBe(0)
+    expect(drafts.yesterday).toBe(1)
+    expect(drafts.delta).toBe(-1)
+    const applications = rows.find((row) => row.key === 'applications')!
+    expect(applications.today).toBe(0)
   })
 })

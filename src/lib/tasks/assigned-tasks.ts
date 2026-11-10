@@ -133,6 +133,8 @@ export interface CreateAssignedTaskInput {
   dueAt?: string | null
   leadId?: string | null
   profileId?: string | null
+  jobId?: string | null
+  revenueIdentityId?: string | null
 }
 
 export async function createAssignedTask(
@@ -140,7 +142,10 @@ export async function createAssignedTask(
   auth: AuthContext,
   input: CreateAssignedTaskInput,
 ): Promise<AssignedTaskRow> {
-  if (!auth.isManager && !auth.isAdmin && !auth.isOwner) {
+  // A rep may create a task for themselves (an Upwork follow-up); only
+  // assigning to someone else requires manager/admin/owner.
+  const canCreate = auth.isManager || auth.isAdmin || auth.isOwner || input.assigneeRepId === auth.repId
+  if (!canCreate) {
     throw new Error('Only managers and admins can assign tasks')
   }
 
@@ -171,6 +176,8 @@ export async function createAssignedTask(
       created_by_rep_id: auth.repId,
       lead_id: input.leadId ?? null,
       profile_id: input.profileId ?? null,
+      job_id: input.jobId ?? null,
+      revenue_identity_id: input.revenueIdentityId ?? null,
       kind: input.kind,
       title: input.title,
       description: input.description ?? null,
@@ -890,10 +897,6 @@ export async function cancelAssignedTask(
   taskId: string,
   reason?: string | null,
 ): Promise<AssignedTaskRow> {
-  if (!auth.isManager && !auth.isAdmin && !auth.isOwner) {
-    throw new Error('Only managers and admins can cancel tasks')
-  }
-
   const { data: current, error: loadError } = await client
     .from('assigned_tasks')
     .select('*')
@@ -901,6 +904,14 @@ export async function cancelAssignedTask(
     .eq('organization_id', auth.orgId)
     .maybeSingle()
   if (loadError || !current) throw new Error('Task not found')
+
+  // A rep may cancel their own task (an Upwork follow-up); cancelling someone
+  // else's still requires manager/admin/owner.
+  const canCancel =
+    auth.isManager || auth.isAdmin || auth.isOwner || current.assignee_rep_id === auth.repId
+  if (!canCancel) {
+    throw new Error('Only managers and admins can cancel tasks')
+  }
 
   const scope = await resolveTaskAssigneeScope(client, auth)
   if (scope.assigneeIds && !scope.assigneeIds.includes(current.assignee_rep_id)) {

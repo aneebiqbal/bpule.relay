@@ -44,6 +44,9 @@ import type {
   TrendingAngle,
   UpworkJob,
   UpworkMessage,
+  UpworkApplication,
+  UpworkProposalVersion,
+  UpworkScreeningAnswer,
   Verdict,
   VoiceProfile,
   RevenueIdentity,
@@ -524,7 +527,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       urgencySignal: 'Previous developer went unresponsive mid-project.',
       score: 8,
       verdict: 'apply',
-      status: 'new',
+      status: 'SAVED',
       extractedFields: null,
       rawInput: null,
       tags: ['fintech', 'react', 'nodejs'],
@@ -556,7 +559,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       urgencySignal: null,
       score: 6,
       verdict: 'apply_if_connects',
-      status: 'drafted',
+      status: 'DRAFT_READY',
       postedAt: t(3),
       remoteStatus: 'remote',
       clientName: 'Demo Analytics Client',
@@ -574,6 +577,8 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
   ]
   const upworkMessages: UpworkMessage[] = []
+  const upworkApplications: UpworkApplication[] = []
+  const upworkProposalVersions: UpworkProposalVersion[] = []
   const tailoredCvs: TailoredCV[] = []
   const pushSubs: PushSubscription[] = []
   const notifications: NotificationLogEntry[] = [
@@ -1590,7 +1595,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       }
 
       const upworkQueue = upworkJobs
-        .filter((j) => j.status === 'new' || j.status === 'drafted')
+        .filter((j) => j.status === 'SAVED' || j.status === 'DRAFT_READY')
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
       const upwork: UpworkSnapshot = { queue: upworkQueue, todayApplies: upworkApplies }
 
@@ -1713,7 +1718,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         urgencySignal: input.urgencySignal ?? null,
         score: null,
         verdict: null,
-        status: 'new',
+        status: 'SAVED',
         extractedFields: null,
         rawInput: input.rawInput ?? null,
         tags: input.tags ?? [],
@@ -1736,8 +1741,16 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         messages: upworkMessages.filter((m) => m.jobId === id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
       }
     },
-    async listUpworkJobs() {
-      return upworkJobs.filter((j) => j.ownerRepId === rep.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    async listUpworkJobs(filter = {}) {
+      const scope = filter.repIds === undefined ? [rep.id] : filter.repIds
+      return upworkJobs
+        .filter((j) => (scope ? scope.includes(j.ownerRepId ?? '') : true))
+        .filter((j) => (filter.status?.length ? filter.status.includes(j.status) : true))
+        .filter((j) => (filter.includeArchived ? true : j.status !== 'ARCHIVED'))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    },
+    async resolveUpworkRepScope() {
+      return [rep.id]
     },
     async getPipelineStageSummary() {
       return null
@@ -1788,55 +1801,146 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         if (updates.notes !== undefined) job.notes = updates.notes as any
       }
     },
-    async saveUpworkDraft(input) {
-      const existing = upworkMessages.find((m) => m.jobId === input.jobId && m.type === input.type && !m.sentAt)
-      if (existing) {
-        existing.draftText = input.draftText
-        existing.modelUsed = input.modelUsed
-        return existing
+    async submitUpworkApplication(input) {
+      const existing = upworkApplications.find((a) => a.jobId === input.jobId)
+      if (existing) return existing
+      const version: UpworkProposalVersion = {
+        id: nextId('upv'),
+        organizationId: DEMO_ORG_ID,
+        jobId: input.jobId,
+        repId: input.repId,
+        profileId: input.profileId ?? null,
+        revenueIdentityId: input.revenueIdentityId ?? null,
+        proposalText: input.proposalText,
+        modelTier: input.modelTier ?? null,
+        promptVersion: input.promptVersion ?? null,
+        proofRefs: input.proofRefs ?? [],
+        screeningAnswers: input.screeningAnswers ?? [],
+        createdAt: new Date().toISOString(),
       }
-      const msg: UpworkMessage = {
+      upworkProposalVersions.unshift(version)
+      const application: UpworkApplication = {
+        id: nextId('uapp'),
+        organizationId: DEMO_ORG_ID,
+        jobId: input.jobId,
+        repId: input.repId,
+        revenueIdentityId: input.revenueIdentityId ?? null,
+        personProfileId: input.profileId ?? null,
+        submittedAt: new Date().toISOString(),
+        proposalText: input.proposalText,
+        proposalVersionId: version.id,
+        connectsSpent: input.connectsSpent ?? null,
+        boostConnects: input.boostConnects ?? 0,
+        screeningAnswers: input.screeningAnswers ?? [],
+        firstReplyAt: null,
+        latestReplyAt: null,
+        interviewAt: null,
+        wonAt: null,
+        lostAt: null,
+        archivedAt: null,
+        status: 'submitted',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      upworkApplications.unshift(application)
+      const job = upworkJobs.find((j) => j.id === input.jobId)
+      if (job) {
+        job.status = 'APPLIED'
+        if (input.revenueIdentityId) job.revenueIdentityId = input.revenueIdentityId
+      }
+      return application
+    },
+    async getUpworkApplication(jobId) {
+      return upworkApplications.find((a) => a.jobId === jobId) ?? null
+    },
+    async listUpworkApplications(filter = {}) {
+      return upworkApplications
+        .filter((a) => (filter.repIds?.length ? filter.repIds.includes(a.repId ?? '') : true))
+        .filter((a) => (filter.identityIds?.length ? filter.identityIds.includes(a.revenueIdentityId ?? '') : true))
+        .filter((a) => (filter.from ? (a.submittedAt ?? '') >= filter.from : true))
+        .filter((a) => (filter.to ? (a.submittedAt ?? '') < filter.to : true))
+        .filter((a) => (filter.includeArchived ? true : a.status !== 'archived'))
+    },
+    async updateUpworkApplication(id, patch) {
+      const application = upworkApplications.find((a) => a.id === id)
+      if (!application) return
+      if (patch.status !== undefined) application.status = patch.status
+      if (patch.firstReplyAt !== undefined) application.firstReplyAt = patch.firstReplyAt
+      if (patch.latestReplyAt !== undefined) application.latestReplyAt = patch.latestReplyAt
+      if (patch.interviewAt !== undefined) application.interviewAt = patch.interviewAt
+      if (patch.wonAt !== undefined) application.wonAt = patch.wonAt
+      if (patch.lostAt !== undefined) application.lostAt = patch.lostAt
+      if (patch.archivedAt !== undefined) application.archivedAt = patch.archivedAt
+      application.updatedAt = new Date().toISOString()
+    },
+    async createUpworkProposalVersion(input) {
+      const version: UpworkProposalVersion = {
+        id: nextId('upv'),
+        organizationId: DEMO_ORG_ID,
+        jobId: input.jobId,
+        repId: input.repId,
+        profileId: input.profileId ?? null,
+        revenueIdentityId: input.revenueIdentityId ?? null,
+        proposalText: input.proposalText,
+        modelTier: input.modelTier ?? null,
+        promptVersion: input.promptVersion ?? null,
+        proofRefs: input.proofRefs ?? [],
+        screeningAnswers: input.screeningAnswers ?? [],
+        createdAt: new Date().toISOString(),
+      }
+      upworkProposalVersions.unshift(version)
+      return version
+    },
+    async listUpworkProposalVersions(jobId) {
+      return upworkProposalVersions.filter((v) => v.jobId === jobId)
+    },
+    async logUpworkMessage(input) {
+      const message: UpworkMessage = {
         id: nextId('umsg'),
         organizationId: DEMO_ORG_ID,
         jobId: input.jobId,
-        repId: rep.id,
+        repId: input.repId,
         type: input.type,
-        draftText: input.draftText,
-        sentText: null,
-        sentAt: null,
-        modelUsed: input.modelUsed,
-        senderProfileId: input.senderProfileId ?? null,
-        createdAt: new Date().toISOString(),
-      }
-      upworkMessages.unshift(msg)
-      return msg
-    },
-    async markUpworkApplied(jobId, sentText, type = 'cover', senderProfileIdOverride = null, ownerRepId = null) {
-      const job = upworkJobs.find((j) => j.id === jobId && (ownerRepId === null || j.ownerRepId === ownerRepId))
-      if (job) job.status = 'applied'
-      // Same resolution as the Supabase store: caller override, job, then draft.
-      let senderProfileId = senderProfileIdOverride
-        ?? (job as { senderProfileId?: string | null } | undefined)?.senderProfileId
-        ?? null
-      if (!senderProfileId) {
-        const draft = [...upworkMessages]
-          .reverse()
-          .find((m) => m.jobId === jobId && m.type === type && !m.sentAt)
-        senderProfileId = draft?.senderProfileId ?? null
-      }
-      upworkMessages.push({
-        id: nextId('umsg'),
-        organizationId: DEMO_ORG_ID,
-        jobId,
-        repId: rep.id,
-        type,
         draftText: null,
-        sentText,
-        sentAt: new Date().toISOString(),
+        sentText: input.direction === 'outbound' ? input.body : null,
+        sentAt: input.direction === 'outbound' ? new Date().toISOString() : null,
         modelUsed: null,
-        senderProfileId,
+        senderProfileId: input.senderProfileId ?? null,
+        direction: input.direction,
+        body: input.body,
         createdAt: new Date().toISOString(),
-      })
+      }
+      upworkMessages.unshift(message)
+      return message
+    },
+    async deleteUpworkJob(id) {
+      const job = upworkJobs.find((j) => j.id === id)
+      if (!job) throw new Error('Job not found.')
+      if (job.status !== 'SAVED' && job.status !== 'DRAFT_READY') throw new Error('Only untouched saved jobs can be deleted.')
+      if (upworkApplications.some((a) => a.jobId === id)) throw new Error('A job with an application cannot be deleted.')
+      upworkJobs.splice(upworkJobs.indexOf(job), 1)
+    },
+    async archiveUpworkJob(id) {
+      const job = upworkJobs.find((j) => j.id === id)
+      if (job) {
+        job.status = 'ARCHIVED'
+        job.archivedAt = new Date().toISOString()
+      }
+      const application = upworkApplications.find((a) => a.jobId === id)
+      if (application) {
+        application.status = 'archived'
+        application.archivedAt = new Date().toISOString()
+      }
+    },
+    async getUpworkWorkspace(id) {
+      const job = await this.getUpworkJob(id)
+      if (!job) return null
+      return {
+        job,
+        application: upworkApplications.find((a) => a.jobId === id) ?? null,
+        proposalVersions: upworkProposalVersions.filter((v) => v.jobId === id),
+        messages: job.messages ?? [],
+      }
     },
     async saveTailoredCV(input) {
       const cv: TailoredCV = {

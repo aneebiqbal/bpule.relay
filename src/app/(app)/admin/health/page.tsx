@@ -7,6 +7,28 @@ import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 /**
+ * Honest monitoring coverage. A green signal means "no persisted signal
+ * exceeded tolerance", not "nothing went wrong" — application errors are not
+ * persisted anywhere this dashboard can read.
+ */
+const COVERAGE: Array<{ tone: 'ok' | 'warn'; label: string; detail: string }> = [
+  { tone: 'ok', label: 'Model calls, fallbacks and schema failures', detail: 'Persisted in ai_traces' },
+  { tone: 'ok', label: 'Product actions and throughput', detail: 'Persisted in action_events' },
+  { tone: 'ok', label: 'Email delivery outcomes', detail: 'Persisted in email_delivery_events' },
+  {
+    tone: 'warn',
+    label: 'Application exceptions and HTTP 500s',
+    detail: 'Not persisted — Vercel runtime logs only, and this account cannot read them',
+  },
+  {
+    tone: 'warn',
+    label: 'Database connection and permission failures',
+    detail: 'Not persisted — Vercel runtime logs only',
+  },
+  { tone: 'warn', label: 'Unexpected 401 / 403 responses', detail: 'Not aggregated anywhere' },
+]
+
+/**
  * Admin → System → Release health.
  *
  * One small surface over existing telemetry: AI traces, the action ledger,
@@ -36,9 +58,12 @@ export default async function AdminHealthPage() {
         subtitle="Live operating signals from existing product telemetry. No vanity metrics — only what a duty engineer needs to decide whether to page anyone."
         actions={
           report ? (
-            <Pill tone={report.healthy ? 'success' : 'danger'}>
-              {report.healthy ? 'Healthy' : 'Degraded'}
-            </Pill>
+            <div className="flex items-center gap-2">
+              <Pill tone={report.healthy ? 'success' : 'danger'}>
+                {report.healthy ? 'Signals OK' : 'Degraded'}
+              </Pill>
+              <Pill tone="neutral">Limited error visibility</Pill>
+            </div>
           ) : null
         }
       />
@@ -47,6 +72,27 @@ export default async function AdminHealthPage() {
         <EmptyNote>Release health could not be loaded. The database is unreachable or a table is missing.</EmptyNote>
       ) : !report ? null : (
         <>
+          <Panel
+            title="Monitoring coverage"
+            subtitle="What this dashboard can and cannot see. A lack of recorded errors is not proof that no errors occurred."
+          >
+            <ul className="divide-y divide-line/70">
+              {COVERAGE.map((row) => (
+                <li key={row.label} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                  {row.tone === 'ok' ? (
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-status-success" aria-hidden="true" />
+                  ) : (
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-warning" aria-hidden="true" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-ink">{row.label}</p>
+                    <p className="text-[12px] text-stone">{row.detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+
           {report.missingMigrations.length > 0 && (
             <Panel title="Missing tables">
               <p className="text-[13px] font-medium text-status-danger">
@@ -153,7 +199,7 @@ export default async function AdminHealthPage() {
             )}
             <span>
               {report.healthy
-                ? 'No missing tables and the AI failure ratio is inside tolerance.'
+                ? 'No missing tables and the AI failure ratio is inside tolerance — across the persisted signals only. Unmonitored failure modes are listed under Monitoring coverage.'
                 : 'Check the signals above before assuming a healthy system.'}
             </span>
             <span className="ml-auto text-stone">

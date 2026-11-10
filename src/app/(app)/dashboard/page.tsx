@@ -207,16 +207,32 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       }
     })(),
   ]))
-  const upworkJobs = allUpworkJobs
-    .filter((j) => j.verdict === 'apply' && j.status !== 'applied')
+  const upworkApplications = await store.listUpworkApplications({ repIds: [user.rep.id] }).catch(() => [])
+  const applicationByJob = new Map(upworkApplications.map((a) => [a.jobId, a]))
+  const upworkCandidates = allUpworkJobs
+    .filter((j) => j.verdict === 'apply' && j.status !== 'APPLIED')
     .slice(0, 3)
-    .map((j) => ({
+  const upworkDetails = await Promise.all(upworkCandidates.map((j) => store.getUpworkJob(j.id))).catch(() => [])
+  const upworkJobs = upworkCandidates.map((j, index) => {
+    const application = applicationByJob.get(j.id)
+    const detail = upworkDetails[index]
+    const followUps = (detail?.messages ?? [])
+      .filter((m) => m.type === 'followup' && m.direction !== 'inbound' && (m.sentAt ?? m.createdAt))
+      .map((m) => m.sentAt ?? m.createdAt)
+      .sort()
+    return {
       id: j.id,
       title: j.title,
       company: j.clientName ?? j.tags[0] ?? 'Client',
       canonicalScore: j.score,
       fitScore: j.score,
-    }))
+      status: j.status,
+      submittedAt: application?.submittedAt ?? null,
+      firstReplyAt: application?.firstReplyAt ?? null,
+      followUpCount: followUps.length,
+      followUps,
+    }
+  })
 
   const identityRows = sliceTargetSummaryForWorkspace(workspace.targetSummary.byIdentity, null)
   const scopedTargets = sumTargets(identityRows)

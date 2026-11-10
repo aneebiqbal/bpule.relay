@@ -1,6 +1,6 @@
 import type { UpworkJobStatus } from '@/lib/domain/types'
 
-/** Stages the live upwork_jobs check constraint accepts. */
+/** The canonical lifecycle, in order. One state per job. */
 export interface UpworkStage {
   key: UpworkJobStatus
   label: string
@@ -8,36 +8,32 @@ export interface UpworkStage {
 }
 
 export const UPWORK_OPEN_STAGES: UpworkStage[] = [
-  { key: 'new', label: 'Saved', detail: 'On your list. No proposal yet.' },
-  { key: 'drafted', label: 'Draft ready', detail: 'Written. Not submitted on Upwork.' },
-  { key: 'applied', label: 'Proposal sent', detail: 'Submitted. Connects are spent.' },
-  { key: 'replied', label: 'Client replied', detail: 'The client wrote back.' },
+  { key: 'SAVED', label: 'Saved', detail: 'On your list. Not reviewed yet.' },
+  { key: 'DRAFT_READY', label: 'Draft ready', detail: 'Proposal written. Not submitted.' },
+  { key: 'APPLIED', label: 'Applied', detail: 'Application submitted. Connects are spent.' },
+  { key: 'CLIENT_REPLIED', label: 'Client replied', detail: 'The client wrote back.' },
+  { key: 'INTERVIEW', label: 'Interview', detail: 'Talking with the client.' },
+  { key: 'WON', label: 'Won', detail: 'Awarded. Preserve the history.' },
+  { key: 'LOST', label: 'Lost', detail: 'Closed without a win.' },
 ]
 
-export const UPWORK_CLOSE_STAGES: UpworkStage[] = [
-  { key: 'no', label: 'Passed', detail: 'You are done with this job.' },
-  { key: 'dead', label: 'Closed', detail: 'The post is gone or no longer worth it.' },
-]
-
-const LEGACY_LABEL: Partial<Record<UpworkJobStatus, string>> = {
-  shortlisted: 'Shortlisted',
-  interviewing: 'Interview',
-  offer_sent: 'Offer',
-  awarded: 'Hired',
-  rejected: 'Declined',
+export const UPWORK_ARCHIVED_STAGE: UpworkStage = {
+  key: 'ARCHIVED',
+  label: 'Archived',
+  detail: 'Out of the active queue. History preserved.',
 }
 
+export const UPWORK_ALL_STAGES: UpworkStage[] = [...UPWORK_OPEN_STAGES, UPWORK_ARCHIVED_STAGE]
+
 export function upworkStageLabel(status: UpworkJobStatus): string {
-  return [...UPWORK_OPEN_STAGES, ...UPWORK_CLOSE_STAGES].find((stage) => stage.key === status)?.label
-    ?? LEGACY_LABEL[status]
-    ?? status
+  return UPWORK_ALL_STAGES.find((stage) => stage.key === status)?.label ?? status
 }
 
 export function upworkStageDetail(status: UpworkJobStatus): string {
-  return [...UPWORK_OPEN_STAGES, ...UPWORK_CLOSE_STAGES].find((stage) => stage.key === status)?.detail
-    ?? 'This mark is not a stage you can work. Move the job onto the Upwork path.'
+  return UPWORK_ALL_STAGES.find((stage) => stage.key === status)?.detail ?? 'Unknown stage.'
 }
 
-export function isLegacyUpworkStatus(status: UpworkJobStatus): boolean {
-  return status in LEGACY_LABEL
+/** True when the job is out of the active queue. */
+export function isArchivedStatus(status: UpworkJobStatus): boolean {
+  return status === 'ARCHIVED'
 }

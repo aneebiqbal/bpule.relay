@@ -9,7 +9,8 @@
 import type { RepWorkspaceData } from '@/lib/rep-home/rep-workspace-data'
 import type { RepCoverageView } from '@/lib/coverage/load'
 import { channelLabel } from '@/lib/profiles/channel'
-import { compareDailyActions, URGENCY_RANK, type DailyAction } from './types'
+import { followUpDueAt, isArchiveCandidate } from '@/lib/upwork/lifecycle'
+import { compareDailyActions, URGENCY_RANK, type DailyAction, type DailyActionType } from './types'
 
 function actionChannel(channel: string | null | undefined): string {
   return channel ? channelLabel(channel) : 'Any channel'
@@ -226,18 +227,20 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
     }
   }
 
-  // ── Optional Upwork opportunities ───────────────────────────────────────────
+  // ── Upwork: apply, follow up, reply, interview, archive review ─────────────
   for (const job of input.data.upworkJobs ?? []) {
+    const action = upworkDailyAction(job, now)
+    if (!action) continue
     actions.push({
       id: `upwork:${job.id}`,
-      type: 'UPWORK',
-      urgency: 'P6',
-      urgencyRank: URGENCY_RANK.P6,
+      type: action.type,
+      urgency: action.urgency,
+      urgencyRank: URGENCY_RANK[action.urgency],
       source: 'Upwork',
       profile: job.company || 'Upwork job',
       channel: 'Upwork',
       subject: job.title,
-      reason: job.fitScore != null ? `Fit ${job.fitScore}` : 'Saved opportunity',
+      reason: action.reason,
       age: 'Saved',
       dueAt: null,
       destination: `/upwork/${job.id}`,
@@ -247,4 +250,44 @@ export function projectDailyActions(input: ProjectDailyActionsInput): DailyActio
   }
 
   return actions.sort(compareDailyActions).slice(0, input.limit ?? 5)
+}
+
+interface UpworkDailyAction {
+  type: DailyActionType
+  urgency: 'P1' | 'P2' | 'P3' | 'P4'
+  reason: string
+}
+
+/**
+ * The one Upwork next action for a job, derived from canonical facts. Follow-up
+ * due and archive review are computed from the application and follow-up
+ * timestamps — never from a generated proposal or a stored status flag.
+ */
+function upworkDailyAction(
+  job: { status?: string; submittedAt?: string | null; firstReplyAt?: string | null; followUps?: string[] },
+  now: number,
+): UpworkDailyAction | null {
+  const nowIso = new Date(now).toISOString()
+  switch (job.status) {
+    case 'SAVED':
+      return { type: 'UPWORK', urgency: 'P4', reason: 'Saved job to review' }
+    case 'DRAFT_READY':
+      return { type: 'UPWORK', urgency: 'P3', reason: 'Draft ready to apply' }
+    case 'CLIENT_REPLIED':
+      return { type: 'INBOX_REPLY', urgency: 'P1', reason: 'Client replied' }
+    case 'INTERVIEW':
+      return { type: 'UPWORK', urgency: 'P1', reason: 'Interview scheduled' }
+    case 'APPLIED': {
+      if (job.firstReplyAt) return null
+      const followUps = job.followUps ?? []
+      const due = followUpDueAt(job.submittedAt ?? null, followUps, job.firstReplyAt ?? null)
+      if (due && due <= nowIso) return { type: 'FOLLOW_UP', urgency: 'P2', reason: 'Follow-up due' }
+      if (isArchiveCandidate(job.submittedAt ?? null, followUps, job.firstReplyAt ?? null, nowIso)) {
+        return { type: 'UPWORK', urgency: 'P4', reason: 'Ready to archive' }
+      }
+      return null
+    }
+    default:
+      return null
+  }
 }

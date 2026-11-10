@@ -7,20 +7,28 @@ import {
   listAssignedProfilesForRep,
 } from '@/lib/profiles/assigned-profiles'
 import { hasUnfilledValues, UNFILLED_VALUES_MESSAGE } from '@/lib/relay/unfilled-values'
+import { FOLLOWUP_POLICY } from '@/lib/upwork/lifecycle'
+import { createAssignedTask } from '@/lib/tasks/assigned-tasks'
+import type { UpworkScreeningAnswer } from '@/lib/domain/types'
 
 // A job scoring below this is not recommended for a Connect spend — see
-// src/lib/score/upwork-rubric.ts's verdictFor() (6-10 apply, 3-5
-// apply_if_connects, 0-2 skip). The client already disables "Mark as
-// applied" below this score (see upwork-job-actions.tsx), but a disabled
-// button is not a security/business-logic boundary — this route is the real
-// enforcement point and must reject independently of what the client sent.
+// verdictFor() in upwork-rubric.ts. The client disables the button, but this
+// route is the real enforcement point.
 const MIN_SCORE_TO_APPLY = 6
 
+/**
+ * POST /api/upwork/jobs/[id]/apply
+ * Body: { proposalText, screeningAnswers?, connectsSpent?, boostConnects?,
+ *         modelTier?, promptVersion?, proofRefs?, proposalVersionId?, repId? }
+ *
+ * One explicit confirmation creates exactly one application. The proposal
+ * version, application row and job status commit together in the database.
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id: pathJobId } = await params
+  const { id: jobId } = await params
 
   let body: Record<string, unknown>
   try {
@@ -29,32 +37,31 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  // jobId in the body is accepted for backward compatibility with existing
-  // callers, but the route's own [id] segment is the source of truth.
-  const jobId = pathJobId || (typeof body.jobId === 'string' ? body.jobId : '')
-  const sentText = typeof body.sentText === 'string' ? body.sentText.trim() : ''
-  const type = typeof body.type === 'string' ? body.type : 'cover'
-  if (!jobId || !sentText) {
-    return NextResponse.json(
-      { error: 'jobId and sentText are required.' },
-      { status: 400 },
-    )
+  const proposalText = typeof body.proposalText === 'string' ? body.proposalText.trim() : ''
+  if (!proposalText) {
+    return NextResponse.json({ error: 'proposalText is required.' }, { status: 400 })
   }
-  // A proposal with a stripped number or placeholder is never sendable.
-  if (hasUnfilledValues(sentText)) {
+  if (hasUnfilledValues(proposalText)) {
     return NextResponse.json({ error: UNFILLED_VALUES_MESSAGE }, { status: 400 })
   }
 
-  let store
-  try {
-    store = await createScoutStore()
-  } catch (err) {
-    return NextResponse.json(
-      { error: 'Not signed in.' },
-      { status: 401 },
-    )
-  }
+  const screeningAnswers: UpworkScreeningAnswer[] = Array.isArray(body.screeningAnswers)
+    ? (body.screeningAnswers as unknown[]).filter(
+        (a): a is UpworkScreeningAnswer =>
+          typeof a === 'object' && a !== null && typeof (a as { question?: unknown }).question === 'string',
+      )
+    : []
+  const connectsSpent = typeof body.connectsSpent === 'number' && Number.isFinite(body.connectsSpent)
+    ? Math.round(body.connectsSpent)
+    : null
+  const boostConnects = typeof body.boostConnects === 'number' && Number.isFinite(body.boostConnects)
+    ? Math.round(body.boostConnects)
+    : 0
+  const modelTier = typeof body.modelTier === 'string' ? body.modelTier : null
+  const promptVersion = typeof body.promptVersion === 'string' ? body.promptVersion : null
+  const proofRefs = Array.isArray(body.proofRefs) ? (body.proofRefs as unknown[]) : []
 
+  const store = await createScoutStore()
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
 
@@ -79,57 +86,85 @@ export async function POST(
     actingRepId = repRow.id as string
   }
 
-  // Server-side score gate — reuses the score computed and stored at
-  // job-creation time (computeUpworkScore), never recomputed here. The job and
-  // its gate are checked before any profile work: a missing job or a score too
-  // low to spend a Connect on must not read profiles at all.
   const job = await store.getUpworkJob(jobId)
-  if (!job) {
+  if (!job) return NextResponse.json({ error: 'Job not found.' }, { status: 404 })
+  if (job.organizationId !== authCtx.orgId) {
     return NextResponse.json({ error: 'Job not found.' }, { status: 404 })
+  }
+  // Only the owning rep, or an admin/owner, may apply.
+  if (job.ownerRepId !== actingRepId && !isAdmin) {
+    return NextResponse.json({ error: 'You do not own this job.' }, { status: 403 })
   }
   if (job.score === null || job.score < MIN_SCORE_TO_APPLY) {
     return NextResponse.json(
-      {
-        error: `Score below ${MIN_SCORE_TO_APPLY} — Relay does not recommend spending a Connect here.`,
-      },
+      { error: `Score below ${MIN_SCORE_TO_APPLY} — Relay does not recommend spending a Connect here.` },
       { status: 400 },
     )
   }
 
-  // The applied proposal must carry the same sender the rep selected, generated
-  // with and saved under. A client-supplied id is reauthorized against the
-  // acting rep's eligible Upwork profiles before it is persisted.
+  // The applied proposal must carry the sender the rep selected. A client-
+  // supplied id is reauthorized against the acting rep's eligible profiles.
   const assigned = actingRepId === authCtx.repId
     ? await listAssignedProfiles()
     : await listAssignedProfilesForRep(authCtx.orgId, actingRepId)
   const upworkProfiles = filterAssignedProfilesByChannel(assigned, 'upwork')
   const requestedProfileId = typeof body.profileId === 'string' ? body.profileId : null
-  const senderProfile = requestedProfileId
+  const sender = requestedProfileId
     ? upworkProfiles.find((a) => a.profile.id === requestedProfileId) ?? null
     : upworkProfiles[0] ?? null
 
-  if (requestedProfileId && !senderProfile) {
+  if (requestedProfileId && !sender) {
     return NextResponse.json(
       { error: 'That profile is not assigned to you for Upwork. Select an eligible profile.' },
       { status: 403 },
     )
   }
-
-  // A proposal with no sender cannot be attributed. Never mark a job applied
-  // without the profile it was sent from.
-  if (!senderProfile) {
+  if (!sender) {
     return NextResponse.json(
       { error: 'Select an eligible Upwork profile before marking this job applied.' },
       { status: 400 },
     )
   }
 
-  await store.markUpworkApplied(
-    jobId,
-    sentText,
-    type as 'cover' | 'followup' | 'reply',
-    senderProfile?.profile.id ?? null,
-    actingRepId,
-  )
-  return NextResponse.json({ ok: true, profileId: senderProfile?.profile.id ?? null })
+  const revenueIdentityId = sender.assignedIdentityIds[0] ?? null
+
+  try {
+    const application = await store.submitUpworkApplication({
+      jobId,
+      repId: actingRepId,
+      revenueIdentityId,
+      profileId: sender.profile.id,
+      proposalText,
+      modelTier,
+      promptVersion,
+      proofRefs,
+      screeningAnswers,
+      connectsSpent,
+      boostConnects,
+    })
+
+    // The first follow-up enters the canonical task engine — no second scheduler.
+    try {
+      const dueAt = new Date(Date.now() + FOLLOWUP_POLICY.firstFollowUpDays * 86_400_000).toISOString()
+      await createAssignedTask(store.getSupabaseClient(), authCtx, {
+        assigneeRepId: actingRepId,
+        kind: 'FOLLOW_UP',
+        title: `Follow up on ${job.title}`,
+        description: `Application submitted. First follow-up due ${FOLLOWUP_POLICY.firstFollowUpDays} days after submission.`,
+        dueAt,
+        jobId,
+        profileId: sender.profile.id,
+        revenueIdentityId,
+      })
+    } catch {
+      // A missing reminder must never fail a submitted application.
+    }
+
+    return NextResponse.json({ ok: true, application, profileId: sender.profile.id })
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to submit the application.' },
+      { status: 500 },
+    )
+  }
 }

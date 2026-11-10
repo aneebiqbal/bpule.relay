@@ -65,6 +65,9 @@ import type {
   TailoredCV,
   UpworkJob,
   UpworkMessage,
+  UpworkApplication,
+  UpworkProposalVersion,
+  UpworkScreeningAnswer,
   Verdict,
   VoiceProfile,
   TrendSource,
@@ -584,7 +587,9 @@ export interface ScoutStore {
     experienceLevel?: string | null
   }): Promise<UpworkJob>
   getUpworkJob(id: string): Promise<(UpworkJob & { messages: UpworkMessage[] }) | null>
-  listUpworkJobs(): Promise<UpworkJob[]>
+  listUpworkJobs(filter?: { status?: UpworkJob['status'][]; repIds?: string[] | null; includeArchived?: boolean }): Promise<UpworkJob[]>
+  /** Canonical Upwork scope: rep → own, manager → managed team, admin/owner → org. */
+  resolveUpworkRepScope(): Promise<string[] | null>
   /** Pipeline stage counts. Null on the Supabase rollback path (use loadBoardData). */
   getPipelineStageSummary(scope: PipelineStageScope): Promise<PipelineStageCounts | null>
   /** Bounded card ids in board order. Null on the Supabase rollback path. */
@@ -595,15 +600,55 @@ export interface ScoutStore {
   updateUpworkJobFields(id: string, fields: Partial<Parameters<ScoutStore['createUpworkJob']>[0]>): Promise<void>
   updateUpworkJobScore(id: string, score: { total: number; verdict: UpworkJob['verdict']; canonicalScore?: number | null; scoreVersion?: string | null; scoreBreakdown?: unknown; jobFacts?: unknown; profileMatch?: unknown }): Promise<void>
   updateUpworkJob(id: string, updates: { status?: UpworkJob['status']; notes?: string | null; proposedRate?: number | null }): Promise<void>
-  saveUpworkDraft(input: { jobId: string; type: UpworkMessage['type']; draftText: string; modelUsed: string; senderProfileId?: string | null }): Promise<UpworkMessage>
-  markUpworkApplied(
-    jobId: string,
-    sentText: string,
-    type?: UpworkMessage['type'],
-    senderProfileId?: string | null,
-    /** Acting rep for admin on-behalf applies; defaults to the signed-in rep. */
-    ownerRepId?: string | null,
+  /** Canonical application submission: version + application + job status commit together. */
+  submitUpworkApplication(input: {
+    jobId: string
+    repId: string
+    revenueIdentityId?: string | null
+    profileId?: string | null
+    proposalText: string
+    modelTier?: string | null
+    promptVersion?: string | null
+    proofRefs?: unknown[]
+    screeningAnswers?: UpworkScreeningAnswer[]
+    connectsSpent?: number | null
+    boostConnects?: number
+  }): Promise<UpworkApplication>
+  getUpworkApplication(jobId: string): Promise<UpworkApplication | null>
+  listUpworkApplications(filter?: {
+    repIds?: string[]
+    identityIds?: string[]
+    from?: string
+    to?: string
+    includeArchived?: boolean
+  }): Promise<UpworkApplication[]>
+  updateUpworkApplication(
+    id: string,
+    patch: Partial<Pick<UpworkApplication, 'status' | 'firstReplyAt' | 'latestReplyAt' | 'interviewAt' | 'wonAt' | 'lostAt' | 'archivedAt'>>,
   ): Promise<void>
+  createUpworkProposalVersion(input: {
+    jobId: string
+    repId: string
+    profileId?: string | null
+    revenueIdentityId?: string | null
+    proposalText: string
+    modelTier?: string | null
+    promptVersion?: string | null
+    proofRefs?: unknown[]
+    screeningAnswers?: UpworkScreeningAnswer[]
+  }): Promise<UpworkProposalVersion>
+  listUpworkProposalVersions(jobId: string): Promise<UpworkProposalVersion[]>
+  logUpworkMessage(input: {
+    jobId: string
+    repId: string
+    type: UpworkMessage['type']
+    direction: 'outbound' | 'inbound'
+    body: string
+    senderProfileId?: string | null
+  }): Promise<UpworkMessage>
+  deleteUpworkJob(id: string): Promise<void>
+  archiveUpworkJob(id: string, repId?: string): Promise<void>
+  getUpworkWorkspace(id: string): Promise<{ job: UpworkJob & { messages: UpworkMessage[] }; application: UpworkApplication | null; proposalVersions: UpworkProposalVersion[]; messages: UpworkMessage[] } | null>
   // csv imports
   logCsvImport(input: Omit<CsvImport, 'id' | 'createdAt' | 'repId'>): Promise<CsvImport>
   listCsvImports(): Promise<CsvImport[]>

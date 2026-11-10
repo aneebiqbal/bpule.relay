@@ -78,7 +78,18 @@ export interface RepWorkspaceData {
   teamMembers?: any[]
   referredLeads?: Array<{ id: string; company: string; score: number | null; canonicalScore: number | null; referredAt: string | null }>
   recentLeads?: Array<{ id: string; company: string; score: number | null; canonicalScore: number | null; createdAt: string }>
-  upworkJobs?: Array<{ id: string; title: string; company: string; canonicalScore: number | null; fitScore: number | null }>
+  upworkJobs?: Array<{
+    id: string
+    title: string
+    company: string
+    canonicalScore: number | null
+    fitScore: number | null
+    status?: import('@/lib/domain/types').UpworkJobStatus
+    submittedAt?: string | null
+    firstReplyAt?: string | null
+    followUpCount?: number
+    followUps?: string[]
+  }>
   completion?: { done: number; remaining: number }
   resumeWork?: Array<{ id: string; company: string; contactName: string | null; lastAction: string; state: string }>
   signalFeed?: import('@/lib/relay/signal-watch').SignalFeedItem[]

@@ -19,8 +19,17 @@ type ActionEventType =
   | 'LEAD_REFERRED'
   | 'PROFILE_RECOMMENDED'
   | 'UPWORK_JOB_EXTRACTED'
+  | 'UPWORK_JOB_SAVED'
   | 'UPWORK_PROPOSAL_PREPARED'
   | 'UPWORK_APPLIED'
+  | 'UPWORK_APPLICATION_SUBMITTED'
+  | 'UPWORK_FOLLOWUP_SENT'
+  | 'UPWORK_CLIENT_REPLIED'
+  | 'UPWORK_INTERVIEW'
+  | 'UPWORK_WON'
+  | 'UPWORK_LOST'
+  | 'UPWORK_ARCHIVED'
+  | 'UPWORK_DELETED'
   | 'OPPORTUNITY_CREATED'
   | 'MEETING_BOOKED'
   | 'CLIENT_WON'
@@ -64,6 +73,7 @@ interface DailySummary {
   repliesReceived: number
   leadsExtracted: number
   upworkProposals: number
+  upworkApplications: number
   opportunities: number
   referrals: number
   totalActions: number
@@ -245,6 +255,7 @@ export async function getDailySummary(
         repliesReceived: 0,
         leadsExtracted: 0,
         upworkProposals: 0,
+        upworkApplications: 0,
         opportunities: 0,
         referrals: 0,
         totalActions: 0,
@@ -273,9 +284,12 @@ export async function getDailySummary(
       case 'LEAD_EXTRACTED':
         summary.leadsExtracted++
         break
-      case 'UPWORK_APPLIED':
       case 'UPWORK_PROPOSAL_PREPARED':
         summary.upworkProposals++
+        break
+      case 'UPWORK_APPLIED':
+      case 'UPWORK_APPLICATION_SUBMITTED':
+        summary.upworkApplications++
         break
       case 'UPWORK_JOB_EXTRACTED':
         summary.leadsExtracted++
@@ -377,6 +391,7 @@ export async function getTodayCounts(orgId: string, client?: DbClient): Promise<
     repliesReceived: 0,
     leadsExtracted: 0,
     upworkProposals: 0,
+    upworkApplications: 0,
     opportunities: 0,
   }
 
@@ -388,6 +403,7 @@ export async function getTodayCounts(orgId: string, client?: DbClient): Promise<
     totals.repliesReceived += rep.repliesReceived
     totals.leadsExtracted += rep.leadsExtracted
     totals.upworkProposals += rep.upworkProposals
+    totals.upworkApplications += rep.upworkApplications
     totals.opportunities += rep.opportunities
   }
 

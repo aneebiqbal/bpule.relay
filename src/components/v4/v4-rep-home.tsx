@@ -20,6 +20,7 @@ import { relativeWait } from '@/lib/rep-home/action-presentation'
 import { selectAssignedOpenTasks, selectAssignedOverdueTasks } from '@/lib/tasks/rank-unified-tasks'
 import { RepDayControl, repDayStartTime } from '@/components/coverage/rep-day-control'
 import { RepProfilesToday } from '@/components/coverage/rep-profiles-today'
+import { UpworkRepHomeSummary } from '@/components/upwork/rep-home-summary'
 import {
   V4Panel,
   V4PanelHeader,
@@ -177,6 +178,8 @@ export function V4RepHome({
           role={role}
         />
       </section>
+
+      <UpworkRepHomeSummary jobs={data.upworkJobs ?? []} now={now ?? Date.now()} />
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-12">
         <div className="lg:col-span-7">

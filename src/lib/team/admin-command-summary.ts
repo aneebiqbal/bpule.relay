@@ -87,7 +87,8 @@ export interface AdminMovement {
   followupsToday: number
   meetingsToday: number
   winsToday: number
-  proposalsToday: number
+  draftsGeneratedToday: number
+  applicationsToday: number
 }
 
 /** Yesterday's persisted totals for the today-vs-yesterday comparison. */
@@ -109,7 +110,8 @@ export function emptyMovement(): AdminMovement {
     followupsToday: 0,
     meetingsToday: 0,
     winsToday: 0,
-    proposalsToday: 0,
+    draftsGeneratedToday: 0,
+    applicationsToday: 0,
   }
 }
 

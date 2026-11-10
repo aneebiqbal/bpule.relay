@@ -25,6 +25,9 @@ export const NOTIFICATION_CATEGORIES: Array<{ value: NotificationCategory; label
 export function categoryForType(type: string | null | undefined): NotificationCategory {
   const t = (type ?? '').toLowerCase()
   if (t === 'reply_received' || t === 'reply_waiting' || t === 'reply' || t === 'followups_due') return 'replies'
+  if (t === 'upwork_client_replied') return 'replies'
+  if (t === 'upwork_followup_due' || t === 'upwork_archive_candidate') return 'tasks'
+  if (t === 'upwork_interview') return 'meetings'
   if (
     t === 'task_assigned'
     || t === 'task_reassigned'
@@ -94,6 +97,11 @@ export type OperationalEvent =
   | { kind: 'THREAD_REVIEW'; leadId: string; reviewerRepId: string; reason: string; person: string; dayKey: string }
   // Never notify — listed so callers cannot accidentally route them here.
   | { kind: 'LEAD_OPENED' | 'FILTER_CHANGED' | 'DRAFT_GENERATED' | 'SCORE_RECALCULATED' }
+  // Upwork lifecycle events. Actionable only; never a draft or a score change.
+  | { kind: 'UPWORK_CLIENT_REPLIED'; jobId: string; messageId?: string; ownerRepId: string | null; actorRepId: string | null; title: string }
+  | { kind: 'UPWORK_FOLLOWUP_DUE'; jobId: string; assigneeRepId: string; title: string; dueAt: string }
+  | { kind: 'UPWORK_INTERVIEW'; jobId: string; ownerRepId: string | null; actorRepId: string | null; title: string }
+  | { kind: 'UPWORK_ARCHIVE_CANDIDATE'; jobId: string; ownerRepId: string | null; actorRepId: string | null; title: string; dayKey: string }
 
 export interface NotificationIntent {
   recipientId: string
@@ -192,6 +200,48 @@ export function notificationFor(event: OperationalEvent): NotificationIntent | n
         link: `/chats?lead=${event.leadId}`,
         dedupeKey: `thread_review:${event.leadId}:${event.dayKey}`,
       }
+    case 'UPWORK_CLIENT_REPLIED': {
+      if (!event.ownerRepId || event.ownerRepId === event.actorRepId) return null
+      return {
+        recipientId: event.ownerRepId,
+        type: 'upwork_client_replied',
+        title: 'Client replied on Upwork',
+        body: event.title,
+        link: `/upwork/${event.jobId}`,
+        dedupeKey: `upwork_client_replied:${event.jobId}:${event.messageId ?? event.actorRepId ?? 'system'}`,
+      }
+    }
+    case 'UPWORK_FOLLOWUP_DUE':
+      return {
+        recipientId: event.assigneeRepId,
+        type: 'upwork_followup_due',
+        title: 'Upwork follow-up due',
+        body: event.title,
+        link: `/upwork/${event.jobId}`,
+        dedupeKey: `upwork_followup_due:${event.jobId}:${event.dueAt}`,
+      }
+    case 'UPWORK_INTERVIEW': {
+      if (!event.ownerRepId || event.ownerRepId === event.actorRepId) return null
+      return {
+        recipientId: event.ownerRepId,
+        type: 'upwork_interview',
+        title: 'Upwork interview',
+        body: event.title,
+        link: `/upwork/${event.jobId}`,
+        dedupeKey: `upwork_interview:${event.jobId}`,
+      }
+    }
+    case 'UPWORK_ARCHIVE_CANDIDATE': {
+      if (!event.ownerRepId || event.ownerRepId === event.actorRepId) return null
+      return {
+        recipientId: event.ownerRepId,
+        type: 'upwork_archive_candidate',
+        title: 'Ready to archive',
+        body: event.title,
+        link: `/upwork/${event.jobId}`,
+        dedupeKey: `upwork_archive_candidate:${event.jobId}:${event.dayKey}`,
+      }
+    }
     default:
       return null
   }

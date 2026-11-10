@@ -9,8 +9,10 @@ import type { UpworkJob } from '@/lib/domain/types'
 interface Message {
   id: string
   type: string
+  direction?: 'outbound' | 'inbound'
   sentText?: string | null
   draftText?: string | null
+  body?: string | null
   createdAt: string
 }
 
@@ -29,13 +31,15 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
       await fetch(`/api/upwork/jobs/${jobId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inboundText.trim(), direction: 'inbound' }),
+        body: JSON.stringify({ text: inboundText.trim(), direction: 'inbound', type: 'reply' }),
       })
       setMessages((prev) => [
         {
           id: `inbound-${Date.now()}`,
           type: 'reply',
+          direction: 'inbound',
           sentText: inboundText.trim(),
+          body: inboundText.trim(),
           createdAt: new Date().toISOString(),
         },
         ...prev,
@@ -78,13 +82,15 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
       await fetch(`/api/upwork/jobs/${jobId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: replyText.trim(), direction: 'outbound' }),
+        body: JSON.stringify({ text: replyText.trim(), direction: 'outbound', type: 'reply' }),
       })
       setMessages((prev) => [
         {
           id: `outbound-${Date.now()}`,
           type: 'reply',
+          direction: 'outbound',
           sentText: replyText.trim(),
+          body: replyText.trim(),
           createdAt: new Date().toISOString(),
         },
         ...prev,
@@ -183,14 +189,16 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
                 m.type === 'reply' ? 'bg-bone' : 'bg-bone-raised/50'
               )}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] uppercase tracking-wide text-stone">{m.type}</span>
+                  <span className="text-[10px] uppercase tracking-wide text-stone">
+                    {m.direction === 'inbound' ? 'client message' : m.type}
+                  </span>
                   <span className="text-[10px] text-stone">
                     {new Date(m.createdAt).toLocaleDateString()}
                   </span>
                 </div>
-                {(m.sentText || m.draftText) && (
+                {(m.body ?? m.sentText ?? m.draftText) && (
                   <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-ink/80">
-                    {m.sentText || m.draftText}
+                    {m.body ?? m.sentText ?? m.draftText}
                   </p>
                 )}
               </li>

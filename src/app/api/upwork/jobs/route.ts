@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { computeUpworkScore } from '@/lib/score/upwork-rubric'
 import type { UpworkJob } from '@/lib/domain/types'
+import { getAuthContext } from '@/lib/auth/organization'
+import { isUpworkJobStatus } from '@/lib/upwork/lifecycle'
 
 /**
  * POST /api/upwork/jobs
@@ -106,7 +108,7 @@ export async function POST(request: Request) {
   }, { status: 201 })
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   let store
   try {
     store = await createScoutStore()
@@ -117,6 +119,21 @@ export async function GET() {
     )
   }
 
-  const jobs = await store.listUpworkJobs()
-  return NextResponse.json({ jobs })
+  const authCtx = await getAuthContext()
+  if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+
+  const url = new URL(request.url)
+  const statusParam = url.searchParams.get('status')
+  const status = statusParam
+    ? statusParam.split(',').filter((s): s is UpworkJob['status'] => isUpworkJobStatus(s))
+    : undefined
+  const includeArchived = url.searchParams.get('includeArchived') === '1'
+  const isAdmin = Boolean(authCtx.isAdmin || authCtx.isOwner)
+
+  const jobs = await store.listUpworkJobs({ status, includeArchived, repIds: isAdmin ? null : undefined })
+  const applications = await store.listUpworkApplications({
+    repIds: isAdmin ? [] : [authCtx.repId],
+    includeArchived,
+  })
+  return NextResponse.json({ jobs, applications })
 }

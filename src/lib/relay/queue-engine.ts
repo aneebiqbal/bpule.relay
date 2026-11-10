@@ -194,14 +194,14 @@ export function buildRelayQueue(input: QueueInput): RelayQueue {
 
   // 5. Jobs worth applying to
   for (const job of input.upwork.queue) {
-    if (job.verdict === 'apply' && job.status === 'new') {
+    if (job.verdict === 'apply' && job.status === 'SAVED') {
       tasks.push(buildJobApplyTask(job, input))
     }
   }
 
   // 6. Proposals ready for review
   for (const job of input.upwork.queue) {
-    if (job.status === 'drafted') {
+    if (job.status === 'DRAFT_READY') {
       tasks.push(buildProposalReadyTask(job, input))
     }
   }

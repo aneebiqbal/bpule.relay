@@ -89,6 +89,13 @@ const WORKED_TYPES = new Set([
   'MEETING_BOOKED',
   'UPWORK_PROPOSAL_PREPARED',
   'UPWORK_APPLIED',
+  'UPWORK_APPLICATION_SUBMITTED',
+  'UPWORK_FOLLOWUP_SENT',
+  'UPWORK_CLIENT_REPLIED',
+  'UPWORK_INTERVIEW',
+  'UPWORK_WON',
+  'UPWORK_LOST',
+  'UPWORK_ARCHIVED',
   'CLIENT_WON',
 ])
 
@@ -140,11 +147,19 @@ export function aggregateMetrics(events: readonly PerfEvent[], tasksCompleted = 
       case 'UPWORK_PROPOSAL_PREPARED':
         m.proposals += 1
         break
-      case 'CLIENT_WON':
-        m.wins += 1
-        break
       case 'UPWORK_APPLIED':
+      case 'UPWORK_APPLICATION_SUBMITTED':
         m.applications += 1
+        break
+      case 'UPWORK_FOLLOWUP_SENT':
+        m.messages += 1
+        break
+      case 'UPWORK_CLIENT_REPLIED':
+        m.replies += 1
+        break
+      case 'CLIENT_WON':
+      case 'UPWORK_WON':
+        m.wins += 1
         break
       default:
         continue

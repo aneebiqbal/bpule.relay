@@ -424,6 +424,35 @@ export function createFakeSupabase(seed: Partial<Record<string, Row[]>> = {}) {
           payload: args.p_payload,
         })
       }
+      if (fn === 'submit_upwork_application' && args) {
+        const apps = (state.tables.upwork_applications ??= [])
+        const existing = apps.find((row) => row.job_id === args.p_job_id)
+        if (existing) return { data: existing.id, error: null }
+        const id = `uapp-${state.rpcCalls.length}`
+        apps.push({
+          id,
+          organization_id: args.p_org_id,
+          job_id: args.p_job_id,
+          rep_id: args.p_rep_id,
+          revenue_identity_id: args.p_revenue_identity_id ?? null,
+          person_profile_id: args.p_person_profile_id ?? null,
+          submitted_at: new Date().toISOString(),
+          proposal_text: args.p_proposal_text,
+          proposal_version_id: null,
+          connects_spent: args.p_connects_spent ?? null,
+          boost_connects: args.p_boost_connects ?? 0,
+          screening_answers: [],
+          status: 'submitted',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        const job = (state.tables.upwork_jobs ?? []).find((row) => row.id === args.p_job_id)
+        if (job) {
+          job.status = 'APPLIED'
+          if (args.p_revenue_identity_id) job.revenue_identity_id = args.p_revenue_identity_id
+        }
+        return { data: id, error: null }
+      }
       return { data: null, error: null }
     },
   }

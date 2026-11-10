@@ -68,6 +68,13 @@ export interface ConversationRow {
   waitingOn: 'Rep' | 'Prospect' | null
   /** Hours since the side we are waiting on last moved. null when closed. */
   ageHours: number | null
+  /**
+   * The scheduled follow-up rendered against the clock, e.g. "Overdue by 2d"
+   * or "Due in 3d". null when no follow-up is scheduled. Derived from the same
+   * `next_followup_at` the state derivation already reads — not a new source.
+   * Optional so existing fixture and fallback rows stay valid.
+   */
+  followUpLabel?: string | null
   nextAction: string
   href: string
 }
@@ -80,6 +87,27 @@ function hoursSince(iso: string | null, now: number): number | null {
   const t = Date.parse(iso)
   if (Number.isNaN(t)) return null
   return Math.max(0, Math.floor((now - t) / 3_600_000))
+}
+
+/**
+ * Renders a scheduled follow-up against the clock. `next_followup_at` is
+ * already fetched and used to derive the conversation state; this only makes
+ * the lateness legible instead of dropping it from the projection.
+ */
+export function followUpWhenLabel(dueIso: string | null, now: number): string | null {
+  if (!dueIso) return null
+  const due = Date.parse(dueIso)
+  if (Number.isNaN(due)) return null
+  const diffHours = Math.round((due - now) / 3_600_000)
+  if (diffHours <= 0) {
+    const over = -diffHours
+    if (over < 1) return 'Overdue · due today'
+    if (over < 24) return `Overdue by ${over}h`
+    return `Overdue by ${Math.floor(over / 24)}d`
+  }
+  if (diffHours < 1) return 'Due within the hour'
+  if (diffHours < 24) return `Due in ${diffHours}h`
+  return `Due in ${Math.round(diffHours / 24)}d`
 }
 
 /** Pure. Returns null when there is no conversation yet (nothing sent or received). */
@@ -138,6 +166,7 @@ export function deriveConversationRow(
     lastOutboundAt: lastOut,
     waitingOn,
     ageHours,
+    followUpLabel: followUpWhenLabel(state?.nextFollowupAt ?? null, now),
     nextAction,
     href: `/chats?lead=${lead.id}`,
   }
@@ -148,13 +177,15 @@ export function deriveConversationRow(
  * only from the waiting state and its age — never from AI reasoning, and never
  * invented when the state is closed.
  */
-export function attentionReason(row: Pick<ConversationRow, 'state' | 'ageHours'>): string {
+export function attentionReason(row: Pick<ConversationRow, 'state' | 'ageHours' | 'followUpLabel'>): string {
   const age = ageLabel(row.ageHours)
   switch (row.state) {
     case 'waiting_on_rep':
       return `Client replied ${age} ago. No reply has been sent since.`
     case 'follow_up_due':
-      return `Follow-up due. Last outbound was ${age} ago.`
+      return row.followUpLabel
+        ? `${row.followUpLabel}. Last outbound was ${age} ago.`
+        : `Follow-up due. Last outbound was ${age} ago.`
     case 'waiting_on_prospect':
       return `Waiting on the client. Last outbound was ${age} ago.`
     case 'meeting':
@@ -165,13 +196,13 @@ export function attentionReason(row: Pick<ConversationRow, 'state' | 'ageHours'>
 }
 
 /** Compact queue-row form of the same canonical reason. */
-export function attentionShort(row: Pick<ConversationRow, 'state' | 'ageHours'>): string {
+export function attentionShort(row: Pick<ConversationRow, 'state' | 'ageHours' | 'followUpLabel'>): string {
   const age = ageLabel(row.ageHours)
   switch (row.state) {
     case 'waiting_on_rep':
       return `Client replied ${age} ago`
     case 'follow_up_due':
-      return `Follow-up due · ${age}`
+      return row.followUpLabel ?? `Follow-up due · ${age}`
     case 'waiting_on_prospect':
       return `Waiting on client · ${age}`
     case 'meeting':

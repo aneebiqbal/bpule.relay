@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { DbClient } from '@/lib/db/types'
-import { currentInstant, orgDate, type OperatingPolicy } from '@/lib/org-clock'
+import { currentInstant, orgDate, orgTodayRange, type OperatingPolicy } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
@@ -68,6 +68,10 @@ import type {
   TrendingAngle,
   UpworkJob,
   UpworkMessage,
+  UpworkApplication,
+  UpworkProposalVersion,
+  UpworkScreeningAnswer,
+  UpworkJobStatus,
   Verdict,
   VoiceProfile,
   RevenueIdentity,
@@ -127,6 +131,7 @@ import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib
 import { inboundFirstMessageKey } from '@/lib/conversation/canonical-message'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 import { emitAction } from '@/lib/action-ledger'
+import { getAuthContext } from '@/lib/auth/organization'
 import { messageTypeLimit } from '@/lib/ai/config'
 import { resolveSendPolicy, type EffectiveSendPolicy } from '@/lib/email/effective-policy'
 import { evaluateSendPolicy } from '@/lib/email/policy-engine'
@@ -298,7 +303,7 @@ export const RELAY_QUEUE_CONVERSATION_COLUMNS =
  * read by `getUpworkJob` (the job page), never by the list or the queue.
  */
 export const UPWORK_JOB_LIST_COLUMNS =
-  'id, organization_id, owner_rep_id, title, description, budget_min, budget_max, hourly_rate_min, hourly_rate_max, proposal_count, connects_cost, required_skills, urgency_signal, score, verdict, canonical_score, score_version, status, tags, created_at, posted_at, client_name'
+  'id, organization_id, owner_rep_id, title, description, budget_min, budget_max, hourly_rate_min, hourly_rate_max, proposal_count, connects_cost, required_skills, urgency_signal, score, verdict, canonical_score, score_version, status, tags, created_at, posted_at, client_name, revenue_identity_id, archived_at, sender_profile_id'
 
 /**
  * PostgREST `or` values are comma-separated and `%` is a wildcard, so strip the
@@ -760,16 +765,15 @@ export class SupabaseStore implements ScoutStore {
     return count ?? 0
   }
 
-  private todayRange(): { start: string; end: string } {
-    const start = new Date()
-    start.setHours(0, 0, 0, 0)
-    const end = new Date(start.getTime() + 86_400_000)
-    return { start: start.toISOString(), end: end.toISOString() }
+  /** Today in the organization's timezone — never the server's or browser's. */
+  private async todayRange(): Promise<{ start: string; end: string }> {
+    const policy = await this.getOperatingPolicy()
+    return orgTodayRange(policy)
   }
 
   /** Counts lead messages of any of the given types sent today — dm+followup and connection are two different ceilings (Part 7 rule) and must never be blended into one number. */
   private async countTodaysSendsByTypes(types: string[]): Promise<number> {
-    const { start, end } = this.todayRange()
+    const { start, end } = await this.todayRange()
     const { count, error } = await this.client
       .from('messages')
       .select('id', { count: 'exact', head: true })
@@ -781,16 +785,15 @@ export class SupabaseStore implements ScoutStore {
     return count ?? 0
   }
 
-  /** Upwork applies today share the connection-type daily ceiling but live in a separate table; countTodaysSendsByTypes alone would silently miss them. */
+  /** Upwork applications today come from the canonical application authority. */
   private async countTodaysUpworkApplies(): Promise<number> {
-    const { start, end } = this.todayRange()
+    const { start, end } = await this.todayRange()
     const { count, error } = await this.client
-      .from('upwork_messages')
+      .from('upwork_applications')
       .select('id', { count: 'exact', head: true })
       .eq('rep_id', this.rep.id)
-      .not('sent_at', 'is', null)
-      .gte('sent_at', start)
-      .lt('sent_at', end)
+      .gte('submitted_at', start)
+      .lt('submitted_at', end)
     if (error) throw error
     return count ?? 0
   }
@@ -2776,7 +2779,7 @@ export class SupabaseStore implements ScoutStore {
       this.countTodaysUpworkApplies(),
     ])
     const queue = jobs
-      .filter((j) => j.status === 'new' || j.status === 'drafted')
+      .filter((j) => j.status === 'SAVED' || j.status === 'DRAFT_READY')
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
     return { queue, todayApplies }
   }
@@ -3240,12 +3243,37 @@ export class SupabaseStore implements ScoutStore {
     return { ...mapUpworkJob(data as Row), messages }
   }
 
-  async listUpworkJobs(): Promise<UpworkJob[]> {
-    const { data, error } = await this.client
+  /**
+   * Canonical Upwork scope. One resolver for every role:
+   * rep → own jobs, manager → managed team, admin/owner → organization.
+   */
+  async resolveUpworkRepScope(): Promise<string[] | null> {
+    const auth = await getAuthContext()
+    if (auth?.isAdmin || auth?.isOwner) return null
+    if (auth?.isManager && auth.managedTeamIds.length > 0) {
+      const ids = new Set<string>([this.rep.id])
+      for (const teamId of auth.managedTeamIds) {
+        for (const member of await this.getTeamMembers(teamId)) ids.add(member.repId)
+      }
+      return [...ids]
+    }
+    return [this.rep.id]
+  }
+
+  async listUpworkJobs(filter?: {
+    status?: UpworkJobStatus[]
+    repIds?: string[] | null
+    includeArchived?: boolean
+  }): Promise<UpworkJob[]> {
+    const scope = filter?.repIds === undefined ? await this.resolveUpworkRepScope() : filter.repIds
+    let query = this.client
       .from('upwork_jobs')
       .select(UPWORK_JOB_LIST_COLUMNS)
-      .eq('owner_rep_id', this.rep.id)
-      .order('created_at', { ascending: false })
+      .eq('organization_id', this.orgId)
+    if (scope) query = query.in('owner_rep_id', scope)
+    if (filter?.status && filter.status.length > 0) query = query.in('status', filter.status)
+    if (!filter?.includeArchived) query = query.neq('status', 'ARCHIVED')
+    const { data, error } = await query.order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map(mapUpworkJob)
   }
@@ -3317,313 +3345,310 @@ export class SupabaseStore implements ScoutStore {
     if (!data?.length) throw new Error('Could not update this job.')
   }
 
-  async saveUpworkDraft(input: {
+
+  /**
+   * Submit an Upwork application.
+   *
+   * The DB function commits the proposal version, the application row and the
+   * job status together, and a unique index makes a double-click return the
+   * existing application instead of creating a second. Observability and
+   * accountability are non-fatal, matching every other send path.
+   */
+  async submitUpworkApplication(input: {
     jobId: string
-    type: UpworkMessage['type']
-    draftText: string
-    modelUsed: string
-    senderProfileId?: string | null
-  }): Promise<UpworkMessage> {
-    // One draft row per (job, type): a double-click or a retry must not stack
-    // duplicate drafts. Reuse the existing unsent row and update its text.
-    const { data: existing } = await this.client
-      .from('upwork_messages')
-      .select('id')
-      .eq('job_id', input.jobId)
-      .eq('type', input.type)
-      .is('sent_at', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    const payload: Record<string, unknown> = {
-      draft_text: input.draftText,
-      model_used: input.modelUsed,
-    }
-    if (input.senderProfileId) payload.sender_profile_id = input.senderProfileId
-
-    let data: Row | null = null
-    if (existing?.id) {
-      const { data: updated, error } = await this.client
-        .from('upwork_messages')
-        .update(payload)
-        .eq('id', existing.id)
-        .eq('organization_id', this.orgId)
-        .select('*')
-        .maybeSingle()
-      if (error && isOptionalSearchError(error) && payload.sender_profile_id) {
-        delete payload.sender_profile_id
-        const retry = await this.client
-          .from('upwork_messages')
-          .update(payload)
-          .eq('id', existing.id)
-          .eq('organization_id', this.orgId)
-          .select('*')
-          .maybeSingle()
-        data = (retry.data as Row) ?? null
-        if (retry.error) throw retry.error
-      } else {
-        data = (updated as Row) ?? null
-        if (error) throw error
-      }
-    }
-
-    if (!data) {
-      const insertPayload: Record<string, unknown> = {
-        organization_id: this.orgId,
-        job_id: input.jobId,
-        rep_id: this.rep.id,
-        type: input.type,
-        draft_text: input.draftText,
-        model_used: input.modelUsed,
-      }
-      if (input.senderProfileId) insertPayload.sender_profile_id = input.senderProfileId
-      const { data: inserted, error } = await this.client
-        .from('upwork_messages')
-        .insert(insertPayload)
-        .select('*')
-        .single()
-      if (error && isOptionalSearchError(error) && insertPayload.sender_profile_id) {
-        delete insertPayload.sender_profile_id
-        const retry = await this.client.from('upwork_messages').insert(insertPayload).select('*').single()
-        if (retry.error) throw retry.error
-        data = (retry.data as Row) ?? null
-      } else {
-        if (error) throw error
-        data = (inserted as Row) ?? null
-      }
-    }
-
-    const msg = mapUpworkMessage(data as Row)
-    if (input.type === 'cover') {
-      try {
-        await emitAction({
-          orgId: this.orgId,
-          actionType: 'UPWORK_PROPOSAL_PREPARED',
-          actorType: 'rep',
-          actorId: this.rep.id,
-          jobId: input.jobId,
-          senderProfileId: input.senderProfileId ?? null,
-          messageId: msg.id,
-          executionStatus: 'generated',
-          channel: 'upwork',
-          idempotencyKey: `upwork_proposal:${msg.id}`,
-        })
-      } catch { }
-      try {
-        const { data: targets } = await this.client
-          .from('daily_targets')
-          .select('revenue_identity_id')
-          .eq('rep_id', this.rep.id)
-          .eq('activity_type', 'application')
-          .eq('active', true)
-        if (targets && targets.length > 0) {
-          for (const t of targets) {
-            try {
-              await this.client.rpc('record_activity_event', {
-                p_rep_id: this.rep.id,
-                p_identity_id: t.revenue_identity_id as string,
-                p_activity_type: 'application',
-                p_org_id: this.orgId,
-                p_source_event_id: `activity:upwork_draft:${input.jobId}:${t.revenue_identity_id}`,
-                p_date: await this.businessDate(),
-              })
-            } catch { }
-          }
-          try {
-            const sourceEventId = `canonical:upwork_draft:${input.jobId}:${this.rep.id}`
-            for (const t of targets) {
-              try {
-                await this.client.rpc('record_canonical_progress', {
-                  p_org_id: this.orgId,
-                  p_person_id: this.rep.id,
-                  p_revenue_identity_id: t.revenue_identity_id as string,
-                  p_event_type: 'OUTREACH_RECORDED',
-                  p_metric_key: 'applications',
-                  p_source_event_id: sourceEventId,
-                  p_date: await this.businessDate(),
-                })
-              } catch { }
-            }
-          } catch { }
-        }
-      } catch { }
-    }
-    return msg
-  }
-
-  async markUpworkApplied(
-    jobId: string,
-    sentText: string,
-    type: UpworkMessage['type'] = 'cover',
-    senderProfileIdOverride?: string | null,
-    ownerRepId?: string | null,
-  ): Promise<void> {
-    // Admin on-behalf applies must update the acting rep's job, not the
-    // admin's — otherwise the update matches zero rows and the job stays 'new'.
-    const ownerRep = ownerRepId ?? this.rep.id
-    // Look up the job's connects cost before updating
-    const { data: jobRow } = await this.client
-      .from('upwork_jobs')
-      .select('connects_cost, sender_profile_id')
-      .eq('id', jobId)
-      .maybeSingle()
-    const connectsCost = (jobRow as unknown as { connects_cost: number })?.connects_cost ?? 0
-    // Attribution resolution: the caller's authorized profile, then the draft
-    // row the proposal was saved with, then the job. The job column was the
-    // only source before drafts carried a sender, so applied proposals had no
-    // sender at all.
-    let senderProfileId = senderProfileIdOverride
-      ?? (jobRow as unknown as { sender_profile_id?: string | null })?.sender_profile_id
-      ?? null
-    if (!senderProfileId) {
-      const { data: draftRow } = await this.client
-        .from('upwork_messages')
-        .select('sender_profile_id')
-        .eq('job_id', jobId)
-        .eq('type', type)
-        .is('sent_at', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      senderProfileId = (draftRow as { sender_profile_id?: string | null } | null)?.sender_profile_id ?? null
-    }
-
-    // `connects_used` was added in code (commit 3d0a4b4) without a migration and
-    // does not exist in every environment. supabase-js resolves a query builder
-    // with `{ data, error }` rather than rejecting, so an unchecked 400 here left
-    // `upwork_jobs.status` at 'new' while the route still returned 200 — the job
-    // looked un-applied and could be applied again. Write the optional column
-    // only when it is present, and surface a real failure.
-    const statusUpdate: Record<string, unknown> = { status: 'applied', connects_used: connectsCost }
-    const statusResult = await this.client
-      .from('upwork_jobs')
-      .update(statusUpdate)
-      .eq('id', jobId)
-      .eq('owner_rep_id', ownerRep)
-    if (statusResult.error && isOptionalSearchError(statusResult.error)) {
-      delete statusUpdate.connects_used
-      const retry = await this.client
-        .from('upwork_jobs')
-        .update(statusUpdate)
-        .eq('id', jobId)
-        .eq('owner_rep_id', ownerRep)
-      if (retry.error) throw retry.error
-    } else if (statusResult.error) {
-      throw statusResult.error
-    }
-
-    // One application per job. A retry or a double-click must not log a second
-    // sent proposal — reuse the row an earlier call already committed.
-    const { data: existingMessage } = await this.client
-      .from('upwork_messages')
-      .select('id')
-      .eq('job_id', jobId)
-      .eq('type', type)
-      .not('sent_at', 'is', null)
-      .maybeSingle()
-    if (!existingMessage) {
-      const insertPayload: Record<string, unknown> = {
-        organization_id: this.orgId,
-        job_id: jobId,
-        rep_id: this.rep.id,
-        type,
-        sent_text: sentText,
-        sent_at: new Date().toISOString(),
-      }
-      if (senderProfileId) insertPayload.sender_profile_id = senderProfileId
-      const { error: insertError } = await this.client.from('upwork_messages').insert(insertPayload)
-      if (insertError && isOptionalSearchError(insertError) && insertPayload.sender_profile_id) {
-        delete insertPayload.sender_profile_id
-        const { error: retryError } = await this.client.from('upwork_messages').insert(insertPayload)
-        if (retryError) throw retryError
-      } else if (insertError) {
-        throw insertError
-      }
-    }
-
-    await Promise.all([
-      // Record accountability increment — TEAM-001 (Today showed no
-      // progress). This was the one real send-logging path in the app that
-      // never called record_activity_event: DM/connection/followup/reply/
-      // email all go through markContacted, which does; Upwork applications
-      // went straight to raw table writes and silently never counted
-      // toward the 'application' daily target (UPWORK_PACK in
-      // default-targets.ts), so a rep logging Upwork applications all day
-      // would see Today's progress stay at 0 no matter how much real work
-      // was done. Only 'application' is incremented (not the separate
-      // 'proposal' target also in UPWORK_PACK) — this route represents the
-      // single act of applying; crediting a second, distinct target for
-      // the same action would be its own accountability-integrity bug
-      // (one real action counting as two), not a fix. Non-fatal, mirrors
-      // markContacted's own error handling exactly.
-      (async () => {
-        try {
-          const { data: targets } = await this.client
-            .from('daily_targets')
-            .select('revenue_identity_id')
-            .eq('rep_id', this.rep.id)
-            .eq('activity_type', 'application')
-            .eq('active', true)
-           if (targets && targets.length > 0) {
-            for (const t of targets) {
-              try {
-                await this.client.rpc('record_activity_event', {
-                  p_rep_id: this.rep.id,
-                  p_identity_id: t.revenue_identity_id as string,
-                  p_activity_type: 'application',
-                  p_org_id: this.orgId,
-                  p_source_event_id: `activity:upwork:${jobId}:${t.revenue_identity_id}`,
-                  p_date: await this.businessDate(),
-                })
-              } catch {
-                // Non-fatal per-target
-              }
-            }
-
-            // Bridge: canonical progress for Upwork applications
-            try {
-              const sourceEventId = `canonical:upwork:${jobId}:${this.rep.id}`
-              for (const t of targets) {
-                try {
-                  await this.client.rpc('record_canonical_progress', {
-                    p_org_id: this.orgId,
-                    p_person_id: this.rep.id,
-                    p_revenue_identity_id: t.revenue_identity_id as string,
-                    p_event_type: 'OUTREACH_RECORDED',
-                    p_metric_key: 'applications',
-                    p_source_event_id: sourceEventId,
-                    p_date: await this.businessDate(),
-                  })
-                } catch {
-                  // Non-fatal per-target
-                }
-              }
-            } catch {
-              // Progress bridge must never block the apply
-            }
-          }
-        } catch {
-          // Accountability increment must never block the apply
-        }
-      })(),
-    ])
+    repId: string
+    revenueIdentityId?: string | null
+    profileId?: string | null
+    proposalText: string
+    modelTier?: string | null
+    promptVersion?: string | null
+    proofRefs?: unknown[]
+    screeningAnswers?: UpworkScreeningAnswer[]
+    connectsSpent?: number | null
+    boostConnects?: number
+  }): Promise<UpworkApplication> {
+    const { data, error } = await this.client.rpc<string>('submit_upwork_application', {
+      p_org_id: this.orgId,
+      p_job_id: input.jobId,
+      p_rep_id: input.repId,
+      p_revenue_identity_id: input.revenueIdentityId ?? null,
+      p_person_profile_id: input.profileId ?? null,
+      p_proposal_text: input.proposalText,
+      p_model_tier: input.modelTier ?? null,
+      p_prompt_version: input.promptVersion ?? null,
+      p_proof_refs: JSON.stringify(input.proofRefs ?? []),
+      p_screening_answers: JSON.stringify(input.screeningAnswers ?? []),
+      p_connects_spent: input.connectsSpent ?? null,
+      p_boost_connects: input.boostConnects ?? 0,
+    })
+    if (error) throw error
+    const application = await this.getUpworkApplication(input.jobId)
+    if (!application) throw new Error('Application was not created.')
 
     try {
       await emitAction({
         orgId: this.orgId,
-        actionType: 'UPWORK_APPLIED',
+        actionType: 'UPWORK_APPLICATION_SUBMITTED',
         actorType: 'rep',
-        actorId: this.rep.id,
-        jobId,
-        senderProfileId,
+        actorId: input.repId,
+        jobId: input.jobId,
+        senderProfileId: input.profileId ?? null,
         executionStatus: 'sent',
         channel: 'upwork',
-        idempotencyKey: `upwork_applied:${jobId}`,
+        idempotencyKey: `upwork_application:${input.jobId}`,
       })
     } catch {
       // Action ledger must never break domain operations
     }
+    await this.creditUpworkApplication(input.jobId, input.repId)
+    return application
+  }
+
+  /** Daily target + canonical progress. One application counts once. */
+  private async creditUpworkApplication(jobId: string, repId: string): Promise<void> {
+    try {
+      const { data: targets } = await this.client
+        .from('daily_targets')
+        .select('revenue_identity_id')
+        .eq('rep_id', repId)
+        .eq('activity_type', 'application')
+        .eq('active', true)
+      if (!targets || targets.length === 0) return
+      for (const t of targets) {
+        try {
+          await this.client.rpc('record_activity_event', {
+            p_rep_id: repId,
+            p_identity_id: t.revenue_identity_id as string,
+            p_activity_type: 'application',
+            p_org_id: this.orgId,
+            p_source_event_id: `activity:upwork:${jobId}:${t.revenue_identity_id}`,
+            p_date: await this.businessDate(),
+          })
+        } catch {
+          // Non-fatal per-target
+        }
+      }
+      try {
+        const sourceEventId = `canonical:upwork:${jobId}:${repId}`
+        for (const t of targets) {
+          try {
+            await this.client.rpc('record_canonical_progress', {
+              p_org_id: this.orgId,
+              p_person_id: repId,
+              p_revenue_identity_id: t.revenue_identity_id as string,
+              p_event_type: 'OUTREACH_RECORDED',
+              p_metric_key: 'applications',
+              p_source_event_id: sourceEventId,
+              p_date: await this.businessDate(),
+            })
+          } catch {
+            // Non-fatal per-target
+          }
+        }
+      } catch {
+        // Progress bridge must never block the apply
+      }
+    } catch {
+      // Accountability increment must never block the apply
+    }
+  }
+
+  async getUpworkApplication(jobId: string): Promise<UpworkApplication | null> {
+    const { data, error } = await this.client
+      .from('upwork_applications')
+      .select('*')
+      .eq('job_id', jobId)
+      .maybeSingle()
+    if (error) throw error
+    return data ? mapUpworkApplication(data as Row) : null
+  }
+
+  async listUpworkApplications(filter: {
+    repIds?: string[]
+    identityIds?: string[]
+    from?: string
+    to?: string
+    includeArchived?: boolean
+  } = {}): Promise<UpworkApplication[]> {
+    let query = this.client
+      .from('upwork_applications')
+      .select('*')
+      .eq('organization_id', this.orgId)
+    if (filter.repIds && filter.repIds.length > 0) query = query.in('rep_id', filter.repIds)
+    if (filter.identityIds && filter.identityIds.length > 0) query = query.in('revenue_identity_id', filter.identityIds)
+    if (filter.from) query = query.gte('submitted_at', filter.from)
+    if (filter.to) query = query.lt('submitted_at', filter.to)
+    if (!filter.includeArchived) query = query.neq('status', 'archived')
+    const { data, error } = await query.order('submitted_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => mapUpworkApplication(r as Row))
+  }
+
+  async updateUpworkApplication(
+    id: string,
+    patch: Partial<Pick<UpworkApplication, 'status' | 'firstReplyAt' | 'latestReplyAt' | 'interviewAt' | 'wonAt' | 'lostAt' | 'archivedAt'>>,
+  ): Promise<void> {
+    const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (patch.status !== undefined) row.status = patch.status
+    if (patch.firstReplyAt !== undefined) row.first_reply_at = patch.firstReplyAt
+    if (patch.latestReplyAt !== undefined) row.latest_reply_at = patch.latestReplyAt
+    if (patch.interviewAt !== undefined) row.interview_at = patch.interviewAt
+    if (patch.wonAt !== undefined) row.won_at = patch.wonAt
+    if (patch.lostAt !== undefined) row.lost_at = patch.lostAt
+    if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt
+    const { error } = await this.client
+      .from('upwork_applications')
+      .update(row)
+      .eq('id', id)
+      .eq('organization_id', this.orgId)
+    if (error) throw error
+  }
+
+  /** Proposal drafts/versions. The submitted application points at one of these. */
+  async createUpworkProposalVersion(input: {
+    jobId: string
+    repId: string
+    profileId?: string | null
+    revenueIdentityId?: string | null
+    proposalText: string
+    modelTier?: string | null
+    promptVersion?: string | null
+    proofRefs?: unknown[]
+    screeningAnswers?: UpworkScreeningAnswer[]
+  }): Promise<UpworkProposalVersion> {
+    const { data, error } = await this.client
+      .from('upwork_proposal_versions')
+      .insert({
+        organization_id: this.orgId,
+        job_id: input.jobId,
+        rep_id: input.repId,
+        profile_id: input.profileId ?? null,
+        revenue_identity_id: input.revenueIdentityId ?? null,
+        proposal_text: input.proposalText,
+        model_tier: input.modelTier ?? null,
+        prompt_version: input.promptVersion ?? null,
+        proof_refs: input.proofRefs ?? [],
+        screening_answers: input.screeningAnswers ?? [],
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapUpworkProposalVersion(data as Row)
+  }
+
+  async listUpworkProposalVersions(jobId: string): Promise<UpworkProposalVersion[]> {
+    const { data, error } = await this.client
+      .from('upwork_proposal_versions')
+      .select('*')
+      .eq('job_id', jobId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => mapUpworkProposalVersion(r as Row))
+  }
+
+  /**
+   * Communication history. Inbound client messages are stored as inbound with a
+   * body — never as a proposal draft.
+   */
+  async logUpworkMessage(input: {
+    jobId: string
+    repId: string
+    type: UpworkMessage['type']
+    direction: 'outbound' | 'inbound'
+    body: string
+    senderProfileId?: string | null
+  }): Promise<UpworkMessage> {
+    const { data, error } = await this.client
+      .from('upwork_messages')
+      .insert({
+        organization_id: this.orgId,
+        job_id: input.jobId,
+        rep_id: input.repId,
+        type: input.type,
+        direction: input.direction,
+        body: input.body,
+        sent_text: input.direction === 'outbound' ? input.body : null,
+        sent_at: input.direction === 'outbound' ? new Date().toISOString() : null,
+        sender_profile_id: input.senderProfileId ?? null,
+      })
+      .select('*')
+      .single()
+    if (error) throw error
+    return mapUpworkMessage(data as Row)
+  }
+
+  /**
+   * Safe delete: only an untouched saved/draft job with no application, reply
+   * or follow-up history. Applied jobs archive; they never delete.
+   */
+  async deleteUpworkJob(id: string): Promise<void> {
+    const job = await this.getUpworkJob(id)
+    if (!job) throw new Error('Job not found.')
+    if (job.status !== 'SAVED' && job.status !== 'DRAFT_READY') {
+      throw new Error('Only untouched saved jobs can be deleted. Applied jobs must be archived.')
+    }
+    if (await this.getUpworkApplication(id)) throw new Error('A job with an application cannot be deleted.')
+    const { count, error: countError } = await this.client
+      .from('upwork_messages')
+      .select('id', { head: true, count: 'exact' })
+      .eq('job_id', id)
+      .in('type', ['followup', 'reply'])
+    if (countError) throw countError
+    if (count) throw new Error('A job with follow-up or reply history cannot be deleted.')
+
+    const { error } = await this.client
+      .from('upwork_jobs')
+      .delete()
+      .eq('id', id)
+      .eq('organization_id', this.orgId)
+    if (error) throw error
+    try {
+      await emitAction({
+        orgId: this.orgId,
+        actionType: 'UPWORK_DELETED',
+        actorType: 'rep',
+        actorId: this.rep.id,
+        jobId: id,
+        channel: 'upwork',
+        idempotencyKey: `upwork_deleted:${id}`,
+      })
+    } catch { /* ledger must never break domain operations */ }
+  }
+
+  /** Archive preserves every child row; the job simply leaves the active queue. */
+  async archiveUpworkJob(id: string, repId?: string): Promise<void> {
+    const { error } = await this.client
+      .from('upwork_jobs')
+      .update({ status: 'ARCHIVED', archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('organization_id', this.orgId)
+    if (error) throw error
+    const application = await this.getUpworkApplication(id)
+    if (application) {
+      await this.updateUpworkApplication(application.id, { status: 'archived', archivedAt: new Date().toISOString() })
+    }
+    try {
+      await emitAction({
+        orgId: this.orgId,
+        actionType: 'UPWORK_ARCHIVED',
+        actorType: 'rep',
+        actorId: repId ?? this.rep.id,
+        jobId: id,
+        channel: 'upwork',
+        idempotencyKey: `upwork_archived:${id}`,
+      })
+    } catch { /* ledger must never break domain operations */ }
+  }
+
+  /** The shared workspace: one read every Upwork surface uses. */
+  async getUpworkWorkspace(id: string) {
+    const job = await this.getUpworkJob(id)
+    if (!job) return null
+    const [application, proposalVersions] = await Promise.all([
+      this.getUpworkApplication(id),
+      this.listUpworkProposalVersions(id),
+    ])
+    return { job, application, proposalVersions, messages: job.messages ?? [] }
   }
 
   // ==========================================================================
@@ -5908,7 +5933,7 @@ export class SupabaseStore implements ScoutStore {
   /**
    * Award accountability credit for a genuine new prospect extraction/
    * capture — activity_type 'prospect_extracted'. Mirrors markContacted's
-   * and markUpworkApplied's lookup-then-increment pattern exactly: find
+   * and creditUpworkApplication's lookup-then-increment pattern exactly: find
    * every ACTIVE daily_targets row for this rep+activity, and call
    * record_activity_event for each. Non-fatal per-target and overall — this
    * must never block prospect analysis.
@@ -9232,7 +9257,7 @@ function mapUpworkJob(r: Row): UpworkJob {
     scoreBreakdown: r.score_breakdown ?? null,
     jobFacts: r.job_facts ?? null,
     profileMatch: r.profile_match ?? null,
-    status: (r.status as UpworkJob['status']) ?? 'new',
+    status: (r.status as UpworkJob['status']) ?? 'SAVED',
     extractedFields: (r.extracted_fields as Record<string, unknown>) ?? null,
     rawInput: (r.raw_input as string) ?? null,
     tags: (r.tags as string[]) ?? [],
@@ -9247,6 +9272,9 @@ function mapUpworkJob(r: Row): UpworkJob {
     remoteStatus: (r.remote_status as string) ?? null,
     clientName: (r.client_name as string) ?? null,
     clientEmail: (r.client_email as string) ?? null,
+    revenueIdentityId: (r.revenue_identity_id as string) ?? null,
+    senderProfileId: (r.sender_profile_id as string) ?? null,
+    archivedAt: (r.archived_at as string) ?? null,
   }
 }
 
@@ -9262,6 +9290,51 @@ function mapUpworkMessage(r: Row): UpworkMessage {
     sentAt: (r.sent_at as string) ?? null,
     modelUsed: (r.model_used as string) ?? null,
     senderProfileId: (r.sender_profile_id as string) ?? null,
+    direction: (r.direction as UpworkMessage['direction']) ?? 'outbound',
+    body: (r.body as string) ?? null,
+    createdAt: r.created_at as string,
+  }
+}
+
+export function mapUpworkApplication(r: Row): UpworkApplication {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    jobId: r.job_id as string,
+    repId: (r.rep_id as string) ?? null,
+    revenueIdentityId: (r.revenue_identity_id as string) ?? null,
+    personProfileId: (r.person_profile_id as string) ?? null,
+    submittedAt: (r.submitted_at as string) ?? null,
+    proposalText: (r.proposal_text as string) ?? null,
+    proposalVersionId: (r.proposal_version_id as string) ?? null,
+    connectsSpent: (r.connects_spent as number) ?? null,
+    boostConnects: (r.boost_connects as number) ?? 0,
+    screeningAnswers: (r.screening_answers as UpworkScreeningAnswer[]) ?? [],
+    firstReplyAt: (r.first_reply_at as string) ?? null,
+    latestReplyAt: (r.latest_reply_at as string) ?? null,
+    interviewAt: (r.interview_at as string) ?? null,
+    wonAt: (r.won_at as string) ?? null,
+    lostAt: (r.lost_at as string) ?? null,
+    archivedAt: (r.archived_at as string) ?? null,
+    status: (r.status as UpworkApplication['status']) ?? 'submitted',
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  }
+}
+
+export function mapUpworkProposalVersion(r: Row): UpworkProposalVersion {
+  return {
+    id: r.id as string,
+    organizationId: r.organization_id as string,
+    jobId: r.job_id as string,
+    repId: (r.rep_id as string) ?? null,
+    profileId: (r.profile_id as string) ?? null,
+    revenueIdentityId: (r.revenue_identity_id as string) ?? null,
+    proposalText: r.proposal_text as string,
+    modelTier: (r.model_tier as string) ?? null,
+    promptVersion: (r.prompt_version as string) ?? null,
+    proofRefs: (r.proof_refs as unknown[]) ?? [],
+    screeningAnswers: (r.screening_answers as UpworkScreeningAnswer[]) ?? [],
     createdAt: r.created_at as string,
   }
 }

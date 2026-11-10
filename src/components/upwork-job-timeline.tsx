@@ -5,20 +5,16 @@ import { useRouter } from 'next/navigation'
 import { cn } from 'cn'
 import { V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import type { UpworkJob, UpworkJobStatus } from '@/lib/domain/types'
-import {
-  UPWORK_CLOSE_STAGES,
-  UPWORK_OPEN_STAGES,
-  isLegacyUpworkStatus,
-  upworkStageDetail,
-  upworkStageLabel,
-} from '@/lib/upwork/pipeline'
+import { UPWORK_OPEN_STAGES, UPWORK_ARCHIVED_STAGE, upworkStageDetail, upworkStageLabel } from '@/lib/upwork/pipeline'
+
+const STAGES = [...UPWORK_OPEN_STAGES, UPWORK_ARCHIVED_STAGE]
 
 export function UpworkJobTimeline({ job }: { job: UpworkJob }) {
   const router = useRouter()
   const [status, setStatus] = useState<UpworkJobStatus>(job.status)
   const [updating, setUpdating] = useState<UpworkJobStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const closed = status === 'no' || status === 'dead'
+  const closed = status === 'ARCHIVED'
 
   async function updateStatus(next: UpworkJobStatus) {
     if (next === status || updating) return
@@ -51,15 +47,9 @@ export function UpworkJobTimeline({ job }: { job: UpworkJob }) {
         {upworkStageLabel(status)}
       </span>
 
-      {isLegacyUpworkStatus(status) && (
-        <p className="mt-3 rounded-xl bg-status-warning/10 px-3 py-2 text-[12px] text-status-warning">
-          This job is marked {upworkStageLabel(status)}. Move it to a stage below so the record matches what happened on Upwork.
-        </p>
-      )}
-
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Upwork stage">
-        {UPWORK_OPEN_STAGES.map((stage, index) => {
-          const currentIndex = UPWORK_OPEN_STAGES.findIndex((item) => item.key === status)
+        {STAGES.map((stage, index) => {
+          const currentIndex = STAGES.findIndex((item) => item.key === status)
           const reached = currentIndex >= 0 && index <= currentIndex
           const selected = status === stage.key
           return (
@@ -81,29 +71,6 @@ export function UpworkJobTimeline({ job }: { job: UpworkJob }) {
               <span className={cn('mt-1 block text-[11px] leading-snug', selected ? 'text-on-solid/70' : reached ? 'text-graphite' : 'text-stone')}>
                 {updating === stage.key ? 'Saving…' : stage.detail}
               </span>
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        {UPWORK_CLOSE_STAGES.map((stage) => {
-          const selected = status === stage.key
-          return (
-            <button
-              key={stage.key}
-              type="button"
-              aria-pressed={selected}
-              disabled={Boolean(updating) || selected}
-              onClick={() => void updateStatus(stage.key)}
-              className={cn(
-                'rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors disabled:cursor-default',
-                selected
-                  ? 'border-ink bg-bone text-ink'
-                  : 'border-line text-graphite hover:text-ink',
-              )}
-            >
-              {updating === stage.key ? 'Saving…' : stage.label}
             </button>
           )
         })}

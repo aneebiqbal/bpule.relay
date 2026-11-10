@@ -25,7 +25,7 @@ export type TargetStatus = 'met' | 'on_track' | 'at_risk' | 'no_target'
 export const TARGET_TYPES: Array<{ type: TargetType; label: string; events: string[]; activityEvent: string }> = [
   { type: 'CONNECTIONS', label: 'Connections', events: [...CONNECTION_EVENTS], activityEvent: 'CONNECTION_SENT' },
   { type: 'MESSAGES_SENT', label: 'Messages sent', events: [...SENT_MESSAGE_EVENTS], activityEvent: 'MESSAGES_SENT' },
-  { type: 'UPWORK_APPLICATIONS', label: 'Upwork applications', events: ['UPWORK_APPLIED'], activityEvent: 'UPWORK_APPLIED' },
+  { type: 'UPWORK_APPLICATIONS', label: 'Upwork applications', events: ['UPWORK_APPLIED', 'UPWORK_APPLICATION_SUBMITTED'], activityEvent: 'UPWORK_APPLICATION_SUBMITTED' },
   { type: 'MEETINGS', label: 'Meetings', events: [MEETING_EVENT], activityEvent: MEETING_EVENT },
   { type: 'PROPOSALS', label: 'Proposals', events: ['UPWORK_PROPOSAL_PREPARED'], activityEvent: 'UPWORK_PROPOSAL_PREPARED' },
 ]

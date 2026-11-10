@@ -201,7 +201,7 @@ export default async function ChatsPage({
           <section aria-label="Thread" tabIndex={0} className="min-h-0 min-w-0 overflow-y-auto rounded-lg border border-dashed border-line">
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center p-6 text-center">
               <MessagesSquare className="size-6 text-stone" aria-hidden="true" />
-              <p className="mt-2 text-[13px] text-graphite">Select a conversation to read the thread.</p>
+              <p className="mt-2 text-[13px] text-graphite">Select a conversation to read its thread.</p>
             </div>
           </section>
         </div>
@@ -305,9 +305,15 @@ export default async function ChatsPage({
                 />
               </Suspense>
             ) : (
-              <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-lg border border-dashed border-line text-center">
-                <MessagesSquare className="size-6 text-stone" aria-hidden="true" />
-                <p className="mt-2 text-[13px] text-graphite">Select a conversation to start.</p>
+              <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-lg border border-dashed border-line px-6 py-10 text-center">
+                <div className="flex size-10 items-center justify-center rounded-full bg-bone ring-1 ring-line">
+                  <MessagesSquare className="size-5 text-stone" aria-hidden="true" />
+                </div>
+                <p className="mt-3 text-[14px] font-medium text-ink">Select a conversation</p>
+                <p className="mt-1 max-w-[30ch] text-[13px] leading-relaxed text-graphite">
+                  The message history, the person&apos;s profile and coverage, and the reply composer open here.
+                </p>
+                <p className="mt-3 text-[12px] text-stone">Pick any row from the queue on the left.</p>
               </div>
             )}
           </section>

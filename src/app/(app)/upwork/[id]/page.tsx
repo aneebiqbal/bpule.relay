@@ -40,8 +40,10 @@ export default async function UpworkJobPage({
   const { id } = await params
   const { repId: requestedRepId } = await searchParams
   const store = await createScoutStore()
-  const job = await store.getUpworkJob(id)
-  if (!job) notFound()
+  const workspace = await store.getUpworkWorkspace(id)
+  if (!workspace) notFound()
+  const job = workspace.job
+  const { application, proposalVersions } = workspace
 
   const auth = await getAuthContext()
   const isAdmin = Boolean(auth?.isAdmin || auth?.isOwner)
@@ -188,9 +190,13 @@ export default async function UpworkJobPage({
             jobId={id}
             jobTitle={job.title}
             jobScore={job.score}
+            jobStatus={job.status}
+            connectsCost={job.connectsCost}
             profiles={profiles}
             matchedProofs={[]}
-            savedDraft={(job.messages ?? []).find((m) => m.type === 'cover' && !m.sentAt && m.draftText)?.draftText ?? null}
+            savedDraft={proposalVersions[0]?.proposalText ?? null}
+            savedScreeningAnswers={proposalVersions[0]?.screeningAnswers ?? []}
+            application={application}
             isAdmin={isAdmin}
             reps={reps}
             actingRepId={actingRepId}

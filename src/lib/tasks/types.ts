@@ -75,6 +75,7 @@ export type AssignedTaskKind =
   | 'PREPARE_PROPOSAL'
   | 'CUSTOM'
   | 'REQUEST_UPDATE'
+  | 'FOLLOW_UP'
 
 export interface AssignedTaskRow {
   id: string

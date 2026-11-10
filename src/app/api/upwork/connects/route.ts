@@ -1,17 +1,19 @@
-import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { orgTodayRange, orgWeekRange } from '@/lib/org-clock'
+import type { UpworkApplication } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/upwork/connects
- * Returns connects usage stats for the current rep:
- * - total used this week / this month
- * - per-profile breakdown
- * - per-job history
- * - remaining balance (if tracked)
+ *
+ * Real connects from submitted applications only — never from generated
+ * proposals. Grouped by rep, profile and revenue identity, with today/week
+ * windows in the organization's timezone.
  */
 export async function GET() {
   const user = await getCurrentUser()
@@ -19,75 +21,96 @@ export async function GET() {
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const client = await createServerSupabase()
-  const repId = authCtx.repId
+  const store = await createScoutStore()
+  const policy = await loadOperatingPolicy(authCtx.orgId)
+  const today = orgTodayRange(policy)
+  const week = orgWeekRange(policy)
+  const isAdmin = Boolean(authCtx.isAdmin || authCtx.isOwner)
 
-  // Get all applied jobs with connects cost
-  const { data: jobs } = await client
-    .from('upwork_jobs')
-    .select('id, title, connects_cost, status, updated_at')
-    .eq('owner_rep_id', repId)
-    .eq('organization_id', authCtx.orgId)
-    .in('status', ['applied', 'shortlisted', 'interviewing', 'offer_sent', 'awarded'])
-    .order('updated_at', { ascending: false })
-    .limit(50)
+  const applications = await store.listUpworkApplications({
+    repIds: isAdmin ? [] : [authCtx.repId],
+    includeArchived: true,
+  })
 
-  // The profile label is a second read rather than a PostgREST embed
-  // (`profile:profiles`), which the Neon adapter cannot translate.
-  const profileIds = (jobs ?? []).map((j) => (j as { profile_id: string | null }).profile_id).filter((x): x is string => Boolean(x))
-  const profileLabelById = new Map<string, string>()
-  if (profileIds.length > 0) {
-    const { data: profiles } = await client.from('profiles').select('id, label').in('id', profileIds)
-    for (const p of profiles ?? []) profileLabelById.set(p.id as string, p.label as string)
+  const profileIds = [...new Set(applications.map((a) => a.personProfileId).filter((x): x is string => Boolean(x)))]
+  const identityIds = [...new Set(applications.map((a) => a.revenueIdentityId).filter((x): x is string => Boolean(x)))]
+  const client = store.getSupabaseClient()
+
+  const [profileRows, identityRows] = await Promise.all([
+    profileIds.length > 0
+      ? client.from('profiles').select('id, display_name, full_name, label').in('id', profileIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; display_name: string | null; full_name: string | null; label: string | null }>, error: null }),
+    identityIds.length > 0
+      ? client.from('revenue_identities').select('id, identity_name').in('id', identityIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; identity_name: string | null }>, error: null }),
+  ])
+
+  const profileName = new Map((profileRows.data ?? []).map((p) => [p.id as string, p.display_name ?? p.full_name ?? p.label ?? 'Unknown']))
+  const identityName = new Map((identityRows.data ?? []).map((i) => [i.id as string, i.identity_name ?? 'Unknown']))
+
+  const connectsOf = (a: { connectsSpent: number | null; boostConnects: number }) =>
+    (a.connectsSpent ?? 0) + (a.boostConnects ?? 0)
+
+  const inRange = (a: { submittedAt: string | null }, range: { start: string; end: string }) =>
+    Boolean(a.submittedAt && a.submittedAt >= range.start && a.submittedAt < range.end)
+
+  const sum = (rows: typeof applications) => rows.reduce((total, a) => total + connectsOf(a), 0)
+
+  const groupBy = (
+    rows: UpworkApplication[],
+    keyOf: (row: UpworkApplication) => string,
+  ) => {
+    const out = new Map<string, { key: string; connects: number; applications: number }>()
+    for (const row of rows) {
+      const key = keyOf(row)
+      const entry = out.get(key) ?? { key, connects: 0, applications: 0 }
+      entry.connects += connectsOf(row)
+      entry.applications += 1
+      out.set(key, entry)
+    }
+    return [...out.values()]
   }
-  const jobsWithProfile = (jobs ?? []).map((j) => ({
-    ...j,
-    profile: (j as { profile_id: string | null }).profile_id
-      ? { id: (j as { profile_id: string }).profile_id, label: profileLabelById.get((j as { profile_id: string }).profile_id) ?? null }
-      : null,
+
+  const nameFor = (row: { personProfileId: string | null; revenueIdentityId: string | null }) =>
+    profileName.get(row.personProfileId ?? '') ?? identityName.get(row.revenueIdentityId ?? '') ?? 'Unknown'
+
+  const perProfile = groupBy(applications, nameFor).map((g) => ({
+    key: g.key,
+    name: g.key,
+    connects: g.connects,
+    applications: g.applications,
+  }))
+  const perIdentity = groupBy(applications, (row) => identityName.get(row.revenueIdentityId ?? '') ?? 'Unknown').map((g) => ({
+    key: g.key,
+    name: g.key,
+    connects: g.connects,
+    applications: g.applications,
+  }))
+  const perRep = groupBy(applications, (row) => row.repId ?? 'unknown').map((g) => ({
+    key: g.key,
+    connects: g.connects,
+    applications: g.applications,
   }))
 
-  // Calculate totals
-  const now = new Date()
-  const weekStart = new Date(now)
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
-  weekStart.setHours(0, 0, 0, 0)
-  const monthStart = new Date(now)
-  monthStart.setDate(1)
-  monthStart.setHours(0, 0, 0, 0)
-
-  let totalUsed = 0
-  let weekUsed = 0
-  let monthUsed = 0
-  const perProfile: Record<string, { name: string; used: number; jobs: number }> = {}
-
-  for (const job of (jobsWithProfile ?? [])) {
-    const used = (job as any).connects_used ?? (job as any).connects_cost ?? 0
-    const updatedAt = new Date((job as any).updated_at ?? now)
-    totalUsed += used
-    if (updatedAt >= weekStart) weekUsed += used
-    if (updatedAt >= monthStart) monthUsed += used
-
-    const profileName = (job as any).profile?.label ?? 'Unknown'
-    if (!perProfile[profileName]) {
-      perProfile[profileName] = { name: profileName, used: 0, jobs: 0 }
-    }
-    perProfile[profileName].used += used
-    perProfile[profileName].jobs++
-  }
+  const recentJobs = applications.slice(0, 10).map((a) => ({
+    id: a.id,
+    jobId: a.jobId,
+    title: a.proposalText?.slice(0, 60) ?? '',
+    connects: connectsOf(a),
+    submittedAt: a.submittedAt,
+  }))
 
   return NextResponse.json({
-    totalUsed,
-    weekUsed,
-    monthUsed,
-    appliedCount: jobsWithProfile?.length ?? 0,
-    perProfile: Object.values(perProfile),
-    recentJobs: (jobsWithProfile ?? []).slice(0, 10).map((j: any) => ({
-      id: j.id,
-      title: j.title.slice(0, 60),
-      connects: j.connects_used ?? j.connects_cost ?? 0,
-      status: j.status,
-      date: j.updated_at,
-    })),
+    todayUsed: sum(applications.filter((a) => inRange(a, today))),
+    weekUsed: sum(applications.filter((a) => inRange(a, week))),
+    totalUsed: sum(applications),
+    todayCount: applications.filter((a) => inRange(a, today)).length,
+    weekCount: applications.filter((a) => inRange(a, week)).length,
+    appliedCount: applications.length,
+    perProfile,
+    perIdentity,
+    perRep,
+    recentJobs,
+    timezone: policy.timezone,
   })
 }

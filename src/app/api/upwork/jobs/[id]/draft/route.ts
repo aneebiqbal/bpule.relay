@@ -6,8 +6,22 @@ import {
   listAssignedProfiles,
   listAssignedProfilesForRep,
 } from '@/lib/profiles/assigned-profiles'
+import type { UpworkScreeningAnswer } from '@/lib/domain/types'
 
-export async function POST(request: Request) {
+/**
+ * POST /api/upwork/jobs/[id]/draft
+ * Body: { proposalText, screeningAnswers?, modelTier?, promptVersion?,
+ *         proofRefs?, profileId?, repId? }
+ *
+ * Saves a proposal version. Screening answers persist with it, so a generated
+ * draft survives a reload. A draft is never an application.
+ */
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id: jobId } = await params
+
   let body: Record<string, unknown>
   try {
     body = await request.json()
@@ -15,31 +29,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  const jobId = typeof body.jobId === 'string' ? body.jobId : ''
-  const draftText = typeof body.draftText === 'string' ? body.draftText.trim() : ''
-  const type = typeof body.type === 'string' ? body.type : 'cover'
-  const modelUsed = typeof body.modelUsed === 'string' ? body.modelUsed : ''
-  if (!jobId || !draftText) {
-    return NextResponse.json(
-      { error: 'jobId and draftText are required.' },
-      { status: 400 },
-    )
+  const proposalText = typeof body.proposalText === 'string' ? body.proposalText.trim() : ''
+  if (!proposalText) {
+    return NextResponse.json({ error: 'proposalText is required.' }, { status: 400 })
   }
 
-  let store
-  try {
-    store = await createScoutStore()
-  } catch (err) {
-    return NextResponse.json(
-      { error: 'Not signed in.' },
-      { status: 401 },
-    )
-  }
+  const screeningAnswers: UpworkScreeningAnswer[] = Array.isArray(body.screeningAnswers)
+    ? (body.screeningAnswers as unknown[]).filter(
+        (a): a is UpworkScreeningAnswer =>
+          typeof a === 'object' && a !== null && typeof (a as { question?: unknown }).question === 'string',
+      )
+    : []
 
+  const store = await createScoutStore()
   const authCtx = await getAuthContext()
   if (!authCtx) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
 
-  // Admin/owner on-behalf: the acting rep must belong to the caller's org.
   const requestedRepId = typeof body.repId === 'string' ? body.repId : null
   const isAdmin = Boolean(authCtx.isAdmin || authCtx.isOwner)
   let actingRepId = authCtx.repId
@@ -60,37 +65,63 @@ export async function POST(request: Request) {
     actingRepId = repRow.id as string
   }
 
-  // The persisted sender is attribution, not a trust boundary — but a client-
-  // supplied id must still resolve to an Upwork-capable profile assigned to the
-  // acting rep. An ineligible id is rejected rather than silently dropped: a
-  // silently dropped id would save the draft with no sender and lose the
-  // profile the proposal was actually written in.
+  const job = await store.getUpworkJob(jobId)
+  if (!job) return NextResponse.json({ error: 'Job not found.' }, { status: 404 })
+  if (job.organizationId !== authCtx.orgId) {
+    return NextResponse.json({ error: 'Job not found.' }, { status: 404 })
+  }
+  if (job.ownerRepId !== actingRepId && !isAdmin) {
+    return NextResponse.json({ error: 'You do not own this job.' }, { status: 403 })
+  }
+
   const assigned = actingRepId === authCtx.repId
     ? await listAssignedProfiles()
     : await listAssignedProfilesForRep(authCtx.orgId, actingRepId)
   const upworkProfiles = filterAssignedProfilesByChannel(assigned, 'upwork')
-
   const requestedProfileId = typeof body.profileId === 'string' ? body.profileId : null
-  const senderProfile = requestedProfileId
+  const sender = requestedProfileId
     ? upworkProfiles.find((a) => a.profile.id === requestedProfileId) ?? null
     : upworkProfiles[0] ?? null
 
-  if (requestedProfileId && !senderProfile) {
+  if (requestedProfileId && !sender) {
     return NextResponse.json(
       { error: 'That profile is not assigned to you for Upwork. Select an eligible profile.' },
       { status: 403 },
     )
   }
-  if (!senderProfile) {
+  if (!sender) {
     return NextResponse.json({ error: 'No Upwork profile is assigned to you.' }, { status: 400 })
   }
 
-  const msg = await store.saveUpworkDraft({
+  const version = await store.createUpworkProposalVersion({
     jobId,
-    type: type as 'cover' | 'followup' | 'reply',
-    draftText,
-    modelUsed,
-    senderProfileId: senderProfile.profile.id,
+    repId: actingRepId,
+    profileId: sender.profile.id,
+    revenueIdentityId: sender.assignedIdentityIds[0] ?? null,
+    proposalText,
+    modelTier: typeof body.modelTier === 'string' ? body.modelTier : null,
+    promptVersion: typeof body.promptVersion === 'string' ? body.promptVersion : null,
+    proofRefs: Array.isArray(body.proofRefs) ? (body.proofRefs as unknown[]) : [],
+    screeningAnswers,
   })
-  return NextResponse.json({ message: msg, profileId: senderProfile.profile.id })
+
+  // Generated ≠ applied: the proposal event is observability, never an application.
+  try {
+    const { emitAction } = await import('@/lib/action-ledger')
+    await emitAction({
+      orgId: authCtx.orgId,
+      actionType: 'UPWORK_PROPOSAL_PREPARED',
+      actorType: 'rep',
+      actorId: actingRepId,
+      jobId,
+      senderProfileId: sender.profile.id,
+      executionStatus: 'generated',
+      channel: 'upwork',
+      idempotencyKey: `upwork_proposal:${version.id}`,
+    })
+  } catch {
+    // Ledger must never break domain operations.
+  }
+
+  return NextResponse.json({ version, profileId: sender.profile.id })
 }

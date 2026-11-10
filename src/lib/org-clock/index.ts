@@ -310,6 +310,21 @@ export function businessDateRange(businessDate: string, timeZone: string): { sta
   return { start: start.toISOString(), end: end.toISOString() }
 }
 
+/** Today in the organization's timezone. Never the server's or browser's. */
+export function orgTodayRange(policy: OperatingPolicy, now: Date = orgNow()): { start: string; end: string } {
+  return businessDateRange(orgDate(now, policy.timezone), policy.timezone)
+}
+
+/** The rolling 7-day window ending today, in the organization's timezone. */
+export function orgWeekRange(policy: OperatingPolicy, now: Date = orgNow()): { start: string; end: string } {
+  const today = orgDate(now, policy.timezone)
+  const weekStart = addDays(today, -6)
+  return {
+    start: businessDateRange(weekStart, policy.timezone).start,
+    end: businessDateRange(today, policy.timezone).end,
+  }
+}
+
 /** '4h 21m' / '43m' / '0m' — the one duration label used by the UI. */
 export function formatDuration(totalMinutes: number): string {
   const minutes = Math.max(0, Math.round(totalMinutes))

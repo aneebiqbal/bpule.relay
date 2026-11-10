@@ -1,3 +1,6 @@
+import type { UpworkJobStatus } from '@/lib/upwork/lifecycle'
+export type { UpworkJobStatus } from '@/lib/upwork/lifecycle'
+
 export type RepRole = 'rep' | 'sourcer' | 'admin' | 'manager'
 
 export type OrganizationPlan = 'trial' | 'active' | 'past_due' | 'canceled'
@@ -195,19 +198,6 @@ export interface Outcome {
 
 export type UpworkJobVerdict = 'apply' | 'apply_if_connects' | 'skip'
 
-export type UpworkJobStatus =
-  | 'new'
-  | 'drafted'
-  | 'applied'
-  | 'shortlisted'
-  | 'interviewing'
-  | 'offer_sent'
-  | 'awarded'
-  | 'rejected'
-  | 'replied'
-  | 'no'
-  | 'dead'
-
 export interface UpworkJob {
   id: string
   organizationId: string
@@ -246,6 +236,12 @@ export interface UpworkJob {
   remoteStatus?: string | null
   clientName?: string | null
   clientEmail?: string | null
+  /** The Upwork identity this job is applied as. */
+  revenueIdentityId?: string | null
+  /** The profile the proposal is written for. */
+  senderProfileId?: string | null
+  /** When the job left the active queue. */
+  archivedAt?: string | null
   messages?: UpworkMessage[]
   followupCount?: number
   notes?: string | null
@@ -263,7 +259,57 @@ export interface UpworkMessage {
   modelUsed: string | null
   /** The profile the proposal was written for, when the schema carries it. */
   senderProfileId: string | null
+  /** Inbound = received from the client; outbound = sent by the rep. */
+  direction?: 'outbound' | 'inbound'
+  /** Communication body. The semantic home for inbound messages. */
+  body?: string | null
   createdAt: string
+}
+
+export interface UpworkScreeningAnswer {
+  question: string
+  answer: string
+  evidenceRef?: string | null
+}
+
+export interface UpworkProposalVersion {
+  id: string
+  organizationId: string
+  jobId: string
+  repId: string | null
+  profileId: string | null
+  revenueIdentityId: string | null
+  proposalText: string
+  modelTier: string | null
+  promptVersion: string | null
+  proofRefs: unknown[]
+  screeningAnswers: UpworkScreeningAnswer[]
+  createdAt: string
+}
+
+/** Canonical submitted-application authority. A generated proposal is not this. */
+export interface UpworkApplication {
+  id: string
+  organizationId: string
+  jobId: string
+  repId: string | null
+  revenueIdentityId: string | null
+  personProfileId: string | null
+  submittedAt: string | null
+  proposalText: string | null
+  proposalVersionId: string | null
+  connectsSpent: number | null
+  boostConnects: number
+  screeningAnswers: UpworkScreeningAnswer[]
+  firstReplyAt: string | null
+  latestReplyAt: string | null
+  interviewAt: string | null
+  wonAt: string | null
+  lostAt: string | null
+  archivedAt: string | null
+  status: 'submitted' | 'archived'
+  createdAt: string
+  updatedAt: string
 }
 
 export interface PushSubscription {

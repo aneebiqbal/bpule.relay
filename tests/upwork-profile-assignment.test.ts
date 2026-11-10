@@ -248,23 +248,21 @@ describe('UPWORK_GENERATION_PROFILE_ATTRIBUTION_PARITY', () => {
     expect(source).toContain('profileId: profile.id')
   })
 
-  it('the draft persists the sender profile', () => {
+  it('the draft persists the sender profile on the proposal version', () => {
     const route = read('src/app/api/upwork/jobs/[id]/draft/route.ts')
-    expect(route).toContain('senderProfileId: senderProfile.profile.id')
+    expect(route).toContain('profileId: sender.profile.id')
     const store = read('src/lib/store/supabase-store.ts')
-    expect(store).toContain('payload.sender_profile_id = input.senderProfileId')
+    expect(store).toContain('profile_id: input.profileId')
   })
 
-  it('apply persists the same sender instead of reading an unwritten job column', () => {
+  it('apply persists the same sender as the application identity', () => {
     const route = read('src/app/api/upwork/jobs/[id]/apply/route.ts')
-    expect(route).toContain('senderProfile?.profile.id')
+    expect(route).toContain('profileId: sender.profile.id')
     const store = read('src/lib/store/supabase-store.ts')
-    // The job's sender_profile_id is a fallback, not the primary source: the
-    // draft row is where the sender was persisted.
-    expect(store).toContain('senderProfileIdOverride')
-    const appliedAt = store.indexOf('async markUpworkApplied')
-    const draftFallbackAt = store.indexOf("from('upwork_messages')", appliedAt)
-    expect(draftFallbackAt).toBeGreaterThan(appliedAt)
+    // The submitted application carries the profile the rep selected; it never
+    // falls back to an unwritten job column.
+    expect(store).toContain('p_person_profile_id: input.profileId')
+    expect(store).toContain('async submitUpworkApplication')
   })
 })
 

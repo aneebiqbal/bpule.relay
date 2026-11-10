@@ -543,7 +543,8 @@ export function buildAdminMovementRows(
     { key: 'qualified', label: 'Qualified', today: movement.qualifiedToday, yesterday: null, delta: null, href: '/leads?filter=new' },
     { key: 'replies', label: 'Replies', today: movement.repliesHandledToday, yesterday: yesterday.replies, delta: movement.repliesHandledToday - yesterday.replies, href: '/chats' },
     { key: 'followups', label: 'Follow-ups', today: movement.followupsToday, yesterday: yesterday.followups, delta: movement.followupsToday - yesterday.followups, href: '/leads?filter=followup' },
-    { key: 'proposals', label: 'Proposals', today: movement.proposalsToday, yesterday: yesterday.proposals, delta: movement.proposalsToday - yesterday.proposals, href: '/upwork' },
+    { key: 'applications', label: 'Applications sent', today: movement.applicationsToday, yesterday: null, delta: null, href: '/upwork' },
+    { key: 'proposals', label: 'Drafts generated', today: movement.draftsGeneratedToday, yesterday: yesterday.proposals, delta: movement.draftsGeneratedToday - yesterday.proposals, href: '/upwork' },
     { key: 'meetings', label: 'Meetings', today: movement.meetingsToday, yesterday: yesterday.meetings, delta: movement.meetingsToday - yesterday.meetings, href: '/reports/sales' },
     { key: 'wins', label: 'Wins', today: movement.winsToday, yesterday: yesterday.wins, delta: movement.winsToday - yesterday.wins, href: '/leads?filter=won' },
   ]

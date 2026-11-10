@@ -141,7 +141,7 @@ export async function loadAdminCommandCenter(): Promise<{
     const weekStart = new Date(dayRange.start)
     weekStart.setUTCDate(weekStart.getUTCDate() - 7)
 
-    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, waitingAndTransfers, unreadTaskUpdates, todayOutcomes, weekOutcomes, yesterdayAccountabilityResult, todayNewLeadsResult, yesterdayNewLeadsResult, yesterdayEventsResult, yesterdayOutcomes, inboxCounts] =
+    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, waitingAndTransfers, unreadTaskUpdates, todayOutcomes, weekOutcomes, yesterdayAccountabilityResult, todayNewLeadsResult, yesterdayNewLeadsResult, yesterdayEventsResult, yesterdayOutcomes, todayApplicationsResult, inboxCounts] =
       await perfTrace('admin:main-batch', () => Promise.all([
         loadTeamDay(),
         loadTeamLive(ctx.orgId),
@@ -218,6 +218,14 @@ export async function loadAdminCommandCenter(): Promise<{
           .lt('occurred_at', yesterdayRange.end)
           .limit(5000),
         loadOutcomeEventCounts(supabase, { orgId: ctx.orgId, repIds: null, start: yesterdayRange.start, end: yesterdayRange.end }),
+        // Canonical applications authority: submitted_at on upwork_applications.
+        // Generated proposals never count here.
+        supabase
+          .from('upwork_applications')
+          .select('id', { head: true, count: 'exact' })
+          .eq('organization_id', ctx.orgId)
+          .gte('submitted_at', dayRange.start)
+          .lt('submitted_at', dayRange.end),
         getInboxCountsForOrg(supabase, { orgId: ctx.orgId }).catch(() => null),
       ]))
 
@@ -277,9 +285,12 @@ export async function loadAdminCommandCenter(): Promise<{
       proposals: row.proposals,
     }))
 
-    const proposalsToday = profileEvents.filter(
+    // Generated drafts, not applications. The canonical application count
+    // comes from upwork_applications.submitted_at below.
+    const draftsGeneratedToday = profileEvents.filter(
       (event) => event.action_type === 'UPWORK_PROPOSAL_PREPARED' && event.execution_status !== 'failed',
     ).length
+    const applicationsToday = todayApplicationsResult.count ?? 0
 
     // New qualified leads today — canonical score band on leads created today.
     const qualifiedToday = openLeads.filter((lead) => {
@@ -299,7 +310,8 @@ export async function loadAdminCommandCenter(): Promise<{
       followupsToday: executionToday.followupsCompleted,
       meetingsToday: todayOutcomes.meetings,
       winsToday: todayOutcomes.wins,
-      proposalsToday,
+      draftsGeneratedToday,
+      applicationsToday,
     }
 
     const yesterdayEvents = (yesterdayEventsResult.data ?? []) as Array<{ action_type: string; execution_status: string | null }>
