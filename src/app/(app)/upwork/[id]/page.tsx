@@ -244,7 +244,7 @@ export default async function UpworkJobPage({
                     <span className="truncate text-ink">
                       {i + 1}. {r.name ?? 'Unnamed'}{r.reasons[0] ? <span className="text-graphite"> · {r.reasons[0]}</span> : null}
                     </span>
-                    <span className={cn('shrink-0 font-mono font-medium', r.profileMatch >= 70 ? 'text-status-success' : r.profileMatch >= 40 ? 'text-[#b8531f]' : 'text-stone')}>
+                    <span className={cn('shrink-0 font-mono font-medium', r.profileMatch >= 70 ? 'text-status-success' : r.profileMatch >= 40 ? 'text-orange' : 'text-stone')}>
                       {r.profileMatch}%
                     </span>
                   </li>

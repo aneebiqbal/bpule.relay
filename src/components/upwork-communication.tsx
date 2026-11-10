@@ -143,12 +143,12 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
       {/* Last client message + reply generation */}
       {lastClientMsg && (
         <div className="mb-4 rounded-lg border border-orange/20 bg-orange/5 p-3">
-          <p className="text-[10px] uppercase tracking-wide text-[#b8531f]">Last client message</p>
+          <p className="text-[10px] uppercase tracking-wide text-orange">Last client message</p>
           <p className="mt-1 text-[12px] text-ink/80 whitespace-pre-wrap">{lastClientMsg}</p>
           <button
             onClick={generateReply}
             disabled={replyGenerating}
-            className="mt-2 flex items-center gap-1.5 rounded bg-orange/10 px-2.5 py-1 text-[11px] font-medium text-[#b8531f] hover:bg-orange/20 disabled:opacity-50"
+            className="mt-2 flex items-center gap-1.5 rounded bg-orange/10 px-2.5 py-1 text-[11px] font-medium text-orange hover:bg-orange/20 disabled:opacity-50"
           >
             {replyGenerating ? <Loader2 className="size-3 animate-spin" /> : <Reply className="size-3" />}
             {replyGenerating ? 'Generating...' : 'Generate reply'}
