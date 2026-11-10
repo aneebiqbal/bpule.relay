@@ -111,7 +111,7 @@ describe('UPWORK_SCREENING_SEPARATE', () => {
     const draft = read('src/app/api/upwork/jobs/[id]/draft/route.ts')
     expect(draft).toContain('screeningAnswers')
     const store = read('src/lib/store/supabase-store.ts')
-    expect(store).toContain('screening_answers: input.screeningAnswers ?? []')
+    expect(store).toContain('screening_answers: JSON.stringify(input.screeningAnswers ?? [])')
     expect(store).toContain('p_screening_answers: JSON.stringify(input.screeningAnswers ?? [])')
   })
 })

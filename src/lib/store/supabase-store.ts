@@ -3531,8 +3531,8 @@ export class SupabaseStore implements ScoutStore {
         proposal_text: input.proposalText,
         model_tier: input.modelTier ?? null,
         prompt_version: input.promptVersion ?? null,
-        proof_refs: input.proofRefs ?? [],
-        screening_answers: input.screeningAnswers ?? [],
+        proof_refs: JSON.stringify(input.proofRefs ?? []),
+        screening_answers: JSON.stringify(input.screeningAnswers ?? []),
       })
       .select('*')
       .single()
@@ -3685,7 +3685,7 @@ export class SupabaseStore implements ScoutStore {
         base_resume_snapshot: input.baseResumeSnapshot ?? {},
         tailored_resume: input.tailoredResume,
         ats_score: input.atsScore,
-        ats_dimensions: input.atsDimensions ?? [],
+        ats_dimensions: JSON.stringify(input.atsDimensions ?? []),
         ats_missing_skills: input.atsMissingSkills ?? [],
         target_title: input.targetTitle ?? null,
         target_skills: input.targetSkills ?? [],
