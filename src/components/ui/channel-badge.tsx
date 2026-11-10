@@ -17,7 +17,7 @@ const CHANNEL_ICON: Record<RevenueIdentityChannel, LucideIcon> = {
 const CHANNEL_TONE: Record<RevenueIdentityChannel, string> = {
   linkedin: 'bg-cobalt/10 text-cobalt',
   upwork: 'bg-status-success/10 text-status-success',
-  email: 'bg-orange/10 text-orange',
+  email: 'bg-orange/10 text-orange-ink',
   other: 'bg-bone text-graphite',
 }
 

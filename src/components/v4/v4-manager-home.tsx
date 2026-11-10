@@ -79,9 +79,9 @@ export function V4ManagerHome({
   }, [team.rows, filter])
 
   const stats: Array<{ key: string; label: string; value: number; hint: string; href: string; tone: 'neutral' | 'danger' | 'warning' | 'success' }> = [
-    { key: 'my-replies', label: 'Replies waiting', value: myReplies, hint: 'Your inbox', href: '/chats?view=waiting_me', tone: myReplies > 0 ? 'warning' : 'neutral' },
-    { key: 'my-waiting', label: 'Waiting on clients', value: myWaitingOnClients, hint: 'Your inbox', href: '/chats?view=waiting_them', tone: 'neutral' },
-    { key: 'my-followups', label: 'Follow-ups due', value: myFollowUps, hint: 'Your queue', href: '/chats?view=followups', tone: myFollowUps > 0 ? 'warning' : 'neutral' },
+    { key: 'my-replies', label: 'Replies waiting', value: myReplies, hint: 'Your inbox', href: '/chats?view=waiting_me&scope=me', tone: myReplies > 0 ? 'warning' : 'neutral' },
+    { key: 'my-waiting', label: 'Waiting on clients', value: myWaitingOnClients, hint: 'Your inbox', href: '/chats?view=waiting_them&scope=me', tone: 'neutral' },
+    { key: 'my-followups', label: 'Follow-ups due', value: myFollowUps, hint: 'Your queue', href: '/chats?view=followups&scope=me', tone: myFollowUps > 0 ? 'warning' : 'neutral' },
     { key: 'my-priority', label: 'My high-priority', value: highPriority.length, hint: 'Your book', href: '/dashboard', tone: 'neutral' },
     { key: 'my-done', label: 'My completed today', value: completedToday, hint: 'Your targets', href: '/dashboard', tone: 'neutral' },
     { key: 'team-attention', label: 'Team attention', value: team.needsAttentionCount, hint: `${team.memberCount} people`, href: '/team', tone: team.needsAttentionCount > 0 ? 'danger' : 'neutral' },

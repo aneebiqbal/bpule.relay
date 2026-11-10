@@ -68,6 +68,10 @@ export default async function ChatsPage({
   const rawAge = Array.isArray(sp.age) ? sp.age[0] : sp.age
   const minAgeHours = AGE_OPTIONS.some((o) => o.value === rawAge) ? Number(rawAge) : null
   const managerViews = ctx.scope.mode !== 'own'
+  // Managers can choose an explicit personal scope (`scope=me`) or the default
+  // managed-team scope. URL-backed, no hidden local state.
+  const rawScope = Array.isArray(sp.scope) ? sp.scope[0] : sp.scope
+  const personalScope = managerViews && rawScope === 'me'
   // Reps open on the work that needs them; managers open on the whole queue.
   const view: ChatView = filters.view ? parseChatView(filters.view, managerViews) : inboxDefaultView(managerViews)
   const rawStage = Array.isArray(sp.cstage) ? sp.cstage[0] : sp.cstage
@@ -83,14 +87,16 @@ export default async function ChatsPage({
     // Reps work every executable profile (primary + active coverage), so the
     // queue and its counts stay parity with Rep Home. Team / org views are
     // never narrowed by the viewer's own sending profile.
-    managerViews ? Promise.resolve(null) : getAuthorizedIdentities().catch(() => null),
+    managerViews && !personalScope ? Promise.resolve(null) : getAuthorizedIdentities().catch(() => null),
     ctx.client.from('revenue_identities').select('id, identity_name').eq('organization_id', ctx.auth.orgId).order('identity_name').limit(200),
     getDatabaseCapabilities(ctx.client),
   ])
   const teamMemberIds = filters.team ? directory?.teams.find((t) => t.id === filters.team)?.memberIds ?? [] : null
   // Admins (ctx.scope.mode === 'org') get the whole organization; managers get
   // their team; reps get their own queue. Scope is never narrowed client-side.
-  const repIds = effectiveRepIds(ctx.scope, { repId: managerViews ? filters.rep : null, teamMemberIds })
+  const repIds = personalScope
+    ? [ctx.auth.repId]
+    : effectiveRepIds(ctx.scope, { repId: managerViews ? filters.rep : null, teamMemberIds })
 
   let queue: ChatQueue | null = null
   try {

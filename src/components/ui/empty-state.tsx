@@ -49,7 +49,7 @@ export function OnboardingGuide({ steps, className }: OnboardingGuideProps) {
     <div className={cn("srf-console p-5 space-y-4", className)}>
       <div className="flex items-center justify-between">
         <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Setup Progress</p>
-        <span className="text-[11px] font-medium text-orange">{completed}/{steps.length}</span>
+        <span className="text-[11px] font-medium text-orange-ink">{completed}/{steps.length}</span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-line/40">
         <div className="h-full rounded-full bg-orange transition-all duration-700" style={{ width: `${pct}%` }} />

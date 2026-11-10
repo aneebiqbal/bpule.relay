@@ -8,7 +8,7 @@ const variantStyles: Record<StatusVariant, { bg: string; text: string; dot: stri
   warning: { bg: "bg-status-warning/10", text: "text-[#7d5410]", dot: "bg-status-warning" },
   danger: { bg: "bg-status-danger/10", text: "text-[#a8342a]", dot: "bg-status-danger" },
   info: { bg: "bg-status-info/10", text: "text-[#2f48b8]", dot: "bg-status-info" },
-  orange: { bg: "bg-orange/10", text: "text-[#b8531f]", dot: "bg-orange" },
+  orange: { bg: "bg-orange/10", text: "text-orange-ink", dot: "bg-orange" },
   cobalt: { bg: "bg-cobalt/10", text: "text-[#2f48b8]", dot: "bg-cobalt" },
 }
 

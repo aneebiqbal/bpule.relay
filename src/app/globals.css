@@ -50,6 +50,7 @@
   --color-orange-light: var(--orange-light);
   --color-orange-dark: var(--orange-dark);
   --color-orange-faint: var(--orange-faint);
+  --color-orange-ink: var(--orange-ink);
 
   --color-cobalt: var(--cobalt);
   --color-cobalt-light: var(--cobalt-light);
@@ -140,15 +141,17 @@
   --orange-light: #e8844e;
   --orange-dark: #b8531f;
   --orange-faint: #fdf3ed;
+  /* Text on light orange tints: WCAG AA on bg-orange/10. */
+  --orange-ink: #a84a1f;
 
   --cobalt: #3b5bdb;
   --cobalt-light: #5c7afa;
   --cobalt-dark: #2f48b8;
   --cobalt-faint: #eef2ff;
 
-  --status-success: #2e7d52;
-  --status-warning: #8a5a12;
-  --status-danger: #c74a3a;
+  --status-success: #1f6b45;
+  --status-warning: #6b450c;
+  --status-danger: #a93428;
   --status-info: #3b5bdb;
 
   --bone-000: #fdfbf6;
@@ -246,6 +249,9 @@
   --orange-light: #e8844e;
   --orange-dark: #b8531f;
   --orange-faint: #1f1a14;
+  --orange-ink: #e8844e;
+  /* Text on dark orange tints: WCAG AA on bg-orange/10. */
+  --color-orange-ink: #e8844e;
 
   --cobalt: #3b5bdb;
   --cobalt-light: #5c7afa;
