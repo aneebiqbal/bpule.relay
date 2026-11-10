@@ -104,7 +104,6 @@ export function ConversationArchive({ threads, failed }: { threads: ArchiveThrea
           icon={MessagesSquare}
           title="No conversations yet"
           description="A thread appears here after you send a message or save an inbound note."
-          action={<Link href="/inbound" className="text-[13px] font-medium text-orange">Log an inbound message</Link>}
         />
       ) : visible.length === 0 ? (
         <EmptyState

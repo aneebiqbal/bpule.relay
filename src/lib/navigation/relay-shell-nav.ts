@@ -207,7 +207,6 @@ export function domainForPathname(pathname: string): RelayNavDomain | null {
 
   if (pathname === '/dashboard') return 'home'
   if (pathname === '/chats' || pathname.startsWith('/chats/')) return 'inbox'
-  if (pathname === '/inbound' || pathname.startsWith('/inbound/')) return 'inbox'
   if (pathname === '/tasks' || pathname.startsWith('/tasks/')) return 'work'
   // Profiles and identities are Team capabilities; /profile-intelligence is the
   // implementation route behind Team → Identities, and the legacy /profiles and

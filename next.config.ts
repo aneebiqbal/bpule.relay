@@ -18,6 +18,8 @@ const nextConfig: NextConfig = {
       { source: "/team/workload", destination: "/team/people", permanent: true },
       { source: "/team/activity", destination: "/reports/activity", permanent: true },
       { source: "/team/targets", destination: "/team/performance?view=targets", permanent: true },
+      // The inbound desk was a second Inbox with its own loader and count.
+      { source: "/inbound", destination: "/chats?view=waiting_me", permanent: true },
     ];
   },
 

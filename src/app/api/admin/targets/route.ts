@@ -4,6 +4,7 @@ import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { personNameFromProfile } from '@/lib/profiles/person-name'
+import { isCoverageActiveOn } from '@/lib/coverage/access'
 import type { ActivityType } from '@/lib/domain/types'
 
 const ACTIVITY_TYPES: ActivityType[] = [
@@ -80,7 +81,7 @@ export async function GET() {
     )
     const coveredByProfileRep = new Set(
       ((coverageAssignments.data ?? []) as Array<{ profile_id: string; covering_rep_id: string; effective_from: string; effective_until: string | null }>)
-        .filter((row) => row.effective_from <= today && (row.effective_until === null || row.effective_until >= today))
+        .filter((row) => isCoverageActiveOn({ effectiveFrom: row.effective_from, effectiveUntil: row.effective_until }, today))
         .map((row) => `${row.profile_id}:${row.covering_rep_id}`),
     )
     // Only executable responsibility appears as current work. Backup eligibility

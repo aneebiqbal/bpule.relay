@@ -27,7 +27,6 @@ const PROTECTED_PREFIXES = [
   "/tasks",
   "/chats",
   "/relay",
-  "/inbound",
   "/notifications",
   "/performance",
   "/workspace",

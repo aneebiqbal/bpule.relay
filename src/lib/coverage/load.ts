@@ -5,6 +5,7 @@ import { isMissingRelation } from '@/lib/operations/db-errors'
 import { currentInstant, isOrgWorkingDay, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
+import { isCoverageActiveOn } from '@/lib/coverage/access'
 import { personNameFromProfile } from '@/lib/profiles/person-name'
 import { deriveConversationRow } from '@/lib/operations/conversations'
 import {
@@ -87,7 +88,7 @@ export async function loadCoverageFacts(
       supabase.from('profile_coverage').select('profile_id, rep_id, role, priority, active').eq('organization_id', orgId).eq('active', true).limit(4000),
       supabase.from('rep_availability').select('rep_id, state').eq('organization_id', orgId).eq('business_date', businessDate).limit(2000),
       supabase.from('rep_day').select('rep_id, check_in_at, closed_at').eq('organization_id', orgId).eq('business_date', businessDate).limit(2000),
-      supabase.from('coverage_assignments').select('profile_id, primary_rep_id, covering_rep_id, effective_until').eq('organization_id', orgId).eq('status', 'ACTIVE').limit(2000),
+      supabase.from('coverage_assignments').select('profile_id, primary_rep_id, covering_rep_id, effective_from, effective_until').eq('organization_id', orgId).eq('status', 'ACTIVE').limit(2000),
       supabase.from('profile_readiness').select('profile_id, rep_id').eq('organization_id', orgId).limit(4000),
       supabase.from('leads').select('id, owner_rep_id, revenue_identity_id, status').eq('organization_id', orgId).eq('archived', false).in('status', [...OPEN_LEAD_STATUSES]).limit(5000),
       supabase.from('assigned_tasks').select('assignee_rep_id, profile_id, status, due_at').eq('organization_id', orgId).in('status', ['OPEN', 'IN_PROGRESS', 'WAITING']).limit(5000),
@@ -182,13 +183,18 @@ export async function loadCoverageFacts(
     profile_id: string
     primary_rep_id: string
     covering_rep_id: string
+    effective_from: string
     effective_until: string | null
   }>).map((row) => ({
     profileId: row.profile_id,
     primaryRepId: row.primary_rep_id,
     coveringRepId: row.covering_rep_id,
+    effectiveFrom: row.effective_from,
     effectiveUntil: row.effective_until,
-    expired: row.effective_until != null && row.effective_until < businessDate,
+    expired: !isCoverageActiveOn(
+      { effectiveFrom: row.effective_from, effectiveUntil: row.effective_until },
+      businessDate,
+    ),
   }))
 
   const readiness = ((readinessRes.data ?? []) as Array<{ profile_id: string; rep_id: string }>).map((row) => ({

@@ -450,10 +450,17 @@ export async function revokeCoverage(input: {
   profileId: string
   actorRepId: string
   reason: string
+  businessDate?: string
+  /** Move the covering rep's open profile-bound tasks back to the primary. */
+  returnOpenTasks?: boolean
+  /** A specific subset of tasks to return; when set, only these move. */
+  returnTaskIds?: string[]
+  auth?: AuthContext
   client?: DbClient
 }): Promise<{ ok: boolean; error?: string }> {
   const client = input.client ?? (await createServerSupabase())
   const now = new Date().toISOString()
+  const businessDate = input.businessDate ?? now.slice(0, 10)
 
   const { data: active } = await client
     .from('coverage_assignments')
@@ -468,6 +475,7 @@ export async function revokeCoverage(input: {
     .from('coverage_assignments')
     .update({
       status: 'REVOKED',
+      effective_until: businessDate,
       revoked_at: now,
       revoked_by: input.actorRepId,
       revoke_reason: input.reason,
@@ -485,6 +493,36 @@ export async function revokeCoverage(input: {
     covering_rep_id: active.covering_rep_id as string,
     reason: input.reason,
     actor_rep_id: input.actorRepId,
+  })
+
+  // Revoke uses the same canonical task policy as restore: open profile-bound
+  // work returns to the primary; completed/cancelled and personal tasks stay.
+  if ((input.returnOpenTasks || (input.returnTaskIds && input.returnTaskIds.length > 0)) && input.auth) {
+    await returnProfileTasksToPrimary(client, input.auth, {
+      profileId: input.profileId,
+      fromRepId: active.covering_rep_id as string,
+      toRepId: active.primary_rep_id as string,
+    }, input.returnTaskIds)
+  }
+
+  const label = await coverageProfileLabel(client, input.organizationId, input.profileId)
+  await notifyOnce(client, {
+    organizationId: input.organizationId,
+    recipientId: active.covering_rep_id as string,
+    type: 'coverage_ended',
+    title: 'Coverage revoked',
+    body: `${label} coverage was revoked. ${input.reason}`.trim(),
+    link: '/dashboard',
+    dedupeKey: `coverage_revoked:${input.profileId}`,
+  })
+  await notifyOnce(client, {
+    organizationId: input.organizationId,
+    recipientId: active.primary_rep_id as string,
+    type: 'coverage_restored_primary',
+    title: 'Responsibility restored',
+    body: `${label} is restored to you. Your ownership never changed.`,
+    link: '/dashboard',
+    dedupeKey: `coverage_restored_primary:${input.profileId}`,
   })
 
   return { ok: true }
