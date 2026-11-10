@@ -140,6 +140,52 @@ export async function TeamToday() {
 
       <V4Panel>
         <V4PanelHeader
+          eyebrow="Setup"
+          title="Needs setup"
+          hint="Missing responsibilities, targets or coverage — before they become gaps."
+        />
+        <div className="mt-3">
+          {people.filter((row) => row.profiles.length === 0).length === 0 && plan.requiresApproval.length === 0 ? (
+            <V4Empty title="Everything is set up" body="Every rep has a responsibility and coverage is current." />
+          ) : (
+            <ul className="divide-y divide-line/70">
+              {people
+                .filter((row) => row.profiles.length === 0)
+                .map((row) => (
+                  <li key={row.repId}>
+                    <Link
+                      href={`/team/${row.repId}#responsibilities`}
+                      className="flex items-center justify-between gap-3 py-2.5 text-[13px] transition-colors hover:bg-bone"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate font-medium text-ink">{row.repName}</span>
+                        <span className="truncate text-graphite">· No responsibility assigned</span>
+                      </span>
+                      <V4Chip tone="warning">Fix plan</V4Chip>
+                    </Link>
+                  </li>
+                ))}
+              {plan.requiresApproval.map((item) => (
+                <li key={`${item.profileId}-${item.kind}`}>
+                  <Link
+                    href={`/team/profiles/${item.profileId}`}
+                    className="flex items-center justify-between gap-3 py-2.5 text-[13px] transition-colors hover:bg-bone"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium text-ink">{item.profileName}</span>
+                      <span className="truncate text-graphite">· {item.reason}</span>
+                    </span>
+                    <V4Chip tone="warning">Review coverage</V4Chip>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </V4Panel>
+
+      <V4Panel>
+        <V4PanelHeader
           eyebrow="People"
           title="Who is working today"
           hint="Today's completion, replies waiting and overdue work."
