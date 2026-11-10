@@ -1803,7 +1803,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     },
     async submitUpworkApplication(input) {
       const existing = upworkApplications.find((a) => a.jobId === input.jobId)
-      if (existing) return existing
+      if (existing) return { application: existing, created: false }
       const version: UpworkProposalVersion = {
         id: nextId('upv'),
         organizationId: DEMO_ORG_ID,
@@ -1848,7 +1848,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         job.status = 'APPLIED'
         if (input.revenueIdentityId) job.revenueIdentityId = input.revenueIdentityId
       }
-      return application
+      return { application, created: true }
     },
     async getUpworkApplication(jobId) {
       return upworkApplications.find((a) => a.jobId === jobId) ?? null

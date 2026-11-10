@@ -129,7 +129,7 @@ export async function POST(
   const revenueIdentityId = sender.assignedIdentityIds[0] ?? null
 
   try {
-    const application = await store.submitUpworkApplication({
+    const { application, created } = await store.submitUpworkApplication({
       jobId,
       repId: actingRepId,
       revenueIdentityId,
@@ -143,24 +143,28 @@ export async function POST(
       boostConnects,
     })
 
-    // The first follow-up enters the canonical task engine — no second scheduler.
-    try {
-      const dueAt = new Date(Date.now() + FOLLOWUP_POLICY.firstFollowUpDays * 86_400_000).toISOString()
-      await createAssignedTask(store.getSupabaseClient(), authCtx, {
-        assigneeRepId: actingRepId,
-        kind: 'FOLLOW_UP',
-        title: `Follow up on ${job.title}`,
-        description: `Application submitted. First follow-up due ${FOLLOWUP_POLICY.firstFollowUpDays} days after submission.`,
-        dueAt,
-        jobId,
-        profileId: sender.profile.id,
-        revenueIdentityId,
-      })
-    } catch {
-      // A missing reminder must never fail a submitted application.
+    // The first follow-up enters the canonical task engine — no second
+    // scheduler. A retry of an already-submitted application must not create a
+    // second reminder.
+    if (created) {
+      try {
+        const dueAt = new Date(Date.now() + FOLLOWUP_POLICY.firstFollowUpDays * 86_400_000).toISOString()
+        await createAssignedTask(store.getSupabaseClient(), authCtx, {
+          assigneeRepId: actingRepId,
+          kind: 'FOLLOW_UP',
+          title: `Follow up on ${job.title}`,
+          description: `Application submitted. First follow-up due ${FOLLOWUP_POLICY.firstFollowUpDays} days after submission.`,
+          dueAt,
+          jobId,
+          profileId: sender.profile.id,
+          revenueIdentityId,
+        })
+      } catch {
+        // A missing reminder must never fail a submitted application.
+      }
     }
 
-    return NextResponse.json({ ok: true, application, profileId: sender.profile.id })
+    return NextResponse.json({ ok: true, application, profileId: sender.profile.id, alreadyApplied: !created })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to submit the application.' },

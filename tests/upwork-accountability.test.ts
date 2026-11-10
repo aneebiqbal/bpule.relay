@@ -66,7 +66,7 @@ describe('submitUpworkApplication — accountability increment (TEAM-001)', () =
     })
 
     const store = new SupabaseStore(makeRep(), fake.client as never, makeOrg())
-    const application = await store.submitUpworkApplication(SUBMIT)
+    const { application } = await store.submitUpworkApplication(SUBMIT)
 
     expect(application.id).toBeTruthy()
     const job = fake.tables.upwork_jobs.find((j) => j.id === JOB_ID)
@@ -97,7 +97,9 @@ describe('submitUpworkApplication — accountability increment (TEAM-001)', () =
     const first = await store.submitUpworkApplication(SUBMIT)
     const second = await store.submitUpworkApplication(SUBMIT)
 
-    expect(second.id).toBe(first.id)
+    expect(first.created).toBe(true)
+    expect(second.created).toBe(false)
+    expect(second.application.id).toBe(first.application.id)
     expect(fake.tables.upwork_applications).toHaveLength(1)
   })
 })

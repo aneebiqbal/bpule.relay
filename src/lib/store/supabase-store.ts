@@ -132,6 +132,7 @@ import { inboundFirstMessageKey } from '@/lib/conversation/canonical-message'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 import { emitAction } from '@/lib/action-ledger'
 import { getAuthContext } from '@/lib/auth/organization'
+import { normalizeJobStatus } from '@/lib/upwork/compat'
 import { messageTypeLimit } from '@/lib/ai/config'
 import { resolveSendPolicy, type EffectiveSendPolicy } from '@/lib/email/effective-policy'
 import { evaluateSendPolicy } from '@/lib/email/policy-engine'
@@ -3186,6 +3187,7 @@ export class SupabaseStore implements ScoutStore {
       .insert({
         organization_id: this.orgId,
         owner_rep_id: this.rep.id,
+        status: 'SAVED',
         title: input.title.trim(),
         description: input.description.trim(),
         budget_min: input.budgetMin != null ? Math.round(Number(input.budgetMin)) : null,
@@ -3366,7 +3368,10 @@ export class SupabaseStore implements ScoutStore {
     screeningAnswers?: UpworkScreeningAnswer[]
     connectsSpent?: number | null
     boostConnects?: number
-  }): Promise<UpworkApplication> {
+  }): Promise<{ application: UpworkApplication; created: boolean }> {
+    // Idempotency: a retry or double-click must not create a second application,
+    // a second submission event, or a second first-follow-up task.
+    const existing = await this.getUpworkApplication(input.jobId)
     const { data, error } = await this.client.rpc<string>('submit_upwork_application', {
       p_org_id: this.orgId,
       p_job_id: input.jobId,
@@ -3401,7 +3406,7 @@ export class SupabaseStore implements ScoutStore {
       // Action ledger must never break domain operations
     }
     await this.creditUpworkApplication(input.jobId, input.repId)
-    return application
+    return { application, created: !existing }
   }
 
   /** Daily target + canonical progress. One application counts once. */
@@ -9257,7 +9262,7 @@ function mapUpworkJob(r: Row): UpworkJob {
     scoreBreakdown: r.score_breakdown ?? null,
     jobFacts: r.job_facts ?? null,
     profileMatch: r.profile_match ?? null,
-    status: (r.status as UpworkJob['status']) ?? 'SAVED',
+    status: normalizeJobStatus(r.status as string | null),
     extractedFields: (r.extracted_fields as Record<string, unknown>) ?? null,
     rawInput: (r.raw_input as string) ?? null,
     tags: (r.tags as string[]) ?? [],

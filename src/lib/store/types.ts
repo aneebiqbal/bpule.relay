@@ -613,7 +613,7 @@ export interface ScoutStore {
     screeningAnswers?: UpworkScreeningAnswer[]
     connectsSpent?: number | null
     boostConnects?: number
-  }): Promise<UpworkApplication>
+  }): Promise<{ application: UpworkApplication; created: boolean }>
   getUpworkApplication(jobId: string): Promise<UpworkApplication | null>
   listUpworkApplications(filter?: {
     repIds?: string[]
