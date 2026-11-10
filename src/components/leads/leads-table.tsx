@@ -330,7 +330,8 @@ function AssignTaskDialog({
           title: title.trim(),
           priority,
           leadId: leads.length === 1 ? leads[0].id : undefined,
-          profileId: leads.length === 1 ? leads[0].revenueIdentityId ?? undefined : undefined,
+          // Channel execution context is a separate column from the person profile.
+          revenueIdentityId: leads.length === 1 ? leads[0].revenueIdentityId ?? undefined : undefined,
           assigneeRepId: currentRepId ?? leads[0]?.ownerRepId ?? undefined,
         }),
       })

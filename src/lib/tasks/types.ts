@@ -84,6 +84,10 @@ export interface AssignedTaskRow {
   created_by_rep_id: string
   lead_id: string | null
   profile_id: string | null
+  /** Channel identity (revenue_identities.id); profile_id is the person. */
+  revenue_identity_id: string | null
+  /** Upwork job this task came from. */
+  job_id: string | null
   kind: AssignedTaskKind
   title: string
   description: string | null

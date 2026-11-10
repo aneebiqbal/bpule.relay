@@ -32,6 +32,8 @@ export interface ChatIntelligence {
   ownerRepId: string | null
   ownerName: string | null
   profileId: string | null
+  /** Channel identity the lead sends as (revenue_identities.id). */
+  revenueIdentityId: string | null
   profileName: string | null
   /** Raw stored source — display parity with the queue row and history. */
   sourceRaw?: string | null
@@ -236,6 +238,7 @@ export async function loadChatIntelligence(
     ownerRepId,
     ownerName,
     profileId: identityId,
+    revenueIdentityId: identityId,
     profileName,
     sourceRaw: (row.source as string | null) ?? null,
     direction: row.direction === 'inbound' ? 'inbound' : 'outbound',

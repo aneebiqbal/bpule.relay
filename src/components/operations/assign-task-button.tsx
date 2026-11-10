@@ -9,6 +9,7 @@ export function AssignTaskButton({
   defaultAssigneeId,
   defaultLeadId,
   defaultProfileId,
+  defaultRevenueIdentityId,
   defaultTitle,
   leads,
   profiles,
@@ -17,6 +18,7 @@ export function AssignTaskButton({
   defaultAssigneeId?: string
   defaultLeadId?: string
   defaultProfileId?: string
+  defaultRevenueIdentityId?: string
   defaultTitle?: string
   leads?: Array<{ id: string; company: string | null }>
   profiles?: Array<{ id: string; name: string }>
@@ -36,6 +38,7 @@ export function AssignTaskButton({
         defaultAssigneeId={defaultAssigneeId}
         defaultLeadId={defaultLeadId}
         defaultProfileId={defaultProfileId}
+        defaultRevenueIdentityId={defaultRevenueIdentityId}
         defaultTitle={defaultTitle}
         leads={leads}
         profiles={profiles}

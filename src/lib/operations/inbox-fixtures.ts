@@ -317,6 +317,7 @@ export function inboxFixtureIntelligence(leadId: string): ChatIntelligence {
     ownerRepId: row.ownerRepId,
     ownerName: row.ownerName,
     profileId: row.profileId,
+    revenueIdentityId: row.profileId,
     profileName: row.profileName,
     sourceRaw: row.sourceRaw,
     direction: row.direction,

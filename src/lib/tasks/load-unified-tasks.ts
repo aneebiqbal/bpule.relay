@@ -39,18 +39,21 @@ export async function loadUnifiedTasks(input: {
 
   // Batch enrichment
   const leadIds = [...new Set(rows.map((r) => r.lead_id).filter(Boolean))] as string[]
+  // profile_id is the canonical PERSON profile; revenue_identity_id is the
+  // channel identity. They are never the same column.
   const profileIds = [...new Set(rows.map((r) => r.profile_id).filter(Boolean))] as string[]
+  const identityIds = [...new Set(rows.map((r) => r.revenue_identity_id).filter(Boolean))] as string[]
 
   const [leadsRes, profilesRes, coverageRes, activeCoverageRes] = await Promise.all([
     leadIds.length
       ? client.from('leads').select('id, company').eq('organization_id', auth.orgId).in('id', leadIds)
       : Promise.resolve({ data: [] as Array<{ id: string; company: string | null }> }),
-    profileIds.length
+    identityIds.length
       ? client
           .from('revenue_identities')
           .select('id, identity_name')
           .eq('organization_id', auth.orgId)
-          .in('id', profileIds)
+          .in('id', identityIds)
       : Promise.resolve({ data: [] as Array<{ id: string; identity_name: string }> }),
     // Canonical ownership + today's temporary execution, so a task can show
     // "Primary: Dawood · Current execution: Madiha" without moving ownership.
@@ -124,7 +127,7 @@ export async function loadUnifiedTasks(input: {
 
   const companyByLead = new Map((leadsRes.data ?? []).map((l) => [l.id, l.company]))
   const nameByRep = new Map(repsRes.map((r) => [r.id, r.name]))
-  const nameByProfile = new Map((profilesRes.data ?? []).map((p) => [p.id, p.identity_name]))
+  const nameByIdentity = new Map((profilesRes.data ?? []).map((p) => [p.id, p.identity_name]))
 
   // Bounded list projections: one latest comment + unread count per task, never
   // a full thread read.
@@ -139,7 +142,7 @@ export async function loadUnifiedTasks(input: {
   const assigned: UnifiedTask[] = rows.map((row) =>
     toUnifiedTaskFromAssigned(row, {
       companyName: row.lead_id ? companyByLead.get(row.lead_id) ?? null : null,
-      profileName: row.profile_id ? nameByProfile.get(row.profile_id) ?? null : null,
+      profileName: row.revenue_identity_id ? nameByIdentity.get(row.revenue_identity_id) ?? null : null,
       createdByName: nameByRep.get(row.created_by_rep_id) ?? null,
       assigneeName: nameByRep.get(row.assignee_rep_id) ?? null,
       transferToName: row.transfer_requested_to ? nameByRep.get(row.transfer_requested_to) ?? null : null,

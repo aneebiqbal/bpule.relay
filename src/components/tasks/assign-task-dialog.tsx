@@ -51,6 +51,7 @@ export function AssignTaskDialog({
   defaultAssigneeId,
   defaultLeadId,
   defaultProfileId,
+  defaultRevenueIdentityId,
   defaultKind = 'REVIEW',
   defaultTitle,
   leads = [],
@@ -62,6 +63,8 @@ export function AssignTaskDialog({
   defaultAssigneeId?: string
   defaultLeadId?: string
   defaultProfileId?: string
+  /** Channel identity the task is about (revenue_identities.id), when known. */
+  defaultRevenueIdentityId?: string
   defaultKind?: AssignedTaskKind
   defaultTitle?: string
   /** Searchable lead options. When empty the lead field stays a raw id input. */
@@ -79,6 +82,7 @@ export function AssignTaskDialog({
   const [dueLocal, setDueLocal] = useState(tomorrowIsoLocal())
   const [leadId, setLeadId] = useState(defaultLeadId ?? '')
   const [profileId, setProfileId] = useState(defaultProfileId ?? '')
+  const [revenueIdentityId, setRevenueIdentityId] = useState(defaultRevenueIdentityId ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -96,8 +100,9 @@ export function AssignTaskDialog({
     setDueLocal(tomorrowIsoLocal())
     setLeadId(defaultLeadId ?? '')
     setProfileId(defaultProfileId ?? '')
+    setRevenueIdentityId(defaultRevenueIdentityId ?? '')
     setError(null)
-  }, [open, defaultAssigneeId, defaultKind, defaultLeadId, defaultProfileId, defaultTitle, reps])
+  }, [open, defaultAssigneeId, defaultKind, defaultLeadId, defaultProfileId, defaultRevenueIdentityId, defaultTitle, reps])
 
   function pickDuePreset(preset: 'today' | 'tomorrow' | 'custom') {
     setDuePreset(preset)
@@ -126,6 +131,7 @@ export function AssignTaskDialog({
           dueAt,
           leadId: leadId.trim() || null,
           profileId: profileId || null,
+          revenueIdentityId: revenueIdentityId || null,
         }),
       })
       const json = await res.json().catch(() => ({}))

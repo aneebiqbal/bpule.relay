@@ -168,6 +168,7 @@ export function ChatIntelligencePanel({
               reps={reps}
               defaultLeadId={intel.leadId}
               defaultProfileId={intel.profileId ?? undefined}
+              defaultRevenueIdentityId={intel.revenueIdentityId ?? undefined}
               defaultTitle={intel.company ? `Follow up with ${intel.company}` : undefined}
             />
           </div>
