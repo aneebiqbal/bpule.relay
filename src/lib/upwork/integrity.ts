@@ -5,7 +5,7 @@
  * Zero unexplained violations is the acceptance bar.
  */
 import type { DbClient } from '@/lib/db/types'
-import { normalizeJobStatus } from '@/lib/upwork/compat'
+import type { UpworkJobStatus } from '@/lib/domain/types'
 
 interface ApplicationRow {
   id: string
@@ -96,7 +96,7 @@ export async function auditUpworkIntegrity(client: DbClient, organizationId: str
   }
 
   for (const job of jobRows) {
-    const status = normalizeJobStatus(job.status)
+    const status = job.status as UpworkJobStatus
     const hasApplication = applicationByJob.has(job.id)
     if ((status === 'APPLIED' || status === 'CLIENT_REPLIED') && !hasApplication) {
       violations.push({ code: 'APPLIED_WITHOUT_APPLICATION', jobId: job.id, detail: `job is ${status} with no application` })
@@ -108,7 +108,7 @@ export async function auditUpworkIntegrity(client: DbClient, organizationId: str
     if (task.status !== 'OPEN' && task.status !== 'IN_PROGRESS') continue
     const job = jobById.get(task.job_id)
     if (!job) continue
-    const status = normalizeJobStatus(job.status)
+    const status = job.status as UpworkJobStatus
     if (status === 'CLIENT_REPLIED' || status === 'WON' || status === 'LOST' || status === 'ARCHIVED') {
       violations.push({ code: 'PENDING_FOLLOWUP_AFTER_CLOSE', jobId: job.id, detail: `open follow-up task on a ${status} job` })
     }

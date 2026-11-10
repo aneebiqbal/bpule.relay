@@ -132,7 +132,6 @@ import { inboundFirstMessageKey } from '@/lib/conversation/canonical-message'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
 import { emitAction } from '@/lib/action-ledger'
 import { getAuthContext } from '@/lib/auth/organization'
-import { normalizeJobStatus } from '@/lib/upwork/compat'
 import { messageTypeLimit } from '@/lib/ai/config'
 import { resolveSendPolicy, type EffectiveSendPolicy } from '@/lib/email/effective-policy'
 import { evaluateSendPolicy } from '@/lib/email/policy-engine'
@@ -9262,7 +9261,7 @@ function mapUpworkJob(r: Row): UpworkJob {
     scoreBreakdown: r.score_breakdown ?? null,
     jobFacts: r.job_facts ?? null,
     profileMatch: r.profile_match ?? null,
-    status: normalizeJobStatus(r.status as string | null),
+    status: (r.status as UpworkJob['status']) ?? 'SAVED',
     extractedFields: (r.extracted_fields as Record<string, unknown>) ?? null,
     rawInput: (r.raw_input as string) ?? null,
     tags: (r.tags as string[]) ?? [],

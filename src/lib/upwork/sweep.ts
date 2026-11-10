@@ -8,8 +8,7 @@
  */
 import type { DbClient } from '@/lib/db/types'
 import { notifyOnce } from '@/lib/notifications/deliver'
-import { followUpDueAt, isArchiveCandidate } from '@/lib/upwork/lifecycle'
-import { normalizeJobStatus } from '@/lib/upwork/compat'
+import { followUpDueAt, isArchiveCandidate, type UpworkJobStatus } from '@/lib/upwork/lifecycle'
 
 interface ApplicationRow {
   id: string
@@ -78,7 +77,7 @@ export async function emitUpworkLifecycleNotifications(
   for (const application of rows) {
     const job = jobById.get(application.job_id)
     if (!job) continue
-    const status = normalizeJobStatus(job.status)
+    const status = job.status as UpworkJobStatus
     if (status === 'WON' || status === 'LOST' || status === 'ARCHIVED') continue
     if (application.first_reply_at) continue
 
