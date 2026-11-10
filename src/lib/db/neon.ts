@@ -473,14 +473,16 @@ class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T>
       this.filters.push(`NOT (${col} IN (${value.map((v) => this.param(v)).join(', ')}))`)
       return this
     }
-    const frag = `${col} ${op.toUpperCase()} ?`
+    const opMap: Record<string, string> = { eq: '=', neq: '<>', gt: '>', gte: '>=', lt: '<', lte: '<=', like: 'LIKE', ilike: 'ILIKE' }
+    const frag = `${col} ${opMap[op] ?? op.toUpperCase()} ?`
     this.filters.push(negate(frag))
     this.filterParams.push(value)
     return this
   }
   filter(column: string, op: string, value: unknown) {
     const col = ident(column)
-    const frag = `${col} ${op.toUpperCase()} ?`
+    const opMap: Record<string, string> = { eq: '=', neq: '<>', gt: '>', gte: '>=', lt: '<', lte: '<=', like: 'LIKE', ilike: 'ILIKE' }
+    const frag = `${col} ${opMap[op] ?? op.toUpperCase()} ?`
     this.filters.push(frag)
     this.filterParams.push(value)
     return this
