@@ -597,7 +597,16 @@ describe('availability authority', () => {
 
 describe('COVERAGE_PARTIAL_FAILURE_IS_REPORTED', () => {
   it('returns per-item results and ok=false when one activation fails', async () => {
-    const { client, tables } = createFakeSupabase()
+    const { client, tables } = createFakeSupabase({
+      revenue_identities: [
+        { id: 'ri-l', organization_id: ORG, profile_id: P_LINKEDIN, channel: 'linkedin', status: 'active' },
+        { id: 'ri-u', organization_id: ORG, profile_id: P_UPWORK, channel: 'upwork', status: 'active' },
+      ],
+      identity_assignments: [
+        { id: 'ia-1', organization_id: ORG, revenue_identity_id: 'ri-l', rep_id: MADIHA },
+        { id: 'ia-2', organization_id: ORG, revenue_identity_id: 'ri-u', rep_id: AHMAD },
+      ],
+    })
     const failProfile = P_UPWORK
     const originalFrom = client.from.bind(client)
     const wrapped = {
@@ -734,9 +743,17 @@ describe('COVERAGE_GRANTS_EXECUTION_ACCESS', () => {
         { id: 'ca-1', organization_id: ORG, profile_id: P_LINKEDIN, primary_rep_id: DAWOOD, covering_rep_id: MADIHA, status: 'ACTIVE', effective_from: '2026-11-06', effective_until: null },
       ],
       revenue_identities: [
+        { id: 'ri-owned', organization_id: ORG, profile_id: 'owned-1', channel: 'linkedin', status: 'active' },
         { id: 'ri-1', organization_id: ORG, profile_id: P_LINKEDIN, channel: 'linkedin', status: 'active' },
       ],
+      identity_assignments: [
+        { id: 'ia-owned', organization_id: ORG, revenue_identity_id: 'ri-owned', rep_id: MADIHA },
+      ],
+      profile_coverage: [
+        { id: 'pc-1', organization_id: ORG, profile_id: 'owned-1', rep_id: MADIHA, role: 'PRIMARY', priority: 1, active: true },
+      ],
       profiles: [
+        { id: 'owned-1', organization_id: ORG, rep_id: MADIHA, platform: 'linkedin', label: 'Owned · LinkedIn', created_at: '2026-11-06' },
         { id: P_LINKEDIN, organization_id: ORG, rep_id: DAWOOD, platform: 'linkedin', label: 'Hassan · LinkedIn', created_at: '2026-11-06' },
       ],
     })
@@ -804,6 +821,12 @@ describe('COVERAGE_TASK_HANDOFF_IS_PROFILE_BOUND_ONLY', () => {
       reps: [
         { id: DAWOOD, organization_id: ORG, name: 'Dawood' },
         { id: MADIHA, organization_id: ORG, name: 'Madiha' },
+      ],
+      revenue_identities: [
+        { id: 'ri-l', organization_id: ORG, profile_id: P_LINKEDIN, channel: 'linkedin', status: 'active' },
+      ],
+      identity_assignments: [
+        { id: 'ia-1', organization_id: ORG, revenue_identity_id: 'ri-l', rep_id: MADIHA },
       ],
     })
     const db = client as unknown as DbClient

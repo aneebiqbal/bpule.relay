@@ -1,5 +1,8 @@
 import type { Profile, RevenueIdentityChannel } from '@/lib/domain/types'
 import { getAuthorizedIdentities, type AuthorizedIdentity } from '@/lib/auth/workspace'
+import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { createScoutStore } from '@/lib/store'
 import { normalizeChannel } from '@/lib/profiles/channel'
 
@@ -86,26 +89,24 @@ export async function listAssignedProfilesForRep(
   const store = await createScoutStore()
   const client = store.getSupabaseClient()
 
-  const { data: assignments, error } = await client
-    .from('identity_assignments')
-    .select('id, revenue_identity_id')
-    .eq('rep_id', repId)
-    .eq('organization_id', orgId)
+  // Canonical execution scope: PRIMARY ownership plus active coverage, minus
+  // any profile under REPLACE coverage. Backup eligibility is not execution.
+  const executable = await listExecutableIdentitiesForRep(
+    client,
+    orgId,
+    repId,
+    orgDate(currentInstant(), (await loadOperatingPolicy(orgId)).timezone),
+  )
+  if (executable.length === 0) return []
+
+  const { data: identityRows, error } = await client
+    .from('revenue_identities')
+    .select('id, identity_name, title, channel, status, profile_id, profile_url')
+    .in('id', executable.map((row) => row.id))
     .limit(500)
   if (error) throw error
 
-  const identityIds = (assignments ?? [])
-    .map((a) => a.revenue_identity_id as string)
-    .filter((id): id is string => Boolean(id))
-  if (identityIds.length === 0) return []
-
-  const { data: identityRows, error: identityError } = await client
-    .from('revenue_identities')
-    .select('id, identity_name, title, channel, status, profile_id, profile_url')
-    .in('id', identityIds)
-    .limit(500)
-  if (identityError) throw identityError
-
+  const executableById = new Map(executable.map((row) => [row.id, row]))
   const profileIds = [
     ...new Set(
       (identityRows ?? [])
@@ -115,21 +116,22 @@ export async function listAssignedProfilesForRep(
   ]
   const profiles = profileIds.length > 0 ? await store.listProfilesByIds(profileIds) : []
 
-  const identities: AuthorizedIdentity[] = (identityRows ?? []).map((row) => ({
-    assignmentId:
-      (assignments ?? []).find((a) => a.revenue_identity_id === row.id)?.id as string
-      ?? `assignment:${row.id as string}`,
-    revenueIdentityId: row.id as string,
-    identityName: row.identity_name as string,
-    title: (row.title as string) ?? null,
-    channel: normalizeChannel(row.channel as string),
-    profileId: (row.profile_id as string) ?? null,
-    personId: (row.profile_id as string) ?? null,
-    profileUrl: (row.profile_url as string) ?? null,
-    status: row.status === 'archived' ? 'archived' : 'active',
-    access: 'assigned',
-    assignedAt: ((assignments ?? []).find((a) => a.revenue_identity_id === row.id)?.created_at as string | undefined) ?? null,
-  }))
+  const identities: AuthorizedIdentity[] = (identityRows ?? []).map((row) => {
+    const executableRow = executableById.get(row.id as string)
+    return {
+      assignmentId: executableRow?.assignmentId ?? `assignment:${row.id as string}`,
+      revenueIdentityId: row.id as string,
+      identityName: row.identity_name as string,
+      title: (row.title as string) ?? null,
+      channel: normalizeChannel(row.channel as string),
+      profileId: (row.profile_id as string) ?? null,
+      personId: (row.profile_id as string) ?? null,
+      profileUrl: (row.profile_url as string) ?? null,
+      status: row.status === 'archived' ? 'archived' : 'active',
+      access: executableRow?.access === 'coverage' ? 'coverage' : 'assigned',
+      assignedAt: executableRow?.assignedAt ?? null,
+    }
+  })
 
   return groupAssignedProfiles(identities, profiles)
 }
