@@ -1131,6 +1131,9 @@ export interface ScoutStore {
   backfillDefaultDailyTargetsAdmin(): Promise<{ created: number; assignments: number }>
   updateDailyTargetAdmin(id: string, patches: { targetCount?: number; active?: boolean }): Promise<import('@/lib/domain/types').DailyTarget>
   deleteDailyTargetAdmin(id: string): Promise<void>
+  getDailyTargetAdmin(id: string): Promise<import('@/lib/domain/types').DailyTarget | null>
+  /** Deactivate a rep's active lanes for one channel; ownership and access are unchanged. */
+  deactivateDailyPlanAdmin(repId: string, revenueIdentityId: string): Promise<{ deactivated: number }>
   // accountability
   getTeamAccountabilityAdmin(date?: string): Promise<import('@/lib/domain/types').TeamAccountabilityView>
   getCommandCenterAdmin(): Promise<import('@/lib/domain/types').CommandCenterView>

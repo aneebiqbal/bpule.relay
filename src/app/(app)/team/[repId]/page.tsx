@@ -302,13 +302,15 @@ async function OverviewTab({
           )}
         </Section>
 
-        <Section title="Responsibilities" description="Who this person works, and what is expected today.">
-          {plan ? (
-            <RepOperatingPlanView repId={basics.id} plan={plan} identities={assignable} canManage={canManage} />
-          ) : (
-            <p className="text-[13px] text-graphite">The operating plan could not be loaded.</p>
-          )}
-        </Section>
+        <div id="responsibilities" className="scroll-mt-20">
+          <Section title="Responsibilities" description="Who this person works, and what is expected today.">
+            {plan ? (
+              <RepOperatingPlanView repId={basics.id} plan={plan} identities={assignable} canManage={canManage} />
+            ) : (
+              <p className="text-[13px] text-graphite">The operating plan could not be loaded.</p>
+            )}
+          </Section>
+        </div>
 
         <Section title="Attention" description="What is oldest or at risk right now.">
           <ul className="divide-y divide-line/70 rounded-lg border border-line">

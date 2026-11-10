@@ -92,7 +92,7 @@ export async function TeamToday() {
             label: 'Replies waiting',
             value: team.totals.repliesWaiting,
             hint: 'Buyers waiting',
-            href: '/chats?view=all',
+            href: '/chats?view=waiting_me',
             tone: team.totals.repliesWaiting > 0 ? 'warning' : 'neutral',
           },
           {

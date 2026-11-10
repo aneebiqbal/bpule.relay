@@ -451,8 +451,10 @@ export async function loadChatQueue(
   const counts = countChatViews(all, includeManager)
   let filtered = all.filter((r) => chatViewMatches(r, query.view === 'review' ? 'all' : query.view))
   if (query.minAgeHours) filtered = filtered.filter((r) => (r.ageHours ?? 0) >= query.minAgeHours!)
+  // Stage is a lead-pipeline drill-down, not a redefinition of conversation
+  // state: it narrows the selected view instead of replacing it.
   if (query.stageGroup) {
-    filtered = all.filter((r) => pipelineGroupForStage(r.stageLabel) === query.stageGroup)
+    filtered = filtered.filter((r) => pipelineGroupForStage(r.stageLabel) === query.stageGroup)
   }
   sortChatRows(filtered)
   const limit = Math.min(Math.max(query.limit ?? 60, 1), 200)

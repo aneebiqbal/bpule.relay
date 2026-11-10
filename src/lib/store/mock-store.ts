@@ -3275,6 +3275,22 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (rep.role !== 'admin') throw new Error('Admin only')
       demoDailyTargets = demoDailyTargets.filter((t) => t.id !== id)
     },
+    async getDailyTargetAdmin(id: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      return demoDailyTargets.find((t) => t.id === id) ?? null
+    },
+    async deactivateDailyPlanAdmin(repId: string, revenueIdentityId: string) {
+      if (rep.role !== 'admin') throw new Error('Admin only')
+      let deactivated = 0
+      for (const target of demoDailyTargets) {
+        if (target.repId === repId && target.revenueIdentityId === revenueIdentityId && target.active) {
+          target.active = false
+          target.updatedAt = new Date().toISOString()
+          deactivated += 1
+        }
+      }
+      return { deactivated }
+    },
     async getTeamAccountabilityAdmin(date?: string) {
       if (rep.role !== 'admin') throw new Error('Admin only')
       return { date: date ?? new Date().toISOString().slice(0, 10), isWorkingDay: true, members: [], exceptions: [], needsAttention: [], summaries: [], consecutiveMisses: [], requiresAttention: [] }

@@ -3,6 +3,7 @@ import { createScoutStore } from '@/lib/store'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
+import { personNameFromProfile } from '@/lib/profiles/person-name'
 import type { ActivityType } from '@/lib/domain/types'
 
 const ACTIVITY_TYPES: ActivityType[] = [
@@ -53,6 +54,25 @@ export async function GET() {
     const profileIdByIdentity = new Map(
       (identities ?? []).map((identity) => [identity.id as string, (identity as unknown as { profileId: string | null }).profileId]),
     )
+    const personIds = [
+      ...new Set(
+        (identities ?? [])
+          .map((identity) => (identity as unknown as { profileId: string | null }).profileId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ]
+    const personNameById = new Map<string, string>()
+    if (personIds.length > 0) {
+      const { data: personRows } = await client
+        .from('profiles')
+        .select('id, display_name, full_name, label')
+        .eq('organization_id', auth.authCtx.orgId)
+        .in('id', personIds)
+        .limit(200)
+      for (const row of (personRows ?? []) as Array<Record<string, unknown>>) {
+        personNameById.set(row.id as string, personNameFromProfile(row))
+      }
+    }
     const primaryByProfileRep = new Set(
       ((coverage.data ?? []) as Array<{ profile_id: string; rep_id: string; role: string; active: boolean }>)
         .filter((row) => row.active && row.role === 'PRIMARY')
@@ -81,6 +101,7 @@ export async function GET() {
       identities,
       assignments: executableAssignments,
       reps,
+      personNameById: Object.fromEntries(personNameById),
       defaults: {
         email: defaultTargetsForChannel('email'),
         linkedin: defaultTargetsForChannel('linkedin'),
@@ -115,6 +136,14 @@ export async function POST(request: Request) {
     const revenueIdentityId = typeof body.revenueIdentityId === 'string' ? body.revenueIdentityId.trim() : ''
     if (!repId || !revenueIdentityId) {
       return NextResponse.json({ error: 'repId and revenueIdentityId are required.' }, { status: 400 })
+    }
+
+    // Remove the daily plan only: ownership, eligibility, coverage and profile
+    // access stay intact; the active target lanes are deactivated.
+    if (body.removePlan === true) {
+      const result = await auth.store.deactivateDailyPlanAdmin(repId, revenueIdentityId)
+      const targets = await auth.store.listDailyTargetsAdmin()
+      return NextResponse.json({ ok: true, ...result, targets })
     }
 
     if (body.assignIfNeeded === true) {

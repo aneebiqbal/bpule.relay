@@ -105,8 +105,8 @@ export default async function TeamPeoplePage({
             metrics={[
               { label: 'People', value: rows.length, href: null },
               { label: 'Need attention', value: attentionCount, href: '/team/people?view=attention', tone: attentionCount ? 'attention' : 'default' },
-              { label: 'Replies waiting', value: sum('repliesWaiting'), href: `/chats?view=needs_reply&scope=${leadScope}`, tone: sum('repliesWaiting') ? 'attention' : 'default' },
-              { label: 'Follow-ups due', value: sum('followUpsOverdue'), href: `/chats?view=follow_ups&scope=${leadScope}` },
+              { label: 'Replies waiting', value: sum('repliesWaiting'), href: `/chats?view=waiting_me&scope=${leadScope}`, tone: sum('repliesWaiting') ? 'attention' : 'default' },
+              { label: 'Follow-ups due', value: sum('followUpsOverdue'), href: `/chats?view=followups&scope=${leadScope}` },
               { label: 'Overdue tasks', value: sum('overdueTasks'), href: '/tasks?view=overdue', tone: sum('overdueTasks') ? 'critical' : 'default' },
               { label: 'Open leads', value: sum('openLeads'), href: `/leads?scope=${leadScope}` },
             ]}

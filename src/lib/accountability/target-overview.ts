@@ -14,6 +14,10 @@ export interface PersonTargetLane {
   channel: RevenueIdentity['channel']
   /** Canonical person profile — the operating-center deep link. */
   profileId: string | null
+  /** Canonical person key (same as profileId) — groups channels under one person. */
+  personKey: string | null
+  /** Person display name; channels render nested under it. */
+  personName: string
   assigned: boolean
   activities: PersonTargetActivity[]
   actionsPerDay: number
@@ -42,6 +46,8 @@ export function buildTeamTargetOverview(input: {
   identities: Array<Pick<RevenueIdentity, 'id' | 'identityName' | 'channel' | 'status' | 'profileId'>>
   assignments: Array<Pick<IdentityAssignment, 'repId' | 'revenueIdentityId'>>
   targets: DailyTarget[]
+  /** Canonical person profile id → display name, for person-first grouping. */
+  personNameById?: Map<string, string>
 }): TeamTargetOverview {
   const repsById = new Map(input.reps.map((rep) => [rep.id, rep]))
   const identitiesById = new Map(input.identities.map((identity) => [identity.id, identity]))
@@ -64,6 +70,10 @@ export function buildTeamTargetOverview(input: {
       identityName: identity.identityName,
       channel: identity.channel,
       profileId: identity.profileId ?? null,
+      personKey: identity.profileId ?? null,
+      personName: identity.profileId
+        ? (input.personNameById?.get(identity.profileId) ?? identity.identityName)
+        : identity.identityName,
       assigned: false,
       activities: [],
       actionsPerDay: 0,

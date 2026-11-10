@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { activityLabel, formatDefaultPack, type DefaultDailyTarget } from '@/lib/accountability/default-targets'
 import { ChannelBadge } from '@/components/ui/channel-badge'
 import { channelLabel } from '@/lib/profiles/channel'
-import { buildTeamTargetOverview } from '@/lib/accountability/target-overview'
+import { buildTeamTargetOverview, type PersonTargetLane } from '@/lib/accountability/target-overview'
 import { DEFAULT_WEIGHTS } from '@/lib/performance/execution-score'
 import { DashHeader, Initials, Panel, Pill, StatTile } from '@/components/dashboard/kit'
 import type { DailyTarget, RevenueIdentity, Rep, ActivityType, IdentityAssignment } from '@/lib/domain/types'
@@ -29,11 +29,23 @@ const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
+function groupLanesByPerson(lanes: PersonTargetLane[]): Array<[string | null, PersonTargetLane[]]> {
+  const map = new Map<string | null, PersonTargetLane[]>()
+  for (const lane of lanes) {
+    const key = lane.personKey
+    const list = map.get(key) ?? []
+    list.push(lane)
+    map.set(key, list)
+  }
+  return [...map.entries()]
+}
+
 interface TargetsPayload {
   targets?: DailyTarget[]
   identities?: RevenueIdentity[]
   assignments?: IdentityAssignment[]
   reps?: Rep[]
+  personNameById?: Record<string, string>
   error?: string
 }
 
@@ -42,6 +54,7 @@ export function TargetsManager() {
   const [identities, setIdentities] = useState<RevenueIdentity[]>([])
   const [reps, setReps] = useState<Rep[]>([])
   const [assignments, setAssignments] = useState<IdentityAssignment[]>([])
+  const [personNameById, setPersonNameById] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -66,6 +79,7 @@ export function TargetsManager() {
     setTargets(data.targets ?? [])
     setIdentities(data.identities ?? [])
     setAssignments(data.assignments ?? [])
+    setPersonNameById(data.personNameById ?? {})
     setReps(data.reps ?? [])
   }, [])
 
@@ -80,7 +94,17 @@ export function TargetsManager() {
 
   const identityById = useMemo(() => new Map(identities.map((i) => [i.id, i])), [identities])
   const repsById = useMemo(() => new Map(reps.map((r) => [r.id, r])), [reps])
-  const overview = useMemo(() => buildTeamTargetOverview({ reps, identities, assignments, targets }), [reps, identities, assignments, targets])
+  const overview = useMemo(
+    () =>
+      buildTeamTargetOverview({
+        reps,
+        identities,
+        assignments,
+        targets,
+        personNameById: new Map(Object.entries(personNameById)),
+      }),
+    [reps, identities, assignments, targets, personNameById],
+  )
   const people = repFilter ? overview.people.filter((person) => person.repId === repFilter) : overview.people
 
   const selectedIdentity = identityById.get(form.revenueIdentityId)
@@ -323,11 +347,14 @@ export function TargetsManager() {
                   <span className="text-[13px] font-medium tabular-nums text-ink">{person.totalActionsPerDay}<span className="text-[11px] font-normal text-stone"> / day</span></span>
                   {!person.packComplete && <Pill tone="warning">incomplete</Pill>}
                 </div>
-                <div className="space-y-2 sm:pl-10">
-                  {person.lanes.map((lane) => (
+                <div className="space-y-3 sm:pl-10">
+                  {groupLanesByPerson(person.lanes).map(([personKey, lanes]) => (
+                    <div key={personKey ?? 'unassigned'}>
+                      <p className="text-[13px] font-medium text-ink">{lanes[0]?.personName ?? 'Unnamed'}</p>
+                      <div className="mt-1.5 space-y-2">
+                        {lanes.map((lane) => (
                     <div key={`${person.repId}-${lane.identityId}`} className="grid gap-2 rounded-lg border border-line/70 bg-bone/60 p-2.5 sm:grid-cols-[180px_1fr] sm:items-center">
                       <div className="min-w-0">
-                        <p className="truncate text-[12px] font-medium text-ink">{lane.identityName}</p>
                         <ChannelBadge channel={lane.channel} className="mt-1" />
                         <p className="text-[11px] text-stone">
                           {lane.actionsPerDay}/day
@@ -391,6 +418,9 @@ export function TargetsManager() {
                             </span>
                           )
                         })}
+                      </div>
+                    </div>
+                        ))}
                       </div>
                     </div>
                   ))}

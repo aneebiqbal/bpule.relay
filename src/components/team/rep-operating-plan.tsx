@@ -43,6 +43,7 @@ export function RepOperatingPlanView({
     | { mode: 'assign' }
     | { mode: 'transfer'; row: OperatingResponsibility }
     | { mode: 'remove'; row: OperatingResponsibility }
+    | { mode: 'removePlan'; row: OperatingResponsibility }
     | null
   >(null)
 
@@ -87,6 +88,7 @@ export function RepOperatingPlanView({
                   canManage={canManage}
                   onTransfer={() => setDialog({ mode: 'transfer', row })}
                   onRemove={() => setDialog({ mode: 'remove', row })}
+                  onRemovePlan={() => setDialog({ mode: 'removePlan', row })}
                 />
               ))}
             </ul>
@@ -150,6 +152,9 @@ export function RepOperatingPlanView({
       {dialog?.mode === 'remove' && (
         <RemoveDialog row={dialog.row} repId={repId} onClose={() => setDialog(null)} />
       )}
+      {dialog?.mode === 'removePlan' && (
+        <RemovePlanDialog row={dialog.row} repId={repId} onClose={() => setDialog(null)} />
+      )}
     </div>
   )
 }
@@ -169,11 +174,13 @@ function ResponsibilityRow({
   canManage,
   onTransfer,
   onRemove,
+  onRemovePlan,
 }: {
   row: OperatingResponsibility
   canManage: boolean
   onTransfer: () => void
   onRemove: () => void
+  onRemovePlan: () => void
 }) {
   return (
     <li className="rounded-lg border border-line bg-bone px-3 py-2.5">
@@ -202,6 +209,15 @@ function ResponsibilityRow({
               >
                 Transfer
               </button>
+              {row.target > 0 && (
+                <button
+                  type="button"
+                  onClick={onRemovePlan}
+                  className="rounded-md border border-line px-2 py-1 text-[11px] text-graphite transition-colors hover:text-ink"
+                >
+                  Remove plan
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onRemove}
@@ -662,6 +678,82 @@ function RemoveDialog({
             className="rounded-lg bg-[#a8342a] px-3 py-1.5 text-[12px] font-medium text-white transition-transform active:scale-[0.98] disabled:opacity-50"
           >
             {saving ? 'Removing…' : 'Remove responsibility'}
+          </button>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
+function RemovePlanDialog({
+  row,
+  repId,
+  onClose,
+}: {
+  row: OperatingResponsibility
+  repId: string
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save() {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/targets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removePlan: true, repId, revenueIdentityId: row.identityId }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error ?? 'Could not remove the daily plan.')
+      router.refresh()
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove the daily plan.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog title="Remove daily plan?" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-[13px] text-ink">
+          {row.personName} · {row.channel}
+        </p>
+        <p className="text-[13px] text-graphite">
+          This removes the active daily target only. The primary assignment, profile access and sender
+          authorization remain unchanged.
+        </p>
+        {row.targets.length > 0 && (
+          <dl className="rounded-lg border border-line px-3 py-2 text-[12px]">
+            {row.targets.map((target) => (
+              <div key={target.targetId} className="flex justify-between gap-2">
+                <dt className="text-graphite">{activityLabel(target.activityType as Parameters<typeof activityLabel>[0])}</dt>
+                <dd className="tabular-nums text-ink">{target.targetCount}</dd>
+              </div>
+            ))}
+            <div className="mt-1 flex justify-between gap-2 border-t border-line pt-1 font-medium">
+              <dt className="text-ink">Total</dt>
+              <dd className="tabular-nums text-ink">{row.target}/day</dd>
+            </div>
+          </dl>
+        )}
+        {error && <p role="alert" className="text-[12px] text-status-danger">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-graphite">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+            className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:opacity-50"
+          >
+            {saving ? 'Removing…' : 'Remove daily plan'}
           </button>
         </div>
       </div>

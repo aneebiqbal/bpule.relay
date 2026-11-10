@@ -6553,6 +6553,43 @@ export class SupabaseStore implements ScoutStore {
     })
   }
 
+  async getDailyTargetAdmin(id: string): Promise<DailyTarget | null> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('daily_targets').select('*').eq('id', id).eq('organization_id', this.orgId).maybeSingle()
+    if (error) throw error
+    if (!data) return null
+    return {
+      id: data.id as string, organizationId: data.organization_id as string, repId: data.rep_id as string,
+      revenueIdentityId: data.revenue_identity_id as string, activityType: data.activity_type as ActivityType,
+      targetCount: data.target_count as number, active: data.active as boolean,
+      createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
+    }
+  }
+
+  /**
+   * Remove a rep's daily plan for one channel without touching ownership.
+   * The PRIMARY assignment, eligibility, coverage and profile access remain;
+   * only the active target lanes are deactivated. Historical rows are kept.
+   */
+  async deactivateDailyPlanAdmin(repId: string, revenueIdentityId: string): Promise<{ deactivated: number }> {
+    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    const { data, error } = await this.client
+      .from('daily_targets')
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq('organization_id', this.orgId)
+      .eq('rep_id', repId)
+      .eq('revenue_identity_id', revenueIdentityId)
+      .eq('active', true)
+      .select('id')
+    if (error) throw error
+    await this.client.from('accountability_audit_log').insert({
+      organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: revenueIdentityId,
+      event_type: 'daily_plan_removed', detail: { rep_id: repId, lanes: data?.length ?? 0 },
+    })
+    return { deactivated: data?.length ?? 0 }
+  }
+
   async getTeamAccountabilityAdmin(date?: string): Promise<TeamAccountabilityView> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
     const targetDate = date ?? (await this.businessDate())

@@ -186,6 +186,12 @@ export function PeopleTable({ rows }: { rows: PeopleRow[] }) {
           </dl>
           <div className="mt-2.5 flex gap-2">
             <Link
+              href={`/team/${r.repId}#responsibilities`}
+              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-graphite hover:text-ink"
+            >
+              Open plan
+            </Link>
+            <Link
               href={`/team/${r.repId}`}
               className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-graphite hover:text-ink"
             >
