@@ -20,10 +20,13 @@ describe('relay_app integration', () => {
       view: 'all',
       managerViews: false,
     })
-    console.log('RELAY_APP counts:', JSON.stringify(queue.counts), 'rows:', queue.rows.length)
-    expect(queue.counts.waiting_me).toBe(2)
-    expect(queue.counts.waiting_them).toBe(85)
-    expect(queue.counts.followups).toBe(101)
-    expect(queue.counts.all).toBe(188)
+    // Counts are live business data and shift as replies/follow-ups move; the
+    // guard is the scope, not the exact number. A leaked RLS policy would
+    // return the whole organization's queue (~978 leads), not one rep's.
+    expect(queue.counts.all).toBeGreaterThan(0)
+    expect(queue.counts.all).toBeLessThan(500)
+    expect(queue.counts.all).toBeGreaterThanOrEqual(queue.counts.waiting_them)
+    expect(queue.counts.all).toBeGreaterThanOrEqual(queue.counts.followups)
+    expect(queue.rows.length).toBeGreaterThan(0)
   }, 30_000)
 })
