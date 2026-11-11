@@ -442,7 +442,12 @@ function SenderMatch({
         ranking.profileMatch - active.profileMatch >= ROUTING_MISMATCH_DELTA,
     ) ?? null
   const delta = stronger && active ? stronger.profileMatch - active.profileMatch : 0
-  const bestName = best?.name ?? result.bestSender?.label ?? null
+  const bestName = active?.name ?? best?.name ?? result.bestSender?.label ?? null
+  // The SELECTED sender is what the lead will be generated as. Ranking #1 is
+  // only a recommendation — showing it as "Sending as" told the rep the wrong
+  // profile was in use (BUG-32 / §38).
+  const activeMatch = active?.profileMatch ?? best?.profileMatch ?? null
+  const activeReason = active?.reasons[0] ?? best?.reasons[0] ?? result.bestSenderProof[0]?.safeClaim
 
   return (
     <section data-testid="sender-section" aria-labelledby="prospect-sender" className="border-t border-line pt-4">
@@ -455,13 +460,13 @@ function SenderMatch({
 
       <p className="mt-1.5 text-[13px] text-ink">
         Sending as: <span className="font-medium">{bestName ?? 'Profile not assigned'}</span>
-        {best ? <span className="text-graphite"> · {best.profileMatch}% sender match</span> : null}
+        {activeMatch !== null ? <span className="text-graphite"> · {activeMatch}% sender match</span> : null}
       </p>
-      {(best?.reasons[0] ?? result.bestSenderProof[0]?.safeClaim) && (
+      {activeReason ? (
         <p className="mt-0.5 text-[11px] text-graphite">
-          {(best?.reasons[0] ?? result.bestSenderProof[0]?.safeClaim ?? '').slice(0, 140)}
+          {activeReason.slice(0, 140)}
         </p>
-      )}
+      ) : null}
       {rankings.length === 0 && !result.bestSender && (
         <p className="mt-1.5 text-[12px] text-graphite">No LinkedIn profile is available for this check.</p>
       )}

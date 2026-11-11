@@ -306,3 +306,184 @@ describe('CROSS_ORG_IDENTITY_DENIED', () => {
     expect(source).toMatch(/identities\.find\(\(item\) => item\.id === identityId && item\.status === 'active'\)/)
   })
 })
+
+// ── V6.1.2 §31 contract gate ─────────────────────────────────────────────────
+
+describe('SELECTED_PROFILE_SURVIVES_ANALYZE_TO_SAVE', () => {
+  it('the client sends the selected profile to both analyze and save', () => {
+    const source = read('src', 'components', 'prospect', 'prospect-analyze.tsx')
+    expect(source).toMatch(/profileId: effectiveProfileId/)
+    expect(source).toMatch(/senderProfileId: selectedProfileId \?\? result\.bestSender\?\.id/)
+    expect(source).not.toMatch(/profileId: workspace\.active\?\.profileId/)
+  })
+})
+
+describe('SELECTED_CHANNEL_SURVIVES_ANALYZE_TO_SAVE', () => {
+  it('the revenue identity is resolved from the selected profile, not the workspace', () => {
+    const source = read('src', 'components', 'prospect', 'prospect-analyze.tsx')
+    expect(source).toMatch(/const revenueIdentityId = identityForProfile\(effectiveProfileId\)/)
+    expect(source).toMatch(/revenueIdentityId: identityForProfile\(/)
+  })
+})
+
+describe('ACTIVE_WORKSPACE_CANNOT_OVERRIDE_SELECTION', () => {
+  it('the workspace is only a fallback in the resolver', () => {
+    const source = read('src', 'lib', 'profiles', 'sender-context.ts')
+    expect(source).toMatch(/if \(selectedProfileId\)[\s\S]*?if \(fallbackIdentityId\)/)
+    expect(source).not.toMatch(/fallbackIdentityId\s*\?\?/)
+  })
+
+  it('no surface still asks for a workspace identity that ignores the sender', () => {
+    const removed = read('src', 'lib', 'workspace', 'active-identity.ts')
+    expect(removed).not.toMatch(/export function workspaceIdentityForSender/)
+  })
+})
+
+describe('PROFILE_KNOWLEDGE_SHARED_BY_PERSON', () => {
+  it('skills, proof and industries aggregate per person', () => {
+    const suggestion = read('src', 'lib', 'relay', 'sender-suggestion.ts')
+    expect(suggestion).toMatch(/skillsByPerson/)
+    expect(suggestion).toMatch(/proofByPerson/)
+    const routing = read('src', 'lib', 'relay', 'routing-context.ts')
+    expect(routing).toMatch(/industriesByPerson/)
+  })
+})
+
+describe('PROFILE_EXECUTION_CHANNEL_SPECIFIC', () => {
+  it('platform and accessibility stay per row even though knowledge is shared', () => {
+    const source = read('src', 'lib', 'relay', 'sender-suggestion.ts')
+    expect(source).toMatch(/platform: p\.platform \?\? null/)
+    expect(source).toMatch(/accessibleToRep: p\.rep_id === repId \|\| holders\.has\(repId\)/)
+  })
+})
+
+describe('LEADS_PROFILE_SEARCH_PARITY', () => {
+  it('search and profile filter apply together', () => {
+    const leads = [
+      { id: 'a', company: 'Finlytic', contactName: 'Dr Ahmad Israr', contactTitle: 'Head of Engineering', revenueIdentityId: 'id-aneeb-li', senderProfileId: null, source: 'linkedin', status: 'new', ownerRepId: 'r1' },
+      { id: 'b', company: 'Northstar', contactName: 'Ahmad Israr', contactTitle: 'Engineer', revenueIdentityId: 'id-mehak-li', senderProfileId: null, source: 'linkedin', status: 'new', ownerRepId: 'r1' },
+      { id: 'c', company: 'Finlytic', contactName: 'Sarah Khan', contactTitle: 'CTO', revenueIdentityId: 'id-aneeb-li', senderProfileId: null, source: 'linkedin', status: 'new', ownerRepId: 'r1' },
+    ] as never[]
+
+    const both = applyCanonicalColumnFilters(
+      leads,
+      parseLeadsQuery({ profile: 'id-aneeb-li', q: 'Ahmad' }),
+    )
+    expect(both.map((row) => row.id)).toEqual(['a'])
+
+    const profileOnly = applyCanonicalColumnFilters(leads, parseLeadsQuery({ profile: 'id-aneeb-li' }))
+    expect(profileOnly.map((row) => row.id)).toEqual(['a', 'c'])
+
+    const searchOnly = applyCanonicalColumnFilters(leads, parseLeadsQuery({ q: 'Ahmad' }))
+    expect(searchOnly.map((row) => row.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('LEADS_PROFILE_COUNT_PARITY', () => {
+  it('the SQL scope and the row scope are the same predicate', () => {
+    const store = read('src', 'lib', 'store', 'supabase-store.ts')
+    const page = store.slice(store.indexOf('async listLeadsPage'))
+    const body = page.slice(0, page.indexOf('async getQueue'))
+    expect(body).toMatch(/input\.identities/)
+    expect(body).toMatch(/revenue_identity_id\.eq\.\$\{row\.id\}/)
+    expect(body).toMatch(/sender_profile_id\.eq\.\$\{row\.profileId\}/)
+  })
+})
+
+describe('DUPLICATE_EXISTING_LEAD_NAVIGABLE', () => {
+  it('the duplicate response carries the lead id and its origin profile', () => {
+    const source = read('src', 'app', 'api', 'prospect', 'save', 'route.ts')
+    expect(source).toMatch(/existingLeadId/)
+    expect(source).toMatch(/existingLeadSenderProfileId/)
+    const client = read('src', 'components', 'prospect', 'prospect-analyze.tsx')
+    expect(client).toMatch(/Open existing lead/)
+  })
+})
+
+describe('ARCHIVED_DUPLICATE_NAVIGABLE', () => {
+  it('archived leads are detected and labelled, never silently re-created', () => {
+    const store = read('src', 'lib', 'store', 'supabase-store.ts')
+    const createLead = store.slice(store.indexOf('async createLead'))
+    const dedupe = createLead.slice(0, createLead.indexOf('const canonicalIntelligence'))
+    expect(dedupe).toMatch(/fetchLeadsAll\(false, true\)/)
+    expect(dedupe).toMatch(/existingLeadArchived: Boolean\(hit\.archived\)/)
+    const client = read('src', 'components', 'prospect', 'prospect-analyze.tsx')
+    expect(client).toMatch(/Already in Relay\{duplicateConflict\.existingLeadArchived \? ' · Archived' : ''\}/)
+  })
+})
+
+describe('DISPLAY_NAME_EXACT', () => {
+  it('titles, prefixes and middle names survive extraction', async () => {
+    const cases = [
+      ['Dr Ahmad Israr', 'Dr Ahmad Israr'],
+      ['Dr. Ahmad Israr', 'Dr. Ahmad Israr'],
+      ['Muhammad Aneeb Iqbal', 'Muhammad Aneeb Iqbal'],
+      ['Prof. Sarah Khan', 'Prof. Sarah Khan'],
+    ] as const
+    for (const [source, expected] of cases) {
+      const result = await produceCanonicalIntelligence(PASTE(source), { deterministicOnly: true } as never)
+      const name = (result.intelligence as unknown as { intelligence: { person: { fullName: string | null } } })
+        .intelligence.person.fullName
+      expect(name, source).toBe(expected)
+    }
+  })
+})
+
+describe('NO_NOTE_ZERO_AI', () => {
+  it('send-without-note never calls the generator', () => {
+    const source = read('src', 'components', 'lead-workspace-simple.tsx')
+    const block = source.slice(source.indexOf('const sendWithoutNote'))
+    const body = block.slice(0, block.indexOf('const logSend'))
+    expect(body).not.toMatch(/generateDraft|streamDraft/)
+    expect(body).toMatch(/sendWithoutNote: true/)
+  })
+})
+
+describe('WITH_NOTE_ON_DEMAND', () => {
+  it('the note is generated only from an explicit click', () => {
+    const source = read('src', 'components', 'lead-workspace-simple.tsx')
+    expect(source).toMatch(/onClick=\{\(\) => generateDraft\('connection'\)\}/)
+    const analyze = read('src', 'app', 'api', 'prospect', 'analyze', 'route.ts')
+    expect(analyze).toMatch(/if \(generateNote && isPitchingPolicy\(loop\.messagingPolicy\)\)/)
+  })
+})
+
+describe('NOTE_GENERATION_ZERO_TARGET_CREDIT', () => {
+  it('only the send path credits the connection target', () => {
+    const store = read('src', 'lib', 'store', 'supabase-store.ts')
+    const markContacted = store.slice(store.indexOf('async markContacted'))
+    const credit = markContacted.slice(0, markContacted.indexOf('record_canonical_progress'))
+    expect(credit).toMatch(/record_activity_event/)
+    expect(credit).toMatch(/if \(type !== 'reply'\)/)
+    const draftRoute = read('src', 'app', 'api', 'leads', '[id]', 'draft', 'route.ts')
+    expect(draftRoute).not.toMatch(/record_activity_event/)
+  })
+})
+
+describe('CONNECTION_ONE_CREDIT', () => {
+  it('the connection is credited once per identity with a stable idempotency key', () => {
+    const store = read('src', 'lib', 'store', 'supabase-store.ts')
+    const markContacted = store.slice(store.indexOf('async markContacted'))
+    const credit = markContacted.slice(0, markContacted.indexOf('record_canonical_progress'))
+    expect(credit).toMatch(/record_activity_event/)
+    expect(credit).toMatch(/p_source_event_id: `activity:\$\{leadId\}:\$\{idempotencyKey \?\? 'none'\}:\$\{identityId\}`/)
+    // One credit per identity actually worked, not once per target row.
+    expect(credit).toMatch(/p_identity_id: identityId/)
+  })
+})
+
+describe('FORGED_IDENTITY_DENIED', () => {
+  it('an identity outside the caller scope resolves to null', () => {
+    const source = read('src', 'lib', 'workspace', 'resolve-active-identity.ts')
+    expect(source).toMatch(/identities\.find\(\(item\) => item\.id === identityId && item\.status === 'active'\)/)
+    expect(source).toMatch(/if \(!identity\) return null/)
+  })
+})
+
+describe('BACKUP_IDENTITY_NOT_SELECTABLE', () => {
+  it('the executable scope excludes backup-only eligibility', () => {
+    const source = read('src', 'lib', 'coverage', 'access.ts')
+    expect(source).toMatch(/if \(!isCovered && !isPrimary\) continue/)
+    expect(source).toMatch(/role', 'PRIMARY'/)
+  })
+})
