@@ -32,6 +32,7 @@ const USERS = [
 
 const VIEWPORTS = [
   { name: '1440', width: 1440, height: 900 },
+  { name: '1280', width: 1280, height: 800 },
   { name: '1024', width: 1024, height: 768 },
   { name: '768', width: 768, height: 1024 },
   { name: '375', width: 375, height: 812 },
@@ -43,6 +44,10 @@ const ROUTES = [
   { name: 'saved', path: '/prospect?tab=saved' },
   { name: 'watchlist', path: '/prospect?tab=watchlist' },
   { name: 'fresh', path: '/prospect?tab=fresh' },
+  { name: 'leads', path: '/leads' },
+  { name: 'lead-detail', path: '/leads' },
+  { name: 'admin-providers', path: '/admin/providers' },
+  { name: 'admin-health', path: '/admin/health' },
 ]
 
 const AXE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js'
@@ -122,8 +127,34 @@ for (const user of USERS) {
     await page.setViewportSize({ width: vp.width, height: vp.height })
     for (const route of ROUTES) {
       consoleErrors.length = 0
+      let routePath = route.path
+      if (route.name === 'lead-detail') {
+        // A lead detail surface needs a real lead id; discover the first one.
+        await page.goto(`${BASE}/leads`, { waitUntil: 'domcontentloaded' })
+        await page.waitForTimeout(1500)
+        const href = await page.evaluate(() => {
+          const anchor = [...document.querySelectorAll('a[href^="/leads/"]')][0]
+          return anchor?.getAttribute('href') ?? null
+        })
+        if (!href) {
+          report.runs.push({
+            role: user.role,
+            viewport: vp.name,
+            route: route.name,
+            url: `${BASE}/leads`,
+            axe: null,
+            consoleErrors: [],
+            overflow: null,
+            ctaVisible: false,
+            skipped: 'no lead link found',
+          })
+          console.log(`${user.role} ${vp.name} ${route.name}: SKIPPED (no lead link)`)
+          continue
+        }
+        routePath = href
+      }
       try {
-        await page.goto(`${BASE}${route.path}`, { waitUntil: 'domcontentloaded' })
+        await page.goto(`${BASE}${routePath}`, { waitUntil: 'domcontentloaded' })
       } catch (err) {
         // A stalled dev server must not abort the whole matrix.
         report.runs.push({
