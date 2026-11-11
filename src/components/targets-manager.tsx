@@ -46,6 +46,7 @@ interface TargetsPayload {
   assignments?: IdentityAssignment[]
   reps?: Rep[]
   personNameById?: Record<string, string>
+  contributorsByIdentity?: Record<string, Array<{ repId: string; repName: string; completedCount: number }>>
   error?: string
 }
 
@@ -55,6 +56,9 @@ export function TargetsManager() {
   const [reps, setReps] = useState<Rep[]>([])
   const [assignments, setAssignments] = useState<IdentityAssignment[]>([])
   const [personNameById, setPersonNameById] = useState<Record<string, string>>({})
+  const [contributorsByIdentity, setContributorsByIdentity] = useState<
+    Record<string, Array<{ repId: string; repName: string; completedCount: number }>>
+  >({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -80,6 +84,7 @@ export function TargetsManager() {
     setIdentities(data.identities ?? [])
     setAssignments(data.assignments ?? [])
     setPersonNameById(data.personNameById ?? {})
+    setContributorsByIdentity(data.contributorsByIdentity ?? {})
     setReps(data.reps ?? [])
   }, [])
 
@@ -367,6 +372,18 @@ export function TargetsManager() {
                             </Link>
                           )}
                         </p>
+                        {(() => {
+                          const contributors = contributorsByIdentity[lane.identityId] ?? []
+                          if (contributors.length === 0) return null
+                          const total = contributors.reduce((sum, row) => sum + row.completedCount, 0)
+                          return (
+                            <p className="mt-0.5 text-[11px] text-stone">
+                              <span className="tabular-nums text-ink">{total}</span> today
+                              {' · '}
+                              {contributors.map((row) => `${row.repName} ${row.completedCount}`).join(', ')}
+                            </p>
+                          )
+                        })()}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {lane.activities.map((activity) => {

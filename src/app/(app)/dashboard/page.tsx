@@ -235,6 +235,32 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   })
 
   const identityRows = sliceTargetSummaryForWorkspace(workspace.targetSummary.byIdentity, null)
+  // Every operator's combined completion for the same identities, so a shared
+  // plan reads as the profile's progress rather than one rep's private target.
+  const profileTotalsByIdentity = await (async () => {
+    try {
+      const identityIds = identityRows.map((row) => row.revenueIdentityId)
+      if (identityIds.length === 0) return { byIdentity: new Map<string, number>(), byActivity: new Map<string, number>() }
+      const { data } = await store
+        .getSupabaseClient()
+        .from('daily_accountability')
+        .select('revenue_identity_id, activity_type, completed_count')
+        .eq('organization_id', user.organization.id)
+        .eq('target_date', workspace.businessDate)
+        .in('revenue_identity_id', identityIds)
+        .limit(2000)
+      const byIdentity = new Map<string, number>()
+      const byActivity = new Map<string, number>()
+      for (const row of (data ?? []) as Array<{ revenue_identity_id: string; activity_type: string; completed_count: number }>) {
+        byIdentity.set(row.revenue_identity_id, (byIdentity.get(row.revenue_identity_id) ?? 0) + row.completed_count)
+        const key = `${row.revenue_identity_id}:${row.activity_type}`
+        byActivity.set(key, (byActivity.get(key) ?? 0) + row.completed_count)
+      }
+      return { byIdentity, byActivity }
+    } catch {
+      return { byIdentity: new Map<string, number>(), byActivity: new Map<string, number>() }
+    }
+  })()
   const scopedTargets = sumTargets(identityRows)
   const totalTarget = scopedTargets.totalTarget
   const totalRemaining = scopedTargets.totalRemaining
@@ -442,6 +468,8 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       identityRows,
       workspace.workdayProgress,
       workspace.policy.warningThresholds,
+      profileTotalsByIdentity.byIdentity,
+      profileTotalsByIdentity.byActivity,
     ),
     targetSummary: {
       ...workspace.targetSummary,

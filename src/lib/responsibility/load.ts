@@ -34,7 +34,7 @@ export interface ResponsibilityAcknowledgementView {
   profileName: string
   channel: string | null
   repId: string
-  subject: 'PRIMARY' | 'COVERAGE'
+  subject: 'PRIMARY' | 'COVERAGE' | 'OPERATOR'
   mode: 'SHARED' | 'REPLACE' | null
   assignedAt: string
   acknowledgedAt: string | null
@@ -119,7 +119,7 @@ function toView(
     profileName: label.name,
     channel: label.channel,
     repId: row.rep_id,
-    subject: row.subject === 'COVERAGE' ? 'COVERAGE' : 'PRIMARY',
+    subject: row.subject === 'COVERAGE' ? 'COVERAGE' : row.subject === 'OPERATOR' ? 'OPERATOR' : 'PRIMARY',
     mode,
     assignedAt: row.assigned_at,
     acknowledgedAt: row.acknowledged_at,
@@ -379,4 +379,73 @@ export async function ensurePrimaryAcknowledgement(
   if (error && (error as { code?: string }).code !== '23505') {
     console.warn('[responsibility] primary acknowledgement seed failed', error.message)
   }
+}
+
+/**
+ * Seed the acknowledgement row for a permanent OPERATOR seat. A genuinely new
+ * seat (different `source_row_id`) re-arms the banner; re-saving an unchanged
+ * chain does not. Removing the seat deletes the row, so a removed operator
+ * never lingers in Admin attention.
+ */
+export async function ensureOperatorAcknowledgement(
+  client: DbClient,
+  input: {
+    organizationId: string
+    profileId: string
+    repId: string
+    sourceRowId: string
+    assignedAt: string
+  },
+): Promise<void> {
+  const { data: existing } = await client
+    .from('responsibility_acknowledgements')
+    .select('id, source_row_id')
+    .eq('organization_id', input.organizationId)
+    .eq('profile_id', input.profileId)
+    .eq('rep_id', input.repId)
+    .eq('subject', 'OPERATOR')
+    .maybeSingle()
+
+  if (existing && existing.source_row_id === input.sourceRowId) return
+
+  if (existing) {
+    const { error } = await client
+      .from('responsibility_acknowledgements')
+      .update({
+        source_row_id: input.sourceRowId,
+        assigned_at: input.assignedAt,
+        acknowledged_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id as string)
+    if (error) console.warn('[responsibility] operator acknowledgement re-arm failed', error.message)
+    return
+  }
+
+  const { error } = await client.from('responsibility_acknowledgements').insert({
+    organization_id: input.organizationId,
+    profile_id: input.profileId,
+    rep_id: input.repId,
+    subject: 'OPERATOR',
+    source_row_id: input.sourceRowId,
+    assigned_at: input.assignedAt,
+    acknowledged_at: null,
+  })
+  if (error && (error as { code?: string }).code !== '23505') {
+    console.warn('[responsibility] operator acknowledgement seed failed', error.message)
+  }
+}
+
+/** Drop the OPERATOR acknowledgement when the seat is removed. */
+export async function deleteOperatorAcknowledgement(
+  client: DbClient,
+  input: { organizationId: string; profileId: string; repId: string },
+): Promise<void> {
+  await client
+    .from('responsibility_acknowledgements')
+    .delete()
+    .eq('organization_id', input.organizationId)
+    .eq('profile_id', input.profileId)
+    .eq('rep_id', input.repId)
+    .eq('subject', 'OPERATOR')
 }

@@ -79,6 +79,7 @@ describe('BACKUP_NOT_EXECUTABLE', () => {
           assignedReps: [], primaryRepId: 'rep-1', primaryRepName: 'Hassan',
           primarySource: 'coverage', primaryReason: 'Explicit primary coverage',
           backups: [{ repId: 'rep-2', repName: 'Madiha', priority: 2, source: 'coverage' }],
+          operators: [],
           coverageState: 'EXPLICIT' as const, needsReview: false, reviewReasons: [],
         },
       ],
@@ -88,6 +89,26 @@ describe('BACKUP_NOT_EXECUTABLE', () => {
     expect(backups.map((p) => p.profileId)).toEqual(['p1'])
     const executable = getExecutableProfilesForRep(set, 'rep-2', new Set())
     expect(executable.map((p) => p.profileId)).toEqual([])
+  })
+
+  it('an operator seat is executable and is not a backup', async () => {
+    const { getOperatorProfilesForRep, getExecutableProfilesForRep } = await import('@/lib/profiles/canonical')
+    const set = {
+      businessDate: '2026-11-09',
+      profiles: [
+        {
+          profileId: 'p1', profileName: 'Fizza', channels: ['upwork'], identityIds: ['i1'],
+          assignedReps: [], primaryRepId: 'rep-1', primaryRepName: 'Hassan',
+          primarySource: 'coverage', primaryReason: 'Explicit primary coverage',
+          backups: [],
+          operators: [{ repId: 'rep-3', repName: 'Ahmad', priority: 1, source: 'coverage' }],
+          coverageState: 'EXPLICIT' as const, needsReview: false, reviewReasons: [],
+        },
+      ],
+      ambiguous: [], unassigned: [],
+    }
+    expect(getOperatorProfilesForRep(set, 'rep-3').map((p) => p.profileId)).toEqual(['p1'])
+    expect(getExecutableProfilesForRep(set, 'rep-3', new Set()).map((p) => p.profileId)).toEqual(['p1'])
   })
 })
 
@@ -101,7 +122,7 @@ describe('ACTIVE_COVER_EXECUTABLE', () => {
           profileId: 'p1', profileName: 'Fizza', channels: ['linkedin'], identityIds: ['i1'],
           assignedReps: [], primaryRepId: 'rep-1', primaryRepName: 'Hassan',
           primarySource: 'coverage', primaryReason: 'Explicit primary coverage',
-          backups: [], coverageState: 'EXPLICIT' as const, needsReview: false, reviewReasons: [],
+          backups: [], operators: [], coverageState: 'EXPLICIT' as const, needsReview: false, reviewReasons: [],
         },
       ],
       ambiguous: [], unassigned: [],
@@ -236,9 +257,10 @@ describe('ADD_PROFILE_CREATES_ONE_PERSON', () => {
 })
 
 describe('ASSIGNMENT_MANAGED_FROM_CHANNEL', () => {
-  it('the channel block manages primary and backups inline', () => {
+  it('the channel block manages primary, operators and backups inline', () => {
     const detail = read('src/components/team/team-profile-detail.tsx')
-    expect(detail).toMatch(/CoverageConfigPanel/)
+    expect(detail).toMatch(/ManagePeopleDialog/)
+    expect(detail).toMatch(/channel\.operators/)
     expect(detail).toMatch(/channel\.backups/)
   })
 })

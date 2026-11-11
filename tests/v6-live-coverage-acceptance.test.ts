@@ -10,7 +10,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeNeonPool, neonDbClient, neonServiceDbClient } from '@/lib/db/neon'
-import { approveCoveragePlan, restorePrimaryCoverage } from '@/lib/coverage/actions'
+import { approveCoveragePlan, restorePrimaryCoverage, configureCoverage } from '@/lib/coverage/actions'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 import {
   acknowledgeResponsibility,
@@ -26,8 +26,8 @@ const ORG = '11111111-1111-1111-1111-111111111111'
 const PROFILE = '87c10cd5-58e3-4742-910d-4de549d522c7' // Aneeb · LinkedIn
 const IDENTITY = 'e57519a5-bc62-4bfe-b29d-2be809e8d9af' // Aneeb · LinkedIn
 const PRIMARY = 'aaaaaaaa-0000-0000-0000-000000000004' // Ahmad
-const COVERING = 'aaaaaaaa-0000-0000-0000-000000000002' // Hassan
-const BACKUP = 'aaaaaaaa-0000-0000-0000-000000000003' // Madiha
+const COVERING = 'aaaaaaaa-0000-0000-0000-000000000003' // Madiha
+const BACKUP = 'aaaaaaaa-0000-0000-0000-000000000002' // Hassan
 const ACTOR = 'aaaaaaaa-0000-0000-0000-000000000001' // Aneeb (admin)
 const AUTH_USER = '4803f9c8-48ef-4f9f-9ef3-c0a59c6414c6' // Aneeb
 
@@ -81,7 +81,7 @@ async function restore(client: ReturnType<typeof neonDbClient>) {
   })
 }
 
-/** Remove every row the fixture created. relay_app cannot delete coverage. */
+/** Remove every coverage row the fixture created. relay_app cannot delete coverage. */
 async function cleanupFixture() {
   // End any coverage an interrupted run left active, so a mode conflict from a
   // previous test can never cascade into the next one.
@@ -107,8 +107,121 @@ async function cleanupFixture() {
   await admin.from('notifications').delete().like('dedupe_key', `%${PROFILE}%`)
 }
 
-afterAll(async () => { await closeNeonPool() })
-beforeEach(async () => { await cleanupFixture() })
+/**
+ * The fixture needs a known owner on Zaira · Upwork. Production ownership moves
+ * as Admin works, so the suite takes the seat over and puts the original back.
+ */
+let originalPrimary: {
+  id: string
+  rep_id: string
+  role: string
+  priority: number
+  created_by: string | null
+} | null = null
+let originalReadiness: Array<{ rep_id: string }> = []
+let captured = false
+
+beforeAll(() => {
+  client = neonDbClient(AUTH_USER)
+  admin = neonServiceDbClient()
+})
+
+beforeEach(async () => {
+  // Capture production ownership and readiness once, BEFORE the fixture mutates
+  // anything, so the suite can put them back exactly at the end.
+  if (!captured) {
+    captured = true
+    const { data: current } = await admin
+      .from('profile_coverage')
+      .select('id, rep_id, role, priority, created_by')
+      .eq('organization_id', ORG)
+      .eq('profile_id', PROFILE)
+      .eq('role', 'PRIMARY')
+      .eq('active', true)
+      .maybeSingle()
+    originalPrimary = (current as typeof originalPrimary) ?? null
+    const { data: readiness } = await admin
+      .from('profile_readiness')
+      .select('rep_id')
+      .eq('organization_id', ORG)
+      .eq('profile_id', PROFILE)
+      .in('rep_id', [PRIMARY, COVERING, BACKUP])
+    originalReadiness = (readiness as Array<{ rep_id: string }>) ?? []
+  }
+
+  await cleanupFixture()
+
+  // Readiness is a per-device confirmation: cleared per run so the
+  // acknowledgement assertion is about this run, restored once at the end.
+  await admin
+    .from('profile_readiness')
+    .delete()
+    .eq('organization_id', ORG)
+    .eq('profile_id', PROFILE)
+    .in('rep_id', [PRIMARY, COVERING, BACKUP])
+
+  await configureCoverage({
+    organizationId: ORG,
+    profileId: PROFILE,
+    primaryRepId: PRIMARY,
+    operators: [],
+    backups: [{ repId: BACKUP, priority: 1 }],
+    actorRepId: ACTOR,
+    client: admin,
+  })
+  // The covering rep must hold eligibility; the fixture never removes it.
+  await admin
+    .from('identity_assignments')
+    .upsert(
+      {
+        organization_id: ORG,
+        revenue_identity_id: IDENTITY,
+        rep_id: COVERING,
+        assigned_by: ACTOR,
+      },
+      { onConflict: 'revenue_identity_id,rep_id' },
+    )
+})
+
+afterAll(async () => {
+  try {
+    await cleanupFixture()
+    await admin
+      .from('profile_coverage')
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq('organization_id', ORG)
+      .eq('profile_id', PROFILE)
+      .eq('active', true)
+    if (originalPrimary) {
+      await admin.from('profile_coverage').upsert(
+        {
+          id: originalPrimary.id,
+          organization_id: ORG,
+          profile_id: PROFILE,
+          rep_id: originalPrimary.rep_id,
+          role: originalPrimary.role,
+          priority: originalPrimary.priority,
+          active: true,
+          created_by: originalPrimary.created_by,
+        },
+        { onConflict: 'id' },
+      )
+    }
+    for (const row of originalReadiness) {
+      await admin.from('profile_readiness').upsert(
+        {
+          organization_id: ORG,
+          profile_id: PROFILE,
+          rep_id: row.rep_id,
+          acknowledged_by: row.rep_id,
+        },
+        { onConflict: 'organization_id,profile_id,rep_id' },
+      )
+    }
+  } finally {
+    await closeNeonPool()
+  }
+})
 
 describe('V6 live coverage acceptance', () => {
   it('SHARED keeps the primary executing, adds the covering rep, hides the backup', async () => {

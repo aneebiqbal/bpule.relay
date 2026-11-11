@@ -179,7 +179,12 @@ export interface ExecutableIdentity {
   assignmentId: string | null
   assignedBy: string | null
   assignedAt: string | null
-  access: 'primary' | 'coverage'
+  /**
+   * `primary` owns the profile of record, `operator` is an active contributor
+   * who shares the same channel plan, `coverage` is temporary cover. Backups
+   * never appear here.
+   */
+  access: 'primary' | 'operator' | 'coverage'
   coverageMode: CoverageExecutionMode | null
   coverageAssignmentId: string | null
   coveragePrimaryRepId: string | null
@@ -192,10 +197,12 @@ export interface ExecutableIdentity {
  *   EXECUTABLE(rep, identity, now) =
  *       PRIMARY ownership of the identity's profile
  *       UNLESS that profile has an active REPLACE coverage
+ *       OR   the rep is an active OPERATOR on that profile
  *       OR   the rep is an active covering operator (SHARED or REPLACE)
  *
  * Backups never execute. Archived identities never execute. Expired or revoked
- * coverage never executes. Ownership is never rewritten by coverage.
+ * coverage never executes. Ownership is never rewritten by coverage, and an
+ * operator seat never moves ownership.
  */
 export async function listExecutableIdentitiesForRep(
   client: DbClient,
@@ -203,7 +210,7 @@ export async function listExecutableIdentitiesForRep(
   repId: string,
   businessDate: string,
 ): Promise<ExecutableIdentity[]> {
-  const [{ data: assignments, error }, { data: primaryRows, error: primaryError }, covered] =
+  const [{ data: assignments, error }, { data: ownershipRows, error: ownershipError }, covered] =
     await Promise.all([
       client
         .from('identity_assignments')
@@ -213,18 +220,23 @@ export async function listExecutableIdentitiesForRep(
         .limit(500),
       client
         .from('profile_coverage')
-        .select('profile_id')
+        .select('profile_id, role')
         .eq('organization_id', orgId)
         .eq('rep_id', repId)
-        .eq('role', 'PRIMARY')
+        .in('role', ['PRIMARY', 'OPERATOR'])
         .eq('active', true)
         .limit(200),
       listActiveCoveredIdentities(client, orgId, repId, businessDate),
     ])
   if (error) throw error
-  if (primaryError) throw primaryError
+  if (ownershipError) throw ownershipError
 
-  const primaryProfileIds = new Set((primaryRows ?? []).map((row) => row.profile_id as string))
+  const primaryProfileIds = new Set<string>()
+  const operatorProfileIds = new Set<string>()
+  for (const row of (ownershipRows ?? []) as Array<{ profile_id: string; role: string }>) {
+    if (row.role === 'OPERATOR') operatorProfileIds.add(row.profile_id)
+    else primaryProfileIds.add(row.profile_id)
+  }
   const coveredProfileIds = [...new Set(covered.map((row) => row.profileId))]
 
   // Load every active coverage row touching the rep's own profiles, so a
@@ -232,11 +244,13 @@ export async function listExecutableIdentitiesForRep(
   const activeForProfiles = await listActiveCoverageForProfiles(
     client,
     orgId,
-    [...new Set([...primaryProfileIds, ...coveredProfileIds])],
+    [...new Set([...primaryProfileIds, ...operatorProfileIds, ...coveredProfileIds])],
     businessDate,
   )
 
-  // REPLACE wins defensively if a conflict ever reaches the read path.
+  // REPLACE wins defensively if a conflict ever reaches the read path. It
+  // excludes the PRIMARY only — an OPERATOR is an ongoing contributor, not the
+  // owner being replaced, so their seat survives.
   const replacedProfileIds = new Set<string>()
   for (const row of activeForProfiles) {
     if (row.coverage_mode === 'REPLACE') replacedProfileIds.add(row.profile_id)
@@ -271,7 +285,8 @@ export async function listExecutableIdentitiesForRep(
     const isPrimary = Boolean(
       row.profile_id && primaryProfileIds.has(row.profile_id) && !replacedProfileIds.has(row.profile_id),
     )
-    if (!isCovered && !isPrimary) continue
+    const isOperator = Boolean(row.profile_id && operatorProfileIds.has(row.profile_id))
+    if (!isCovered && !isPrimary && !isOperator) continue
     if (seen.has(row.id)) continue
     seen.add(row.id)
     const assignment = assignmentByIdentity.get(row.id)
@@ -282,7 +297,7 @@ export async function listExecutableIdentitiesForRep(
       assignmentId: assignment?.id ?? coverage?.coverageAssignmentId ?? null,
       assignedBy: (assignment?.assigned_by as string | null | undefined) ?? null,
       assignedAt: (assignment?.created_at as string | null | undefined) ?? coverage?.effectiveFrom ?? null,
-      access: isCovered ? 'coverage' : 'primary',
+      access: isCovered ? 'coverage' : isOperator ? 'operator' : 'primary',
       coverageMode: coverage?.mode ?? null,
       coverageAssignmentId: coverage?.coverageAssignmentId ?? null,
       coveragePrimaryRepId: coverage?.primaryRepId ?? null,

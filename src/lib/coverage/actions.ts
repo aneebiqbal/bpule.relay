@@ -4,8 +4,10 @@ import type { CoverageMode } from './engine'
 import { isCoverageExecutionMode, type CoverageExecutionMode } from './access'
 import {
   ensureCoverageAcknowledgement,
+  ensureOperatorAcknowledgement,
   ensurePrimaryAcknowledgement,
 } from '@/lib/responsibility/load'
+import { syncChannelEligibility } from '@/lib/profiles/assignment'
 import { notifyOnce } from '@/lib/notifications/deliver'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 import { reassignAssignedTask } from '@/lib/tasks/assigned-tasks'
@@ -638,20 +640,60 @@ export async function revokeCoverage(input: {
 }
 
 /**
- * Configure the ordered coverage chain for one profile. Replaces the existing
- * configuration in a single pass; the previous chain is deactivated, not
- * deleted, so the audit trail keeps it.
+ * Configure the responsibility chain for one profile in a single pass:
+ * one PRIMARY owner, zero or more active OPERATOR seats, and the ordered
+ * BACKUP chain. The previous chain is deactivated, not deleted, so the audit
+ * trail keeps it.
+ *
+ * This is the ONE reconcile path behind "Manage people". It writes eligibility
+ * (`identity_assignments`) for every seat, so a rep is never shown as an
+ * operator they cannot execute, and revokes eligibility from seats that were
+ * removed. The channel's daily plan is never read or written here.
  */
 export async function configureCoverage(input: {
   organizationId: string
   profileId: string
   primaryRepId: string
+  operators: Array<{ repId: string; priority: number }>
   backups: Array<{ repId: string; priority: number }>
   actorRepId: string
   client?: DbClient
 }): Promise<{ ok: boolean; error?: string }> {
   const client = input.client ?? (await createServerSupabase())
   const now = new Date().toISOString()
+
+  const rows = [
+    { role: 'PRIMARY' as const, repId: input.primaryRepId, priority: 1 },
+    ...input.operators.map((operator, index) => ({
+      role: 'OPERATOR' as const,
+      repId: operator.repId,
+      priority: index + 1,
+    })),
+    ...input.backups.map((backup, index) => ({
+      role: 'BACKUP' as const,
+      repId: backup.repId,
+      priority: index + 1,
+    })),
+  ]
+
+  // A rep may hold one seat per profile; a duplicate would violate
+  // pc_active_rep_uniq. The primary wins and later duplicates are dropped.
+  const seen = new Set<string>()
+  const uniqueRows = rows.filter((row) => {
+    if (seen.has(row.repId)) return false
+    seen.add(row.repId)
+    return true
+  })
+
+  const { data: previousRows, error: previousError } = await client
+    .from('profile_coverage')
+    .select('rep_id')
+    .eq('organization_id', input.organizationId)
+    .eq('profile_id', input.profileId)
+    .eq('active', true)
+    .limit(100)
+  if (previousError) return { ok: false, error: previousError.message }
+  const previousReps = new Set((previousRows ?? []).map((row) => row.rep_id as string))
 
   const { error: deactivateError } = await client
     .from('profile_coverage')
@@ -660,19 +702,8 @@ export async function configureCoverage(input: {
     .eq('profile_id', input.profileId)
   if (deactivateError) return { ok: false, error: deactivateError.message }
 
-  // priority is 1-based: the column carries `check (priority >= 1)`, so the
-  // primary is 1 and backups follow in order. The engine orders by this value.
-  const rows = [
-    { role: 'PRIMARY' as const, repId: input.primaryRepId, priority: 1 },
-    ...input.backups.map((backup, index) => ({
-      role: 'BACKUP' as const,
-      repId: backup.repId,
-      priority: index + 2,
-    })),
-  ]
-
   const { data: inserted, error: insertError } = await client.from('profile_coverage').insert(
-    rows.map((row) => ({
+    uniqueRows.map((row) => ({
       organization_id: input.organizationId,
       profile_id: input.profileId,
       rep_id: row.repId,
@@ -681,11 +712,25 @@ export async function configureCoverage(input: {
       active: true,
       created_by: input.actorRepId,
     })),
-  ).select('id')
+  ).select('id, role, rep_id')
   if (insertError) return { ok: false, error: insertError.message }
 
-  // The PRIMARY row is first in `rows`, so its id is the new ownership episode.
-  const primaryRowId = (inserted?.[0]?.id as string | undefined) ?? null
+  // Eligibility is the ASSIGNMENT authority, not the coverage config: the chain
+  // is recorded here, and `syncChannelEligibility` makes it executable.
+  await syncChannelEligibility(client, {
+    orgId: input.organizationId,
+    profileId: input.profileId,
+    seatRepIds: [...new Set(uniqueRows.map((row) => row.repId))],
+    removedRepIds: [...previousReps].filter(
+      (repId) => !uniqueRows.some((row) => row.repId === repId),
+    ),
+    actorRepId: input.actorRepId,
+  })
+
+  const insertedByRep = new Map(
+    (inserted ?? []).map((row) => [row.rep_id as string, row.id as string]),
+  )
+  const primaryRowId = insertedByRep.get(input.primaryRepId) ?? null
   if (primaryRowId) {
     await ensurePrimaryAcknowledgement(client, {
       organizationId: input.organizationId,
@@ -695,13 +740,24 @@ export async function configureCoverage(input: {
       assignedAt: now,
     })
   }
+  for (const operator of uniqueRows.filter((row) => row.role === 'OPERATOR')) {
+    const rowId = insertedByRep.get(operator.repId)
+    if (!rowId) continue
+    await ensureOperatorAcknowledgement(client, {
+      organizationId: input.organizationId,
+      profileId: input.profileId,
+      repId: operator.repId,
+      sourceRowId: rowId,
+      assignedAt: now,
+    })
+  }
 
   await client.from('coverage_events').insert({
     organization_id: input.organizationId,
     profile_id: input.profileId,
     event_type: 'BACKUP_CONFIGURED',
     primary_rep_id: input.primaryRepId,
-    reason: `${rows.length - 1} backup${rows.length === 1 ? '' : 's'} configured`,
+    reason: `${uniqueRows.length - 1} people configured (${input.operators.length} operator${input.operators.length === 1 ? '' : 's'})`,
     actor_rep_id: input.actorRepId,
   })
 

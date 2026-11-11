@@ -80,7 +80,12 @@ export function RepProfilesToday({
   const covering = coverage?.covering ?? []
   const readiness = new Map((coverage?.readiness ?? []).map((row) => [row.profileId, row.ready]))
   const progressById = new Map((profilesToday ?? []).map((profile) => [profile.profileId, profile]))
-  const cards = buildProfileCards(own, covering, progressById)
+  const cards = buildProfileCards(
+    own,
+    covering,
+    progressById,
+    new Set(coverage?.operatorProfileIds ?? []),
+  )
   const unvalidated = cards.filter((card) => !readiness.get(card.profile.profileId))
   const summary = summarizeProfileCards(cards, unvalidated.length)
 
@@ -255,9 +260,13 @@ function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: str
   const continueHref = profile.identityIds[0] ? `/workspace/${profile.identityIds[0]}` : '/dashboard'
   const target = progress?.targetCount ?? 0
   const done = progress?.completedCount ?? 0
-  const remaining = progress?.remaining ?? 0
+  // An operator shares the profile's plan: the progress bar is the PROFILE's
+  // progress, and their own contribution is reported separately.
+  const isOperator = card.kind === 'operator'
+  const profileDone = progress?.profileCompletedCount ?? done
+  const remaining = Math.max(0, target - profileDone)
   const hasTarget = target > 0
-  const percent = hasTarget ? Math.min(100, Math.round((done / target) * 100)) : 0
+  const percent = hasTarget ? Math.min(100, Math.round((profileDone / target) * 100)) : 0
   const label = statusLabel(progress?.status ?? null, hasTarget)
   const tone = statusTone(progress?.status ?? null, hasTarget)
   const breakdown = buildActivityBreakdown(progress)
@@ -305,8 +314,20 @@ function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: str
         <div className="mt-3">
           <div className="flex items-baseline justify-between gap-2">
             <p className="text-[12px] text-graphite">
-              <span className="text-[14px] font-semibold tabular-nums text-ink">{done}</span> of{' '}
-              <span className="tabular-nums">{target}</span> done today
+              {isOperator ? (
+                <>
+                  <span className="text-[14px] font-semibold tabular-nums text-ink">{profileDone}</span>
+                  {' '}
+                  <span className="tabular-nums">/ {target}</span> profile progress
+                  {' · '}
+                  <span className="font-semibold tabular-nums text-ink">{done}</span> your contribution
+                </>
+              ) : (
+                <>
+                  <span className="text-[14px] font-semibold tabular-nums text-ink">{done}</span> of{' '}
+                  <span className="tabular-nums">{target}</span> done today
+                </>
+              )}
             </p>
             <p className="shrink-0 text-[18px] font-semibold leading-none tabular-nums text-ink">
               {remaining}
@@ -342,7 +363,10 @@ function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: str
             <div key={item.activityType} className="flex items-baseline justify-between gap-2 text-[12px]">
               <dt className="text-graphite">{item.label}</dt>
               <dd className="tabular-nums text-ink">
-                {item.completedCount} / {item.targetCount}
+                {item.profileCompletedCount} / {item.targetCount}
+                {isOperator && item.completedCount > 0 ? (
+                  <span className="ml-1 text-stone">· you {item.completedCount}</span>
+                ) : null}
                 {item.complete && <span className="ml-1 text-status-success">✓</span>}
               </dd>
             </div>

@@ -22,9 +22,9 @@ describe('REP_OPERATING_PLAN_EXECUTABLE_ONLY', () => {
     expect(source).toContain('listExecutableIdentitiesForRep')
   })
 
-  it('the canonical scope is PRIMARY plus active coverage and excludes archived/backup-only', () => {
+  it('the canonical scope is PRIMARY + OPERATOR + active coverage and excludes archived/backup-only', () => {
     const source = read('src/lib/coverage/access.ts')
-    expect(source).toContain("eq('role', 'PRIMARY')")
+    expect(source).toContain(".in('role', ['PRIMARY', 'OPERATOR'])")
     expect(source).toContain("eq('status', 'ACTIVE')")
     expect(source).toContain("if (row.status !== 'active') continue")
   })

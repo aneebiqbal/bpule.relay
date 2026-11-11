@@ -20,7 +20,10 @@ export interface OperatingTarget {
   targetId: string
   activityType: string
   targetCount: number
+  /** This rep's contribution today. */
   completedCount: number
+  /** The profile's total for this lane across EVERY operator. */
+  profileCompletedCount: number
   remaining: number
   status: string | null
 }
@@ -33,7 +36,7 @@ export interface OperatingResponsibility {
   /** Canonical person key — the profile row that groups a person's channels. */
   personKey: string
   personName: string
-  role: 'primary' | 'coverage'
+  role: 'primary' | 'operator' | 'coverage'
   coverageUntil: string | null
   coveragePrimaryRepId: string | null
   readiness: boolean
@@ -132,7 +135,7 @@ export async function loadRepOperatingPlan(
     executable.length
       ? client
           .from('daily_accountability')
-          .select('revenue_identity_id, rep_id, completed_count')
+          .select('revenue_identity_id, rep_id, activity_type, completed_count')
           .eq('organization_id', input.orgId)
           .eq('target_date', businessDate)
           .in('revenue_identity_id', executable.map((row) => row.id))
@@ -154,12 +157,18 @@ export async function loadRepOperatingPlan(
   if (readinessRows.error) throw readinessRows.error
 
   const profileCompletedByIdentity = new Map<string, number>()
+  const profileCompletedByActivity = new Map<string, number>()
   const contributorsByIdentity = new Map<string, Set<string>>()
   for (const row of profileAccountabilityRows.data ?? []) {
     const identityId = row.revenue_identity_id as string
     profileCompletedByIdentity.set(
       identityId,
       (profileCompletedByIdentity.get(identityId) ?? 0) + (row.completed_count as number),
+    )
+    const activityKey = `${identityId}:${row.activity_type as string}`
+    profileCompletedByActivity.set(
+      activityKey,
+      (profileCompletedByActivity.get(activityKey) ?? 0) + (row.completed_count as number),
     )
     const contributors = contributorsByIdentity.get(identityId) ?? new Set<string>()
     contributors.add(row.rep_id as string)
@@ -191,6 +200,7 @@ export async function loadRepOperatingPlan(
           activityType: target.activity_type as string,
           targetCount,
           completedCount,
+          profileCompletedCount: profileCompletedByActivity.get(`${row.id}:${target.activity_type as string}`) ?? completedCount,
           remaining: Math.max(0, targetCount - completedCount),
           status: (accountability?.status as string | null) ?? null,
         }
@@ -209,7 +219,11 @@ export async function loadRepOperatingPlan(
       profileId,
       personKey,
       personName: personNameById.get(personKey) ?? (row.identity_name as string) ?? 'Unnamed',
-      role: executableRow.access === 'coverage' ? 'coverage' : 'primary',
+      role: executableRow.access === 'coverage'
+        ? 'coverage'
+        : executableRow.access === 'operator'
+          ? 'operator'
+          : 'primary',
       coverageUntil: executableRow.coverageEffectiveUntil ?? null,
       coveragePrimaryRepId: executableRow.coveragePrimaryRepId ?? null,
       readiness,
@@ -224,10 +238,13 @@ export async function loadRepOperatingPlan(
     })
   }
 
-  // Primary first, then coverage; within each, by person then channel.
+  // Ownership and operator seats are the rep's working set; coverage is
+  // temporary and listed separately.
   const byPersonThenChannel = (a: OperatingResponsibility, b: OperatingResponsibility) =>
     a.personName.localeCompare(b.personName) || a.channel.localeCompare(b.channel)
-  const primary = responsibilities.filter((row) => row.role === 'primary').sort(byPersonThenChannel)
+  const owning = responsibilities
+    .filter((row) => row.role === 'primary' || row.role === 'operator')
+    .sort(byPersonThenChannel)
   const coverage = responsibilities.filter((row) => row.role === 'coverage').sort(byPersonThenChannel)
 
   const inbox = executable.length
@@ -242,10 +259,16 @@ export async function loadRepOperatingPlan(
     () => new Map<string, number>(),
   )
 
-  const todayTarget = primary.reduce((sum, row) => sum + row.target, 0)
-  const todayCompleted = primary.reduce((sum, row) => sum + row.completed, 0)
+  const todayTarget = owning.reduce((sum, row) => sum + row.target, 0)
+  const todayCompleted = owning.reduce((sum, row) => sum + row.completed, 0)
+  // Remaining is the PROFILE's remaining, not the rep's personal share: a shared
+  // plan is never presented as one rep's private target.
+  const todayRemaining = owning.reduce(
+    (sum, row) => sum + Math.max(0, row.target - row.profileCompleted),
+    0,
+  )
 
-  const needsSetup = primary
+  const needsSetup = owning
     .filter((row) => row.target === 0 || !row.readiness)
     .map((row) => ({
       identityId: row.identityId,
@@ -262,12 +285,12 @@ export async function loadRepOperatingPlan(
     today: {
       target: todayTarget,
       completed: todayCompleted,
-      remaining: Math.max(0, todayTarget - todayCompleted),
+      remaining: todayRemaining,
       repliesWaiting: inbox?.needsReply ?? 0,
       followUpsDue: inbox?.followups ?? 0,
       overdueTasks: overdueByRep.get(input.repId) ?? 0,
     },
-    responsibilities: primary,
+    responsibilities: owning,
     coverage,
     needsSetup,
   }

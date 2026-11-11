@@ -27,6 +27,8 @@ export interface ProfileChannelModel {
   primaryRepId: string | null
   primaryRepName: string | null
   backups: Array<{ repId: string; repName: string; priority: number }>
+  /** Active, executable contributors. They share this channel's one plan. */
+  operators: Array<{ repId: string; repName: string; priority: number }>
   activeCoverage: Array<{ coveringRepId: string; coveringRepName: string; reason: string | null }>
   readiness: Array<{ repId: string; repName: string; ready: boolean }>
   targets: Array<{
@@ -392,6 +394,14 @@ export async function loadProfileOperatingModel(
         repName: repNameById.get(row.rep_id) ?? 'Unknown',
         priority: row.priority,
       }))
+    const operators = chain
+      .filter((row) => row.role === 'OPERATOR')
+      .sort((a, b) => a.priority - b.priority)
+      .map((row) => ({
+        repId: row.rep_id,
+        repName: repNameById.get(row.rep_id) ?? 'Unknown',
+        priority: row.priority,
+      }))
     const channelTargets = targets
       .filter((row) => row.revenue_identity_id === identityId && row.targetable)
       .map((row) => {
@@ -421,6 +431,7 @@ export async function loadProfileOperatingModel(
       primaryRepId: primary?.rep_id ?? null,
       primaryRepName: primary ? repNameById.get(primary.rep_id) ?? 'Unknown' : null,
       backups,
+      operators,
       activeCoverage: activeCoverage
         .filter((row) => row.profile_id === channelProfileId)
         .map((row) => ({

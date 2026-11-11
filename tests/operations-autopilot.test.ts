@@ -658,6 +658,7 @@ describe('COVERAGE_CONFIGURATION_REPLACES_CHAIN', () => {
         { id: 'pc-1', organization_id: ORG, profile_id: P_LINKEDIN, rep_id: DAWOOD, role: 'PRIMARY', priority: 0, active: true },
         { id: 'pc-2', organization_id: ORG, profile_id: P_LINKEDIN, rep_id: MADIHA, role: 'BACKUP', priority: 1, active: true },
       ],
+      responsibility_acknowledgements: [],
     })
     const db = client as unknown as DbClient
 
@@ -665,7 +666,8 @@ describe('COVERAGE_CONFIGURATION_REPLACES_CHAIN', () => {
       organizationId: ORG,
       profileId: P_LINKEDIN,
       primaryRepId: DAWOOD,
-      backups: [{ repId: MADIHA, priority: 1 }, { repId: AHMAD, priority: 2 }],
+      operators: [{ repId: AHMAD, priority: 1 }],
+      backups: [{ repId: MADIHA, priority: 1 }],
       actorRepId: ANEEB,
       client: db,
     })
@@ -677,7 +679,10 @@ describe('COVERAGE_CONFIGURATION_REPLACES_CHAIN', () => {
     // priority is 1-based: the DB carries `check (priority >= 1)`, so a
     // PRIMARY row written with 0 is rejected. Primary = 1, backups follow.
     expect(active.find((row) => row.role === 'PRIMARY')?.priority).toBe(1)
-    expect(active.filter((row) => row.role === 'BACKUP').map((row) => row.priority).sort()).toEqual([2, 3])
+    // OPERATOR and BACKUP each carry their own 1-based priority.
+    expect(active.find((row) => row.role === 'OPERATOR')?.priority).toBe(1)
+    expect(active.find((row) => row.role === 'OPERATOR')?.rep_id).toBe(AHMAD)
+    expect(active.find((row) => row.role === 'BACKUP')?.priority).toBe(1)
     expect(tables.coverage_events).toHaveLength(1)
     expect(tables.coverage_events[0].event_type).toBe('BACKUP_CONFIGURED')
   })

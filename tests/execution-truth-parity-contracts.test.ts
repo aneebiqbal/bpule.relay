@@ -240,11 +240,11 @@ describe('INBOX_REFACTOR_PRESERVES_CANONICAL_COUNTS', () => {
 })
 
 describe('INBOX_REFACTOR_PRESERVES_SCOPE', () => {
-  it('the executable scope is primary + active coverage, backup-only excluded', () => {
+  it('the executable scope is primary + operator + active coverage, backup-only excluded', () => {
     const access = read('src/lib/coverage/access.ts')
-    expect(access).toMatch(/role', 'PRIMARY'/)
+    expect(access).toMatch(/'PRIMARY',\s*'OPERATOR'/)
     expect(access).toMatch(/listActiveCoveredIdentities/)
-    expect(access).toMatch(/if \(!isCovered && !isPrimary\) continue/)
+    expect(access).toMatch(/if \(!isCovered && !isPrimary && !isOperator\) continue/)
   })
 })
 

@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   User,
   UserCheck,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from 'cn'
@@ -16,6 +17,7 @@ import { cn } from 'cn'
  */
 export type ResponsibilityStatus =
   | 'PRIMARY'
+  | 'OPERATOR'
   | 'TEMPORARY'
   | 'BACKUP'
   | 'READY'
@@ -25,6 +27,7 @@ export type ResponsibilityStatus =
 
 const STATUS_META: Record<ResponsibilityStatus, { label: string; icon: LucideIcon; className: string }> = {
   PRIMARY: { label: 'Primary', icon: ShieldCheck, className: 'bg-bone text-graphite ring-line' },
+  OPERATOR: { label: 'Active operator', icon: Users, className: 'bg-status-info/10 text-[#2f48b8] ring-status-info/20' },
   TEMPORARY: { label: 'Temporary cover', icon: UserCheck, className: 'bg-status-info/10 text-[#2f48b8] ring-status-info/20' },
   BACKUP: { label: 'Backup', icon: User, className: 'bg-bone text-stone ring-line' },
   READY: { label: 'Ready', icon: CircleCheck, className: 'bg-status-success/10 text-[#256b4a] ring-status-success/20' },

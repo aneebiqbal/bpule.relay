@@ -21,6 +21,8 @@ export interface ProfileTodayTarget {
   label: string
   targetCount: number
   completedCount: number
+  /** The profile's total for this lane across EVERY operator. */
+  profileCompletedCount: number
   remaining: number
 }
 
@@ -32,6 +34,8 @@ export interface ProfileToday {
   identityIds: string[]
   targetCount: number
   completedCount: number
+  /** The profile's total across EVERY operator, not just this rep. */
+  profileCompletedCount: number
   remaining: number
   status: ProfileCompletionStatus | null
   targets: ProfileTodayTarget[]
@@ -143,6 +147,10 @@ export function buildProfilesToday(
   }>,
   workdayProgress: number,
   thresholds: WarningThresholds,
+  /** identityId → every operator's combined completion. Defaults to the rep's own. */
+  profileTotals?: Map<string, number>,
+  /** `${identityId}:${activityType}` → every operator's combined completion. */
+  profileTotalsByActivity?: Map<string, number>,
 ): ProfileToday[] {
   // Group by the canonical person, not the sender account: a person who sells
   // on two channels must see one card whose total is the sum of both lanes.
@@ -164,6 +172,7 @@ export function buildProfilesToday(
         identityIds: [],
         targetCount: 0,
         completedCount: 0,
+        profileCompletedCount: 0,
         remaining: 0,
         status: null,
         targets: [],
@@ -181,6 +190,8 @@ export function buildProfilesToday(
     if (!entry.identityIds.includes(row.revenueIdentityId)) entry.identityIds.push(row.revenueIdentityId)
     entry.targetCount += row.targets.reduce((sum, t) => sum + t.targetCount, 0)
     entry.completedCount += row.targets.reduce((sum, t) => sum + t.completedCount, 0)
+    entry.profileCompletedCount += profileTotals?.get(row.revenueIdentityId)
+      ?? row.targets.reduce((sum, t) => sum + t.completedCount, 0)
     for (const target of row.targets) {
       const activityType = target.activityType as ActivityType
       entry.targets.push({
@@ -188,6 +199,10 @@ export function buildProfilesToday(
         label: activityLabel(activityType),
         targetCount: target.targetCount,
         completedCount: target.completedCount,
+        profileCompletedCount:
+          profileTotalsByActivity?.get(`${row.revenueIdentityId}:${activityType}`)
+          ?? profileTotals?.get(row.revenueIdentityId)
+          ?? target.completedCount,
         remaining: target.remaining,
       })
     }

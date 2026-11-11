@@ -182,21 +182,27 @@ function ResponsibilityRow({
   onRemove: () => void
   onRemovePlan: () => void
 }) {
+  const summaryLane =
+    row.targets.find((target) => target.activityType === 'application') ?? row.targets[0] ?? null
   return (
     <li className="rounded-lg border border-line bg-bone px-3 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-1 text-[13px] text-ink">
             <ChannelBadge channel={row.channel} />
-            <ResponsibilityStatus status="PRIMARY" />
+            <ResponsibilityStatus
+              status={row.role === 'operator' ? 'OPERATOR' : row.role === 'coverage' ? 'TEMPORARY' : 'PRIMARY'}
+            />
             {row.isNew && <span className="text-[11px] font-medium text-status-info">NEW</span>}
           </p>
           <p className="text-[11px] text-stone">
             {row.readiness ? 'Ready' : 'Access not confirmed'}
             {row.target > 0
-              ? row.contributorCount > 1
-                ? ` · Profile ${row.profileCompleted}/${row.target} · Your contribution ${row.completed}`
-                : ` · ${row.remaining} of ${row.target} left`
+              ? row.role === 'operator' && summaryLane
+                ? ` · Profile ${summaryLane.profileCompletedCount}/${summaryLane.targetCount} ${activityLabel(summaryLane.activityType as Parameters<typeof activityLabel>[0])} · Your contribution ${summaryLane.completedCount} · ${Math.max(0, summaryLane.targetCount - summaryLane.profileCompletedCount)} remaining`
+                : row.contributorCount > 1
+                  ? ` · Profile ${row.profileCompleted}/${row.target} · Your contribution ${row.completed}`
+                  : ` · ${row.remaining} of ${row.target} left`
               : ' · No daily plan'}
           </p>
           {row.contributorCount > 1 && (
@@ -227,13 +233,15 @@ function ResponsibilityRow({
                   Remove plan
                 </button>
               )}
-              <button
-                type="button"
-                onClick={onRemove}
-                className="rounded-md border border-line px-2 py-1 text-[11px] text-graphite transition-colors hover:text-status-danger"
-              >
-                Remove
-              </button>
+              {row.role !== 'primary' && (
+                <button
+                  type="button"
+                  onClick={onRemove}
+                  className="rounded-md border border-line px-2 py-1 text-[11px] text-graphite transition-colors hover:text-status-danger"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -242,7 +250,9 @@ function ResponsibilityRow({
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-stone">
           {row.targets.map((target) => (
             <span key={target.targetId}>
-              {activityLabel(target.activityType as Parameters<typeof activityLabel>[0])} {target.completedCount}/{target.targetCount}
+              {activityLabel(target.activityType as Parameters<typeof activityLabel>[0])}{' '}
+              {target.profileCompletedCount}/{target.targetCount}
+              {row.contributorCount > 1 ? ` · you ${target.completedCount}` : ''}
             </span>
           ))}
         </div>
@@ -296,7 +306,7 @@ function AssignDialog({
 
   const [personKey, setPersonKey] = useState('')
   const [identityId, setIdentityId] = useState('')
-  const [role, setRole] = useState<'primary' | 'backup'>('primary')
+  const [role, setRole] = useState<'primary' | 'operator' | 'backup'>('primary')
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -353,7 +363,7 @@ function AssignDialog({
   }
 
   return (
-    <Dialog title={review ? 'Review assignment' : 'Assign responsibility'} onClose={onClose}>
+    <Dialog title={review ? 'Review assignment' : 'Assign people'} onClose={onClose}>
       {review ? (
         <div className="space-y-3">
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-stone">Review assignment</p>
@@ -361,7 +371,7 @@ function AssignDialog({
             <ReviewRow label="Rep" value={plan.repName} />
             <ReviewRow label="Person" value={selected?.personName ?? '—'} />
             <ReviewRow label="Channel" value={selected ? <ChannelBadge channel={selected.channel} /> : '—'} />
-            <ReviewRow label="Role" value={role === 'primary' ? 'Primary' : 'Backup'} />
+            <ReviewRow label="Role" value={role === 'primary' ? 'Primary owner' : role === 'operator' ? 'Active operator' : 'Backup'} />
             {role === 'primary' ? (
               <div>
                 <dt className="text-[11px] uppercase tracking-[0.12em] text-stone">Daily plan</dt>
@@ -376,6 +386,14 @@ function AssignDialog({
                     <span>Total</span>
                     <span className="tabular-nums">{total} actions/day</span>
                   </p>
+                </dd>
+              </div>
+            ) : role === 'operator' ? (
+              <div>
+                <dt className="text-[11px] uppercase tracking-[0.12em] text-stone">Shared daily plan</dt>
+                <dd className="mt-1 text-[13px] text-graphite">
+                  The operator works the channel&apos;s existing plan and their contribution is counted
+                  separately. Ownership never moves.
                 </dd>
               </div>
             ) : (
@@ -446,11 +464,11 @@ function AssignDialog({
 
         <div>
           <span className="text-[11px] uppercase tracking-[0.12em] text-stone">Role</span>
-          <div className="mt-1 flex gap-2">
-            {(['primary', 'backup'] as const).map((value) => (
+          <div className="mt-1 flex flex-wrap gap-2">
+            {(['primary', 'operator', 'backup'] as const).map((value) => (
               <label key={value} className="flex items-center gap-1.5 text-[13px] text-ink">
                 <input type="radio" checked={role === value} onChange={() => setRole(value)} />
-                {value === 'primary' ? 'Primary (daily work)' : 'Backup (eligibility only)'}
+                {value === 'primary' ? 'Primary (owns)' : value === 'operator' ? 'Active operator (shares plan)' : 'Backup (eligibility only)'}
               </label>
             ))}
           </div>
@@ -490,6 +508,13 @@ function AssignDialog({
         {role === 'backup' && (
           <p className="text-[12px] text-stone">
             A backup can be activated for temporary coverage later. No daily target is created.
+          </p>
+        )}
+
+        {role === 'operator' && (
+          <p className="text-[12px] text-stone">
+            The operator works the channel&apos;s existing plan and is counted separately. The primary
+            owner does not change.
           </p>
         )}
 

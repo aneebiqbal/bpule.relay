@@ -3,8 +3,10 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { reportError, safeErrorResponse } from '@/lib/errors'
 import {
+  addOperatorResponsibility,
   assignBackupResponsibility,
   assignPrimaryResponsibility,
+  removeOperatorResponsibility,
   removeResponsibility,
   transferResponsibility,
 } from '@/lib/profiles/assignment'
@@ -81,6 +83,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, transferred: false, backup: true, ...result })
     }
 
+    if (body.role === 'operator') {
+      const result = await addOperatorResponsibility(auth.client, {
+        orgId: auth.authCtx.orgId,
+        identityId,
+        repId,
+        actorRepId: auth.authCtx.repId,
+      })
+      return NextResponse.json({ ok: true, transferred: false, operator: true, ...result })
+    }
+
     const result = await assignPrimaryResponsibility(auth.client, {
       orgId: auth.authCtx.orgId,
       identityId,
@@ -138,17 +150,27 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const result = await removeResponsibility(auth.client, {
-      orgId: auth.authCtx.orgId,
-      identityId,
-      repId,
-      actorRepId: auth.authCtx.repId,
-    })
+    const result = body.role === 'primary'
+      ? await removeResponsibility(auth.client, {
+          orgId: auth.authCtx.orgId,
+          identityId,
+          repId,
+          actorRepId: auth.authCtx.repId,
+        })
+      : await removeOperatorResponsibility(auth.client, {
+          orgId: auth.authCtx.orgId,
+          identityId,
+          repId,
+          actorRepId: auth.authCtx.repId,
+        })
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
     if (message === 'IDENTITY_NOT_FOUND') {
       return NextResponse.json({ error: 'That channel identity was not found in your organization.' }, { status: 404 })
+    }
+    if (message === 'CANNOT_REMOVE_PRIMARY') {
+      return NextResponse.json({ error: 'Transfer ownership before removing the primary owner.' }, { status: 400 })
     }
     return safeErrorResponse(error, 500, 'Failed to remove responsibility.', 'admin/responsibilities')
   }
