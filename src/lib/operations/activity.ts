@@ -331,6 +331,23 @@ export async function loadTimeline(client: DbClient, query: TimelineQuery): Prom
   ).catch(() => [] as Array<{ id: string; identity_name: string }>)
   const identityName = new Map(identityRows.map((r) => [r.id, r.identity_name]))
 
+  // The sender profile is the same authority the lead page uses. The revenue
+  // identity above is a second, different concept — resolving only that made the
+  // Profile column blank on leads whose identity lookup failed.
+  const senderIds = [...new Set(leadRows.map((l) => l.sender_profile_id).filter(Boolean))] as string[]
+  const senderRows = await chunkedIn<{ id: string; label: string | null; display_name: string | null; full_name: string | null }>(
+    senderIds,
+    (chunk) =>
+      client
+        .from('profiles')
+        .select('id, label, display_name, full_name')
+        .eq('organization_id', query.orgId)
+        .in('id', chunk),
+  ).catch(() => [] as Array<{ id: string; label: string | null; display_name: string | null; full_name: string | null }>)
+  const senderName = new Map(
+    senderRows.map((r) => [r.id, r.label ?? r.display_name ?? r.full_name ?? null]),
+  )
+
   const lookups: TimelineLookups = {
     reps: new Map(repRows.map((r) => [r.id, r.name])),
     leads: new Map(
@@ -340,7 +357,9 @@ export async function loadTimeline(client: DbClient, query: TimelineQuery): Prom
           label: leadLabel(l.contact_name, l.company),
           company: l.company,
           companyKey: l.company_key,
-          profileName: l.revenue_identity_id ? identityName.get(l.revenue_identity_id) ?? null : null,
+          profileName:
+            (l.sender_profile_id ? senderName.get(l.sender_profile_id) ?? null : null)
+            ?? (l.revenue_identity_id ? identityName.get(l.revenue_identity_id) ?? null : null),
           source: sourceBucket(l.source),
         },
       ]),
