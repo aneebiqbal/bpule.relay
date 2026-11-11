@@ -28,12 +28,6 @@ import {
   draftStateMessage,
   SKIP_POLICY_MESSAGE,
 } from '@/lib/relay/draft-generation-state'
-import {
-  transitionLeadBootstrap,
-  bootstrapPreconditionsMet,
-  stripOneShotIntent,
-  type LeadBootstrapState,
-} from '@/lib/relay/lead-bootstrap-state'
 import { logClientViolation } from '@/lib/relay/violation-kinds'
 import { ScoreBreakdown } from '@/components/score-breakdown'
 import { DecisionExplainability } from '@/components/leads/decision-explain'
@@ -50,13 +44,11 @@ interface Props {
   todaySends: number
   /** Display clock. Server and client must agree or hydration fails. */
   now?: number
-  /** One-shot generation intent from the URL (`?next=generate-dm`). */
-  next?: string | null
   /** Display name of the lead's sender profile, or null when none is assigned. */
   senderProfileName?: string | null
 }
 
-export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now = Date.now(), next = null, senderProfileName }: Props) {
+export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now = Date.now(), senderProfileName }: Props) {
   const router = useRouter()
   const [lead, setLead] = useState(initialLead)
   const [leadVersion, setLeadVersion] = useState(0)
@@ -196,46 +188,6 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
       setGenerationStatus(err instanceof Error ? err.message : 'Generation failed. Retry.')
     } finally { setGenerating(false) }
   }, [lead.id, lastInbound])
-
-  // ── Deep-link bootstrap (QA BUG-003) ─────────────────────────────────────
-  // The one-shot intent is consumed from the URL BEFORE any async work, so a
-  // refresh during generation can never re-trigger it. Generation then starts
-  // only from PENDING and only when the lead and its canonical decision exist.
-  const [bootstrap, setBootstrap] = useState<LeadBootstrapState>('NOT_REQUESTED')
-  const consumeOneShotIntent = useCallback(() => {
-    const stripped = stripOneShotIntent(window.location.href)
-    if (stripped !== null) window.history.replaceState({}, '', stripped)
-  }, [])
-
-  useEffect(() => {
-    if (!next) return
-    const match = next.match(/^generate-(connection|dm|reply|followup)$/)
-    if (!match) return
-
-    // Consume first: the intent must not survive a reload mid-generation.
-    consumeOneShotIntent()
-    setBootstrap((s) => transitionLeadBootstrap(s, 'REQUEST'))
-
-    const requested = match[1] as Mode
-    if (requested === 'followup' && phase !== 'follow_up_due') return
-    if (requested === 'connection' && phase !== 'connection_due') return
-
-    // Draft generation requires the lead, a valid id and the canonical decision.
-    if (!bootstrapPreconditionsMet({
-      leadLoaded: Boolean(lead),
-      leadIdValid: Boolean(lead.id),
-      decisionAvailable: decisionCtx !== null,
-    })) {
-      setBootstrap((s) => transitionLeadBootstrap(s, 'FAIL'))
-      return
-    }
-
-    setBootstrap((s) => transitionLeadBootstrap(s, 'START'))
-    setMode(requested)
-    void generateDraft(requested).finally(() => {
-      setBootstrap((s) => (s === 'RUNNING' ? transitionLeadBootstrap(s, 'SUCCEED') : s))
-    })
-  }, [next, phase, lead, decisionCtx, generateDraft, consumeOneShotIntent])
 
   // "Send without note" logs a connection with no text. It must surface
   // server refusals (daily ceiling, lock, ownership) instead of failing

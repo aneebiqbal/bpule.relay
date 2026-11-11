@@ -40,13 +40,11 @@ const TAB_ITEMS = [
 export function LeadWorkspaceAsync({
   dataPromise,
   initialTab,
-  initialNext,
   now,
   reps = [],
 }: {
   dataPromise: Promise<LeadData>
   initialTab: Tab
-  initialNext: string | null
   now: number
   /** Empty for a plain rep — the composer then stays out of the lead surface. */
   reps?: Array<{ id: string; name: string }>
@@ -135,7 +133,7 @@ export function LeadWorkspaceAsync({
           <Tabs items={TAB_ITEMS} value={tab} onChange={changeTab} />
           {tab === 'overview' ? (
             <div className="mt-4">
-              <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} senderProfileName={senderProfileName} now={now} next={initialNext} />
+              <LeadWorkspace lead={lead} dailyLimit={dailyLimit} todaySends={todaySends} senderProfileName={senderProfileName} now={now} />
             </div>
           ) : null}
           {tab === 'conversation' ? (

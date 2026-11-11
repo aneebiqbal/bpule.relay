@@ -299,6 +299,29 @@ describe('REP_IDENTITY_SCOPE_CANONICAL', () => {
   })
 })
 
+describe('PROFILE_KNOWLEDGE_READINESS', () => {
+  it('the analyzer reports knowledge readiness per candidate', () => {
+    expect(read('src/lib/relay/sender-suggestion.ts')).toMatch(/knowledgeReady/)
+    expect(read('src/lib/relay/sender-routing-engine.ts')).toMatch(/knowledgeReady/)
+    const ui = read('src/components/prospect/prospect-result.tsx')
+    expect(ui).toMatch(/Profile data incomplete/)
+    expect(ui).toMatch(/Match confidence is limited/)
+  })
+
+  it('the profile Knowledge tab shows a readiness summary from canonical facts', () => {
+    const source = read('src/components/team/team-profile-detail.tsx')
+    expect(source).toMatch(/Match readiness/)
+    expect(source).toMatch(/CV \/ source/)
+    expect(source).toMatch(/Claims/)
+  })
+
+  it('incomplete knowledge is never presented as a bare percentage', () => {
+    const source = read('src/components/prospect/prospect-result.tsx')
+    expect(source).toMatch(/knowledgeReady === false/)
+    expect(source).toMatch(/Review profile/)
+  })
+})
+
 describe('CROSS_ORG_IDENTITY_DENIED', () => {
   it('a client-supplied identity must resolve inside the caller’s own scope', () => {
     const source = read('src', 'lib', 'workspace', 'resolve-active-identity.ts')

@@ -567,8 +567,44 @@ function ChannelTargetsEditor({
 
 function KnowledgeTab({ model }: { model: ProfileOperatingModel }) {
   const knowledge = model.knowledge
+  const readiness = [
+    { label: 'CV / source', value: knowledge.sources.length > 0 ? 'Ready' : 'Missing', ready: knowledge.sources.length > 0 },
+    { label: 'Experience', value: knowledge.experience.length > 0 ? `${knowledge.experience.length}` : 'Missing', ready: knowledge.experience.length > 0 },
+    { label: 'Skills', value: String(knowledge.skills.length), ready: knowledge.skills.length > 0 },
+    { label: 'Projects', value: String(knowledge.projects.length), ready: knowledge.projects.length > 0 },
+    { label: 'Proof', value: String(knowledge.proof.length), ready: knowledge.proof.length > 0 },
+    { label: 'Claims', value: String(knowledge.claims.length), ready: knowledge.claims.length > 0 },
+  ]
+  // Materially incomplete: nothing to match on at all. A profile with only a
+  // CV is still better than an empty one, so this is deliberately conservative.
+  const complete = knowledge.skills.length > 0 || knowledge.proof.length > 0
   return (
     <div className="space-y-4">
+      <V4Panel>
+        <V4PanelHeader
+          eyebrow="Knowledge"
+          title="Match readiness"
+          hint={complete ? 'Complete' : 'Incomplete'}
+        />
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] sm:grid-cols-3">
+          {readiness.map((row) => (
+            <div key={row.label} className="flex items-baseline justify-between gap-2 border-b border-line/50 pb-1">
+              <dt className="text-graphite">{row.label}</dt>
+              <dd className={cn('font-medium', row.ready ? 'text-status-success' : 'text-status-warning')}>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className={cn('mt-3 text-[12px] font-medium', complete ? 'text-status-success' : 'text-status-warning')}>
+          Match readiness: {complete ? 'Complete' : 'Incomplete'}
+        </p>
+        {!complete && (
+          <p className="mt-1 text-[11px] leading-relaxed text-graphite">
+            This profile has no skills or proof, so any match score against it is not trustworthy.
+            Add knowledge to improve confidence.
+          </p>
+        )}
+      </V4Panel>
+
       <V4Panel>
         <V4PanelHeader
           eyebrow="Knowledge"

@@ -57,6 +57,8 @@ interface SenderRankView {
   reasons: string[]
   accessibleToRep: boolean
   primaryProof: string | null
+  /** False when the person has no skills and no proof on any channel row. */
+  knowledgeReady?: boolean
 }
 
 type AnalyzeEvent =

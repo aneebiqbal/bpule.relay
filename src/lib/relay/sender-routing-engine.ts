@@ -24,6 +24,8 @@ export interface SenderProfile {
   proof: SenderProof[]
   holders: Array<{ repId: string; name: string }>
   accessibleToRep: boolean
+  /** False when the person has no skills and no proof — the score is not trustworthy. */
+  knowledgeReady: boolean
   historicalOutcomes?: {
     leadsContacted: number
     replies: number
@@ -63,6 +65,8 @@ export interface SenderRanking {
   /** Rep ids who hold this sender — lets the UI address a help request. */
   holderRepIds: string[]
   primaryProof: string | null
+  /** False when the person has no knowledge on any channel row. */
+  knowledgeReady: boolean
 }
 
 export interface RoutingResult {
@@ -110,6 +114,7 @@ export function rankSendersForLead(
       holders: sender.holders.map((h) => h.name),
       holderRepIds: sender.holders.map((h) => h.repId).filter((id): id is string => Boolean(id)),
       primaryProof: result.primaryProof,
+      knowledgeReady: sender.knowledgeReady,
     }
   })
 

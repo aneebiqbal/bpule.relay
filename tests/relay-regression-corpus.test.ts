@@ -165,7 +165,6 @@ describe('Relay historical bug corpus', () => {
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { canStartBootstrap } from '@/lib/relay/lead-bootstrap-state'
 import { getAuthCapabilities, signupAvailable } from '@/lib/auth/capabilities'
 import {
   resolveDraftGenerationState,
@@ -206,11 +205,12 @@ const NAMED_CASES: readonly NamedCase[] = [
     id: 'BUG003_REFRESH_BOOTSTRAP',
     symptom: 'The one-shot ?next intent survived a refresh during draft generation and fired a second draft.',
     check: () => {
-      const mod = readApp('src/lib/relay/lead-bootstrap-state.ts')
-      for (const symbol of ['stripOneShotIntent', 'bootstrapPreconditionsMet', 'canStartBootstrap']) {
-        if (!mod.includes(`export function ${symbol}`)) throw new Error(`${symbol} is missing`)
-      }
-      if (!canStartBootstrap('PENDING')) throw new Error('generation must start from PENDING')
+      // Fixed by removal: no surface produces a ?next=generate-* intent any more,
+      // so there is no auto-generation to re-fire. Reintroducing either is a regression.
+      const page = readApp('src/app/(app)/leads/[id]/page.tsx')
+      const workspace = readApp('src/components/lead-workspace-simple.tsx')
+      if (page.includes('next=') || page.includes('initialNext')) throw new Error('the lead page reintroduced a ?next intent')
+      if (workspace.includes('generate-(') || workspace.includes('bootstrap')) throw new Error('the lead workspace reintroduced auto-generation')
     },
   },
   {

@@ -19,7 +19,6 @@ import {
   findDuplicateOpeningTurns,
 } from '@/lib/conversation/canonical-message'
 import { buildThread } from '@/lib/conversation/thread'
-import { stripOneShotIntent } from '@/lib/relay/lead-bootstrap-state'
 import {
   resolveDraftGenerationState,
   canGenerateDraft,
@@ -28,7 +27,6 @@ import { getAuthCapabilities, signupAvailable } from '@/lib/auth/capabilities'
 import { extractExplicitDates } from '@/lib/intelligence-v3/source-facts'
 import { resolveBuyerIntentFromSource } from '@/lib/intelligence-v3/buyer-intent'
 import { readUpworkJobFacts } from '@/lib/upwork/facts'
-import { transitionLeadBootstrap, canStartBootstrap } from '@/lib/relay/lead-bootstrap-state'
 import { cleanExtractedTitle } from '@/lib/upwork-v2'
 import type { LeadDetail } from '@/lib/store/types'
 
@@ -258,29 +256,6 @@ describe('BUG-004 — cross-lead identity spoofing', () => {
   })
 })
 
-// ── BUG-003 — one-shot intent ─────────────────────────────────────────────────
-
-describe('BUG-003 — one-shot URL intent', () => {
-  it('removes only the next param and keeps unrelated ones', () => {
-    expect(stripOneShotIntent('https://relay.test/leads/a?tab=conversation&next=generate-reply'))
-      .toBe('https://relay.test/leads/a?tab=conversation')
-  })
-
-  it('returns null when there is no intent to consume', () => {
-    expect(stripOneShotIntent('https://relay.test/leads/a')).toBeNull()
-  })
-
-  it('handles the intent as the only param', () => {
-    expect(stripOneShotIntent('https://relay.test/leads/a?next=generate-connection'))
-      .toBe('https://relay.test/leads/a')
-  })
-
-  it('handles a trailing intent param', () => {
-    expect(stripOneShotIntent('https://relay.test/leads/a?tab=conversation&next=generate-dm'))
-      .toBe('https://relay.test/leads/a?tab=conversation')
-  })
-})
-
 // ── BUG-012 — draft policy ────────────────────────────────────────────────────
 
 describe('BUG-012 — SKIP never generates', () => {
@@ -413,25 +388,6 @@ describe('BUG-002 — every start phrasing is a start, every deadline a deadline
   })
 })
 
-// ── BUG-003 — bootstrap state machine edges ──────────────────────────────────
-
-describe('BUG-003 — bootstrap state is terminal until re-requested', () => {
-  it('cannot restart from DONE without a new REQUEST', () => {
-    expect(transitionLeadBootstrap('DONE', 'START')).toBe('DONE')
-    expect(canStartBootstrap('DONE')).toBe(false)
-  })
-
-  it('cannot restart from FAILED without a new REQUEST', () => {
-    expect(transitionLeadBootstrap('FAILED', 'START')).toBe('FAILED')
-    expect(transitionLeadBootstrap('FAILED', 'REQUEST')).toBe('PENDING')
-  })
-
-  it('cannot start from NOT_REQUESTED or RUNNING', () => {
-    expect(canStartBootstrap('NOT_REQUESTED')).toBe(false)
-    expect(canStartBootstrap('RUNNING')).toBe(false)
-  })
-})
-
 // ── BUG-004 — remaining edges ────────────────────────────────────────────────
 
 describe('BUG-004 — direction and empty edges', () => {
@@ -472,24 +428,6 @@ describe('BUG-004 — direction and empty edges', () => {
       { id: 'b', role: 'client', text: 'Can you share a similar case study?' },
     ])
     expect(dupes).toHaveLength(1)
-  })
-})
-
-// ── BUG-003 — URL edges ─────────────────────────────────────────────────────
-
-describe('BUG-003 — URL edge cases', () => {
-  it('handles a host-only URL', () => {
-    expect(stripOneShotIntent('https://relay.test?next=generate-reply')).toBe('https://relay.test/')
-  })
-
-  it('handles an intent repeated in the query string', () => {
-    const out = stripOneShotIntent('https://relay.test/leads/a?next=generate-reply&next=generate-dm')
-    expect(out).not.toContain('next=')
-  })
-
-  it('does not treat a value containing the word next as the intent param', () => {
-    // `nextStep` is a different parameter; only an exact `next` is the intent.
-    expect(stripOneShotIntent('https://relay.test/leads/a?nextStep=1')).toBeNull()
   })
 })
 

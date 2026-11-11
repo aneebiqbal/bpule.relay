@@ -62,7 +62,6 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
   const reps = await loadLeadReps()
   const raw = await searchParams
   const rawTab = Array.isArray(raw.tab) ? raw.tab[0] : raw.tab
-  const rawNext = Array.isArray(raw.next) ? raw.next[0] : raw.next
   const initialTab = LEAD_TABS.includes(rawTab as (typeof LEAD_TABS)[number])
     ? (rawTab as (typeof LEAD_TABS)[number])
     : 'overview'
@@ -72,7 +71,6 @@ export default async function LeadPage({ params, searchParams }: LeadPageProps) 
       <LeadWorkspaceAsync
         dataPromise={dataPromise}
         initialTab={initialTab}
-        initialNext={rawNext ?? null}
         now={Date.now()}
         reps={reps}
       />

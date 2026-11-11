@@ -467,6 +467,20 @@ function SenderMatch({
           {activeReason.slice(0, 140)}
         </p>
       ) : null}
+      {active && active.knowledgeReady === false ? (
+        <div data-testid="knowledge-incomplete" className="mt-2 rounded-md border border-status-warning/30 bg-status-warning/5 p-2.5">
+          <p className="text-[12px] font-medium text-status-warning">Profile data incomplete</p>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-graphite">
+            Match confidence is limited — this person has no skills or proof on any channel.
+          </p>
+          <a
+            href={`/team/profiles/${active.senderId}?tab=knowledge`}
+            className="mt-1.5 inline-flex h-7 items-center rounded-md border border-line px-2 text-[11px] font-medium text-ink transition-colors hover:bg-bone"
+          >
+            Review profile
+          </a>
+        </div>
+      ) : null}
       {rankings.length === 0 && !result.bestSender && (
         <p className="mt-1.5 text-[12px] text-graphite">No LinkedIn profile is available for this check.</p>
       )}
@@ -497,6 +511,8 @@ function SenderMatch({
               <button
                 type="button"
                 onClick={() => onSenderChange(ranking.senderId)}
+                title={ranking.knowledgeReady === false ? 'Profile data incomplete — match confidence is limited' : undefined}
+                aria-label={ranking.knowledgeReady === false ? `${ranking.name ?? 'Profile'} (profile data incomplete)` : undefined}
                 className={cn(
                   'flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-[11px] transition-colors',
                   ranking.senderId === activeId ? 'bg-bone text-ink' : 'text-graphite hover:text-ink',

@@ -24,6 +24,12 @@ export interface SenderCandidate {
   proof: Array<{ text: string; tags: string[]; strong: boolean; verified: boolean }>
   holders: Array<{ repId: string; name: string }>
   accessibleToRep: boolean
+  /**
+   * False when the person has neither skills nor proof on any of their channel
+   * rows. A match score against an empty knowledge model is not trustworthy and
+   * must say so instead of showing a bare percentage.
+   */
+  knowledgeReady: boolean
 }
 
 export interface SenderScore {
@@ -255,6 +261,8 @@ export async function loadSenderCandidates(
       proof: (proofByPerson.get(personId) ?? []).filter((x) => x.text),
       holders: [...holders].map(([id, name]) => ({ repId: id, name })),
       accessibleToRep: p.rep_id === repId || holders.has(repId),
+      knowledgeReady: (skillsByPerson.get(personId)?.size ?? 0) > 0
+        || (proofByPerson.get(personId)?.length ?? 0) > 0,
     }
   })
 }

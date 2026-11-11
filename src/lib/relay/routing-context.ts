@@ -103,8 +103,7 @@ export async function loadSenderProfiles(client: DbClient, orgId: string, repId:
     ...c,
     industries: [...(industriesByPerson.get(c.personId) ?? new Set<string>())],
     historicalOutcomes: toRoutingFormat(historicalMap.get(c.id)),
-  }))
-}
+  }))}
 
 /** Rank the org's senders for a stored lead. The one call every surface makes. */
 export function routeLead(lead: RoutingLeadLike, packet: V3LeadDecisionPacket | null, senders: SenderProfile[], platform: string | null = null): RoutingResult {

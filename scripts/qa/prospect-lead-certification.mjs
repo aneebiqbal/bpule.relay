@@ -34,14 +34,13 @@ const ID_HASSAN_LINKEDIN = 'c26a685b-a18b-4672-b7ad-a55e211539b2'
 
 const PASTE = `Dr Ahmad Israr
 · 2nd
-Head of Engineering at Finlytic
-Karachi, Pakistan
-We are hiring a senior Rails developer to rebuild our payments platform. Looking for API integration and team leadership experience.
+Founder at Northstar Logistics
+Lahore, Pakistan
+I need a development team to rebuild our freight tracking platform in Rails. We have budget approved and want to start next month. Our current system is outdated and losing us customers.
 About
-Engineering leader with 10 years of Rails and API integrations.
+Founder of a logistics company. Looking for a reliable development partner for a full rebuild.
 Experience
-Finlytic — Head of Engineering (2020 - Present)
-Northstar — Senior Backend Engineer (2016 - 2020)`
+Northstar Logistics — Founder (2018 - Present)`
 
 const results = []
 const record = (id, ok, detail) => {
@@ -147,28 +146,44 @@ const resultText = await page.locator('body').innerText()
 record('§13.display-name-preserved-in-analysis', /Dr Ahmad Israr/.test(resultText), 'found "Dr Ahmad Israr"')
 
 // ── Create the lead ─────────────────────────────────────────────────────────
+const saveResponses = []
+page.on('response', async (res) => {
+  if (/api\/prospect\/save/.test(res.url())) {
+    const body = await res.text().catch(() => '')
+    saveResponses.push({ status: res.status(), body: body.slice(0, 500) })
+  }
+})
+
 const createButton = page.locator('[data-testid="prospect-primary-action"]')
+log('PRIMARY ACTION LABEL:', await createButton.first().innerText().catch(() => '?'))
+log('PRIMARY ACTION DISABLED:', await createButton.first().isDisabled().catch(() => '?'))
 await createButton.first().click()
 log('CREATING LEAD…')
 
 // Either the created-confirmation or a duplicate notice appears.
-await page.waitForTimeout(4000)
+await page.waitForTimeout(5000)
+log('SAVE RESPONSES:', JSON.stringify(saveResponses))
 const afterSave = await page.locator('body').innerText()
-const duplicate = /Already in Relay/i.test(afterSave)
-const created = /lead|created|opened/i.test(afterSave)
-log('AFTER SAVE (excerpt):', afterSave.replace(/\n/g, ' | ').slice(0, 400))
+log('URL AFTER SAVE:', page.url())
+const save409 = saveResponses.find((r) => r.status === 409)
+const save201 = saveResponses.find((r) => r.status === 201)
+const duplicatePayload = save409 ? JSON.parse(save409.body) : null
+const duplicate = Boolean(duplicatePayload?.existingLeadId)
 
 let createdLeadId = null
-if (duplicate) {
-  const href = await page.locator('a[href^="/leads/"]').first().getAttribute('href').catch(() => null)
-  createdLeadId = href?.match(/^\/leads\/([^/?#]+)/)?.[1] ?? null
-  log('DUPLICATE PATH — existing lead:', createdLeadId)
-  record('§11.duplicate-notice-shows-existing', true, `existing lead ${createdLeadId}`)
+if (save201) {
+  const parsed = JSON.parse(save201.body)
+  createdLeadId = parsed.leadId ?? parsed.lead?.id ?? null
+  record('§3.lead-created', Boolean(createdLeadId), `lead ${createdLeadId} company=${parsed.lead?.company}`)
+  record('§13.display-name-preserved-at-creation', parsed.lead?.contactName === 'Dr Ahmad Israr', JSON.stringify(parsed.lead?.contactName))
+} else if (duplicatePayload) {
+  createdLeadId = duplicatePayload.existingLeadId
+  log('DUPLICATE PATH — existing lead:', createdLeadId, 'origin profile:', duplicatePayload.existingLeadSenderProfileId)
+  record('§11.duplicate-notice-shows-existing', Boolean(createdLeadId), `existing lead ${createdLeadId}`)
+  record('§30.duplicate-shows-origin-profile', duplicatePayload.existingLeadSenderProfileId === '87c10cd5-58e3-4742-910d-4de549d522c7', `origin=${duplicatePayload.existingLeadSenderProfileId}`)
+  record('§12.archived-flag-present', duplicatePayload.existingLeadArchived === false, `archived=${duplicatePayload.existingLeadArchived}`)
 } else {
-  const createdBlock = page.locator('text=/Created|lead created|Open lead/i').first()
-  const openHref = await page.locator('a[href^="/leads/"]').first().getAttribute('href').catch(() => null)
-  createdLeadId = openHref?.match(/^\/leads\/([^/?#]+)/)?.[1] ?? null
-  record('§3.lead-created', Boolean(createdLeadId), `lead ${createdLeadId}`)
+  record('§3.lead-created', false, `no 201/409 response (saw ${saveResponses.map((r) => r.status).join(',') || 'none'})`)
 }
 
 if (createdLeadId) {
@@ -255,7 +270,7 @@ log('FAILED REQUESTS:', failedRequests.length, JSON.stringify(failedRequests.sli
 log('AI REQUESTS (all):', JSON.stringify(aiRequests))
 
 record('§29.no-page-errors', pageErrors.length === 0, `${pageErrors.length} page errors`)
-record('§29.no-failed-api-requests', failedRequests.filter((f) => !/404|409/.test(f)).length === 0, `${failedRequests.length} failed`)
+record('§29.no-failed-api-requests', failedRequests.filter((f) => !/401 GET \/api\/me\/status|409 POST \/api\/prospect\/save/.test(f)).length === 0, `${failedRequests.length} failed`)
 
 // ── Summary ─────────────────────────────────────────────────────────────────
 const failed = results.filter((r) => !r.ok)
