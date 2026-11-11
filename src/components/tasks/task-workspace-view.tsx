@@ -518,7 +518,7 @@ export function TaskWorkspaceView({
                           <Link
                             href={task.action.href}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-[12px] font-medium text-cobalt hover:underline"
+                            className="text-[12px] font-medium text-cobalt-ink hover:underline"
                           >
                             {task.action.label}
                           </Link>
@@ -577,7 +577,7 @@ export function TaskWorkspaceView({
                     <span suppressHydrationWarning className={cn('text-[11px]', isOverdue(task) ? 'font-medium text-status-danger' : 'text-stone')}>
                       {dueLabel(task, timeZone, now)}
                     </span>
-                    <Link href={task.action.href} className="text-[12px] font-medium text-cobalt">
+                    <Link href={task.action.href} className="text-[12px] font-medium text-cobalt-ink">
                       {task.action.label}
                     </Link>
                   </div>

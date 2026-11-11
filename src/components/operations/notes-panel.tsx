@@ -153,7 +153,7 @@ export function NotesPanel({
             </div>
           </form>
           {error && (
-            <p role="alert" className="mt-1 flex items-center gap-2 text-[12px] text-[#8f2b1e]">
+            <p role="alert" className="mt-1 flex items-center gap-2 text-[12px] text-status-danger">
               <span>{error}</span>
               <button
                 type="button"

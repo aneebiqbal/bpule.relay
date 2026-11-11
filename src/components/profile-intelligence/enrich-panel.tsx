@@ -197,7 +197,7 @@ export function EnrichPanel({ profileId, onApplied, onClose }: { profileId: stri
                 {files.map((f) => <li key={f.name}>{f.name} ({Math.max(1, Math.round(f.size / 1024))} KB)</li>)}
               </ul>
               <button onClick={upload} disabled={phase === 'uploading'}
-                className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-white hover:bg-orange/90 disabled:opacity-50">
+                className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-on-orange hover:bg-orange/90 disabled:opacity-50">
                 {phase === 'uploading' ? 'Uploading…' : 'Upload & extract'}
               </button>
             </div>
@@ -245,7 +245,7 @@ export function EnrichPanel({ profileId, onApplied, onClose }: { profileId: stri
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {[...new Set([...proposal.identity.matchedPeople, ...proposal.identity.otherPeople])].filter(Boolean).map((name) => (
                   <button key={name} onClick={() => choosePerson(name)} disabled={phase === 'applying'}
-                    className={`rounded px-2 py-0.5 ${proposal.identity.selectedPerson === name ? 'bg-orange text-white' : 'border border-orange/30 text-orange hover:bg-orange/5'}`}>
+                    className={`rounded px-2 py-0.5 ${proposal.identity.selectedPerson === name ? 'bg-orange text-on-orange' : 'border border-orange/30 text-orange hover:bg-orange/5'}`}>
                     {name}
                   </button>
                 ))}
@@ -283,7 +283,7 @@ export function EnrichPanel({ profileId, onApplied, onClose }: { profileId: stri
                       <div className="min-w-0 flex-1 text-[11px]">
                         <p className="text-ink">
                           <span className="font-medium">{c.label}</span>
-                          <span className="ml-1.5 rounded bg-orange/5 px-1 text-[9px] uppercase tracking-wide text-orange/80">{c.classification.replace('_', ' ')}</span>
+                          <span className="ml-1.5 rounded bg-orange-faint px-1 text-[9px] uppercase tracking-wide text-orange-ink">{c.classification.replace('_', ' ')}</span>
                         </p>
                         {c.kind === 'scalar' && c.existingValue != null ? (
                           <p className="mt-0.5 break-words text-graphite">
@@ -315,7 +315,7 @@ export function EnrichPanel({ profileId, onApplied, onClose }: { profileId: stri
           <div className="flex items-center justify-end gap-3">
             <button onClick={discard} disabled={phase === 'applying'} className="text-[12px] text-graphite hover:text-orange">Discard import</button>
             <button onClick={apply} disabled={phase === 'applying'} data-testid="enrich-apply"
-              className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-white hover:bg-orange/90 disabled:opacity-50">
+              className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-on-orange hover:bg-orange/90 disabled:opacity-50">
               {phase === 'applying' ? 'Applying…' : selectedCount > 0 ? `Apply ${selectedCount} change${selectedCount === 1 ? '' : 's'}` : 'Record provenance only'}
             </button>
           </div>

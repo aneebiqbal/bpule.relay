@@ -25,25 +25,25 @@ export default function OutreachPage() {
         <h2 className="text-heading text-xl text-ink">How drafts are created</h2>
         <ol className="space-y-3 text-[14px] text-graphite">
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               1
             </span>
             <span>You open a scored lead and request a draft.</span>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               2
             </span>
             <span>Relay matches the lead to the most relevant proof from your team&apos;s library.</span>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               3
             </span>
             <span>A draft is generated in the assigned rep&apos;s voice, referencing only facts that exist on file.</span>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               4
             </span>
             <span>The draft is self-checked and sanitized before you see it.</span>

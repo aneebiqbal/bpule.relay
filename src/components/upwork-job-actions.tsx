@@ -55,8 +55,8 @@ function formatResponseTime(ms: number): string {
 
 function markAppliedButtonClass(applied: boolean, belowGate: boolean): string {
   if (applied) return 'bg-status-success/10 text-status-success'
-  if (belowGate) return 'bg-status-success/40 text-on-accent cursor-not-allowed opacity-60'
-  return 'bg-status-success text-on-accent hover:bg-status-success/90'
+  if (belowGate) return 'bg-status-success/40 text-on-success cursor-not-allowed opacity-60'
+  return 'bg-status-success text-on-success hover:bg-status-success/90'
 }
 
 function channelLabel(channels: string[]): string {
@@ -399,7 +399,7 @@ export function UpworkJobActions({
               aria-pressed={generationMode === 'premium'}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors',
-                generationMode === 'premium' ? 'border-cobalt/30 bg-cobalt/10 text-cobalt' : 'border-line text-graphite hover:bg-bone-raised hover:text-ink',
+                generationMode === 'premium' ? 'border-cobalt/30 bg-cobalt/10 text-cobalt-ink' : 'border-line text-graphite hover:bg-bone-raised hover:text-ink',
               )}
             >
               {generationMode === 'premium' ? '★ Premium' : 'Standard'}
@@ -415,7 +415,7 @@ export function UpworkJobActions({
             onClick={() => void generate()}
             disabled={!canGenerate}
             title={eligibility.ok ? undefined : eligibility.reason ?? undefined}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-all hover:bg-orange-dark active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-orange transition-all hover:bg-orange-dark active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {generating ? (
               <>
@@ -496,7 +496,7 @@ export function UpworkJobActions({
 
           {screeningAnswers.length > 0 && (
             <div className="space-y-3 rounded-xl bg-cobalt/[0.04] p-3 ring-1 ring-cobalt/15">
-              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-cobalt">
+              <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-cobalt-ink">
                 Screening answers — saved with the draft
               </p>
               {screeningAnswers.map((qa, i) => (
@@ -539,7 +539,7 @@ export function UpworkJobActions({
                     <span className="shrink-0 text-[10px] uppercase tracking-wide text-stone">{item.kind.replace(/_/g, ' ')}</span>
                     <span className="min-w-0 truncate text-ink">{item.title}</span>
                     {item.url && (
-                      <a href={item.url} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-cobalt hover:underline">
+                      <a href={item.url} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-cobalt-ink hover:underline">
                         link
                       </a>
                     )}
@@ -719,7 +719,7 @@ export function UpworkJobActions({
                 type="button"
                 onClick={() => void confirmApplication()}
                 disabled={submitting}
-                className="rounded-lg bg-status-success px-4 py-1.5 text-[13px] font-medium text-on-accent transition-opacity disabled:opacity-60"
+                className="rounded-lg bg-status-success px-4 py-1.5 text-[13px] font-medium text-on-success transition-opacity disabled:opacity-60"
               >
                 {submitting ? 'Submitting…' : 'Confirm application'}
               </button>

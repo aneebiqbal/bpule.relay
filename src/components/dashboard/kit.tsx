@@ -66,20 +66,20 @@ export type Tone = 'neutral' | 'orange' | 'cobalt' | 'success' | 'warning' | 'da
 // both the page background and the 10% tint chips.
 const TONE_TEXT: Record<Tone, string> = {
   neutral: 'text-ink',
-  orange: 'text-[#9a4519]',
-  cobalt: 'text-cobalt',
-  success: 'text-[#256b4a]',
-  warning: 'text-[#7d5410]',
-  danger: 'text-[#a8342a]',
+  orange: 'text-orange-ink',
+  cobalt: 'text-cobalt-ink',
+  success: 'text-status-success',
+  warning: 'text-status-warning',
+  danger: 'text-status-danger',
 }
 
 const TONE_ICON: Record<Tone, string> = {
   neutral: 'bg-bone text-stone',
-  orange: 'bg-orange/10 text-[#9a4519]',
-  cobalt: 'bg-cobalt/10 text-cobalt',
-  success: 'bg-status-success/10 text-[#256b4a]',
-  warning: 'bg-status-warning/10 text-[#7d5410]',
-  danger: 'bg-status-danger/10 text-[#a8342a]',
+  orange: 'bg-orange/10 text-orange-ink',
+  cobalt: 'bg-cobalt/10 text-cobalt-ink',
+  success: 'bg-status-success/10 text-status-success',
+  warning: 'bg-status-warning/10 text-status-warning',
+  danger: 'bg-status-danger/10 text-status-danger',
 }
 
 export function StatTile({ label, value, sub, tone = 'neutral', icon, href, className }: {

@@ -73,7 +73,7 @@ export function DayDrilldown({ day, timezone }: DayDrilldownProps) {
                 {event.leadId && (
                   <a
                     href={`/leads/${event.leadId}`}
-                    className="text-[10px] text-cobalt hover:underline shrink-0"
+                    className="text-[10px] text-cobalt-ink hover:underline shrink-0"
                   >
                     Open →
                   </a>

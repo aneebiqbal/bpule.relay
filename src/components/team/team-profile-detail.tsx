@@ -339,7 +339,7 @@ function ChannelBlock({
           <dd className="min-w-0 text-ink">
             {channel.identityName}
             {channel.url && (
-              <a href={channel.url} target="_blank" rel="noreferrer" className="ml-2 text-cobalt hover:underline">
+              <a href={channel.url} target="_blank" rel="noreferrer" className="ml-2 text-cobalt-ink hover:underline">
                 link
               </a>
             )}

@@ -116,7 +116,7 @@ export function TrainingDataCenter() {
       <Panel title="Opportunities" subtitle="Ordered by review priority. Open a row to compare production with the candidate engines and record a label.">
         <div className="mb-3 flex flex-wrap gap-1.5">
           {FILTERS.map((f) => (
-            <button key={f.key} type="button" onClick={() => toggle(f.key)} className={cn('rounded-full px-2.5 py-1 text-[11px]', active.has(f.key) ? 'bg-cobalt text-bone' : 'border border-line text-graphite hover:bg-bone-raised')}>{f.label}</button>
+            <button key={f.key} type="button" onClick={() => toggle(f.key)} className={cn('rounded-full px-2.5 py-1 text-[11px]', active.has(f.key) ? 'bg-cobalt text-on-accent' : 'border border-line text-graphite hover:bg-bone-raised')}>{f.label}</button>
           ))}
         </div>
         {!loading && data && data.rows.length === 0 && <EmptyNote>No opportunities match these filters.</EmptyNote>}
@@ -182,7 +182,7 @@ function Row({ row: r, open, onToggle, ranges, enums, mode, onLabelled }: { row:
               <p className="text-[11px] text-graphite">{r.messages.sent} sent · {r.messages.drafts} drafts · {r.messages.inbound} inbound · {r.outcome.connectionAccepted ? 'connection accepted · ' : ''}{r.outcome.replied ? 'replied · ' : ''}{r.outcome.meeting ? 'meeting · ' : ''}{r.outcome.won ? 'won · ' : ''}{r.outcome.lost ? 'lost · ' : ''}status {r.outcome.status ?? '—'}</p>
               {r.messages.firstSentPreview && <p className="mt-1 rounded bg-bone p-2 text-[11px] text-ink">{r.messages.firstSentPreview}</p>}
               {r.feedback.length > 0 && <ul className="mt-1 text-[11px] text-graphite">{r.feedback.map((f, i) => <li key={i}>{f.type}{f.note ? ` — ${f.note}` : ''}</li>)}</ul>}
-              {r.primary.kind === 'lead' && <Link href={`/leads/${r.primary.id}`} className="text-[11px] text-cobalt hover:underline">Open lead</Link>}
+              {r.primary.kind === 'lead' && <Link href={`/leads/${r.primary.id}`} className="text-[11px] text-cobalt-ink hover:underline">Open lead</Link>}
             </Section>
           </div>
           <div className="space-y-3">

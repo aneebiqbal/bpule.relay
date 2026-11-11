@@ -67,7 +67,7 @@ export default function DocsHomePage() {
         <h2 className="text-heading text-xl text-ink">The core loop</h2>
         <ol className="space-y-4 text-[14px] leading-relaxed text-graphite">
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               1
             </span>
             <div>
@@ -79,7 +79,7 @@ export default function DocsHomePage() {
             </div>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               2
             </span>
             <div>
@@ -92,7 +92,7 @@ export default function DocsHomePage() {
             </div>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               3
             </span>
             <div>
@@ -104,7 +104,7 @@ export default function DocsHomePage() {
             </div>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               4
             </span>
             <div>

@@ -172,7 +172,7 @@ export function ProfileList({ isAdmin }: { orgId: string; isAdmin: boolean }) {
                   <div className="col-span-2 col-start-2 flex min-w-0 flex-wrap items-center gap-1 md:col-span-1 md:col-start-auto">
                     {linked.length > 0 ? linked.map((i) => (
                       <span key={i.id} className="inline-flex max-w-full items-center gap-1 truncate rounded-full border border-line bg-bone px-2 py-0.5 text-[10px] text-ink" title={`Sends as ${i.identityName} on ${i.channel}`}>
-                        <span className="font-semibold text-cobalt">{CHANNEL_SHORT[i.channel] ?? '•'}</span>{i.identityName}
+                        <span className="font-semibold text-cobalt-ink">{CHANNEL_SHORT[i.channel] ?? '•'}</span>{i.identityName}
                       </span>
                     )) : isAdmin ? (
                       <span className="inline-flex items-center gap-1 text-[11px] text-stone"><Send className="size-3" aria-hidden="true" />No sending identity</span>

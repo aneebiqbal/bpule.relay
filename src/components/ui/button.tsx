@@ -9,7 +9,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-solid text-on-solid hover:bg-solid/90",
-        orange: "bg-orange text-on-accent hover:bg-orange-dark",
+        orange: "bg-orange text-on-orange hover:bg-orange-dark",
         outline:
           "border-line bg-bone text-ink hover:bg-bone-raised hover:text-ink aria-expanded:bg-bone-raised",
         secondary:

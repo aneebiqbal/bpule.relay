@@ -149,13 +149,13 @@ export function ContextSection() {
           {/* Do This Next — compact */}
           <div className={cn('lg3-console__dtn', isLinked('action-sarah') && 'is-linked')}>
             <div className="flex items-center gap-2">
-              <span className="rounded-sm bg-orange px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-on-accent">Reply</span>
+              <span className="rounded-sm bg-orange px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-on-orange">Reply</span>
               <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">Do This Next</p>
             </div>
             <p className="mt-2 text-[15px] font-medium text-ink">Reply to Sarah</p>
             <p className="mt-0.5 text-[12px] text-graphite">She asked for proof · draft ready</p>
             <div className="mt-3 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-orange px-2.5 py-1.5 text-[11px] font-medium text-on-accent">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-orange px-2.5 py-1.5 text-[11px] font-medium text-on-orange">
                 Review reply
                 <ArrowRight className="size-3" />
               </span>
@@ -190,7 +190,7 @@ export function ContextSection() {
                   </div>
                   <span className={cn(
                     'shrink-0 rounded-full px-1.5 py-0.5 text-mono-medium text-[8px] uppercase tracking-[0.1em]',
-                    row.stage === 'NOW' && 'bg-orange text-on-accent',
+                    row.stage === 'NOW' && 'bg-orange text-on-orange',
                     row.stage === 'NEXT' && 'bg-orange/10 text-orange-ink',
                     row.stage === 'TODAY' && 'bg-bone text-graphite',
                     row.stage === 'LATER' && 'bg-bone text-stone',

@@ -303,7 +303,7 @@ function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: str
         <div className="flex items-center gap-1.5">
           <V4Chip tone={tone}>{label}</V4Chip>
           {isNew && (
-            <span className="rounded-full bg-status-info/10 px-2 py-0.5 text-[11px] font-medium text-[#2f48b8] ring-1 ring-status-info/20">
+            <span className="rounded-full bg-status-info/10 px-2 py-0.5 text-[11px] font-medium text-cobalt-ink ring-1 ring-status-info/20">
               NEW
             </span>
           )}

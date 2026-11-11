@@ -59,7 +59,7 @@ export function DecisionTraceView({ trace }: DecisionTraceViewProps) {
                 {node.step === 'GUARDRAILS_APPLIED' ? (
                   <AlertCircle className="size-3.5 text-status-warning" />
                 ) : node.step === 'RESCORE' ? (
-                  <Clock className="size-3.5 text-cobalt" />
+                  <Clock className="size-3.5 text-cobalt-ink" />
                 ) : (
                   <CheckCircle2 className="size-3.5 text-status-success" />
                 )}

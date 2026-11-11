@@ -52,9 +52,9 @@ function channelIcon(channel: string): string {
 }
 
 function channelColor(channel: string): string {
-  if (channel === 'linkedin') return 'bg-[#0a66c2]/10 text-[#0a66c2]'
-  if (channel === 'email') return 'bg-[#d97706]/10 text-[#d97706]'
-  if (channel === 'upwork') return 'bg-[#14a800]/10 text-[#0e6b00]'
+  if (channel === 'linkedin') return 'bg-cobalt/10 text-cobalt-ink'
+  if (channel === 'email') return 'bg-status-warning/10 text-status-warning'
+  if (channel === 'upwork') return 'bg-status-success/10 text-status-success'
   return 'bg-graphite/10 text-graphite'
 }
 

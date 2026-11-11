@@ -46,7 +46,7 @@ export function RelayLogo({
         {/* The "R" letterform — geometric, precision-cut */}
         <path
           d="M7 6H16C18.76 6 21 8.24 21 11C21 13.24 19.5 15.14 17.46 15.77L21.5 26H18.7L14.8 16H9.5V26H7V6ZM9.5 13.5H16C17.38 13.5 18.5 12.38 18.5 11C18.5 9.62 17.38 8.5 16 8.5H9.5V13.5Z"
-          fill="#1c1c1a"
+          fill="currentColor"
         />
 
         {/* Signal dot at the joint */}
@@ -62,7 +62,7 @@ export function RelayLogo({
           fontSize="18"
           fontWeight="600"
           letterSpacing="-0.02em"
-          fill="#1c1c1a"
+          fill="currentColor"
         >
           Relay
         </text>

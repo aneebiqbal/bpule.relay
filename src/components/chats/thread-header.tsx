@@ -8,10 +8,10 @@ import { InterventionMenu } from '@/components/operations/intervention-menu'
 import type { ChatRow } from '@/lib/operations/chat-queue'
 
 const STATE_CHIP: Record<ChatRow['state'], string> = {
-  waiting_on_rep: 'bg-orange/10 text-[#9e4517] ring-orange/20',
-  waiting_on_prospect: 'bg-cobalt/10 text-cobalt-dark ring-cobalt/20',
-  follow_up_due: 'bg-status-warning/10 text-[#7d5410] ring-status-warning/20',
-  meeting: 'bg-status-success/10 text-[#1f5e3c] ring-status-success/20',
+  waiting_on_rep: 'bg-orange/10 text-orange-ink ring-orange/20',
+  waiting_on_prospect: 'bg-cobalt/10 text-cobalt-ink ring-cobalt/20',
+  follow_up_due: 'bg-status-warning/10 text-status-warning ring-status-warning/20',
+  meeting: 'bg-status-success/10 text-status-success ring-status-success/20',
   closed: 'bg-bone text-stone ring-line',
 }
 

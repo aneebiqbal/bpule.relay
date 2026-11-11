@@ -158,13 +158,13 @@ export function LeadDecisionContextCard({ context }: Props) {
       {context.conversationOverride && (
         <div className="rounded-xl border border-cobalt/20 bg-cobalt/5 p-3">
           <div className="flex items-center gap-2">
-            <MessageSquare className="size-3.5 text-cobalt" />
-            <span className="text-[12px] font-medium text-cobalt">Live conversation state</span>
+            <MessageSquare className="size-3.5 text-cobalt-ink" />
+            <span className="text-[12px] font-medium text-cobalt-ink">Live conversation state</span>
             <span className={cn(
               'rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide',
               context.actionConfidence === 'high' ? 'bg-status-success/10 text-status-success' :
               context.actionConfidence === 'medium' ? 'bg-orange/10 text-orange-ink' :
-              'bg-stone-100 text-stone-500'
+              'bg-bone-raised text-stone'
             )}>{context.actionConfidence}</span>
           </div>
           <p className="mt-1 text-[11px] text-cobalt-ink">{context.actionReason}</p>
@@ -273,7 +273,7 @@ function SenderMatchCard({ context }: { context: DecisionContext }) {
                 <span className="w-8 shrink-0 text-right tabular-nums font-medium text-ink">{r.profileMatch}%</span>
                 <span className="min-w-0 flex-1 truncate text-ink">{r.name ?? 'Unknown'}{r.role ? ` · ${r.role}` : ''}</span>
                 {isCurrent && <span className="rounded-full bg-bone-raised px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-graphite">current</span>}
-                {isBest && <span className="rounded-full bg-cobalt/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-cobalt">best</span>}
+                {isBest && <span className="rounded-full bg-cobalt/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-cobalt-ink">best</span>}
                 {!r.accessibleToRep && (
                   <span className="rounded-full bg-orange/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-orange-ink">held by {r.holders.join(', ') || 'another rep'}</span>
                 )}

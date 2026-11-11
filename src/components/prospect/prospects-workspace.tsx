@@ -221,7 +221,7 @@ export function ProspectsWorkspace({
           return (
             <Link
               href={action.href}
-              className="inline-flex items-center gap-1 rounded-md bg-orange px-2.5 py-1 text-[12px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
+              className="inline-flex items-center gap-1 rounded-md bg-orange px-2.5 py-1 text-[12px] font-medium text-on-orange transition-colors hover:bg-orange-dark"
             >
               {action.label}
             </Link>
@@ -246,7 +246,7 @@ export function ProspectsWorkspace({
       action={
         <Link
           href="/prospect"
-          className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
+          className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-orange transition-colors hover:bg-orange-dark"
         >
           <Plus className="size-4" aria-hidden="true" />
           Analyze Prospect

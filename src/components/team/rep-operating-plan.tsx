@@ -213,7 +213,7 @@ function ResponsibilityRow({
         </div>
         <div className="flex items-center gap-2">
           {row.isNew && (
-            <span className="rounded-full bg-orange/15 px-2 py-0.5 text-[11px] font-medium text-[#b8531f]">NEW</span>
+            <span className="rounded-full bg-orange-faint px-2 py-0.5 text-[11px] font-medium text-orange-ink">NEW</span>
           )}
           {canManage && (
             <div className="flex items-center gap-1">
@@ -709,7 +709,7 @@ function RemoveDialog({
             type="button"
             onClick={() => void save()}
             disabled={saving}
-            className="rounded-lg bg-[#a8342a] px-3 py-1.5 text-[12px] font-medium text-white transition-transform active:scale-[0.98] disabled:opacity-50"
+            className="rounded-lg bg-status-danger px-3 py-1.5 text-[12px] font-medium text-on-danger transition-transform active:scale-[0.98] disabled:opacity-50"
           >
             {saving ? 'Removing…' : 'Remove responsibility'}
           </button>

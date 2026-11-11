@@ -100,7 +100,7 @@ export function UploadBatchUploader({ onBatchCreated }: {
           <button
             onClick={handleUpload}
             disabled={uploading}
-            className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-white hover:bg-orange/90 disabled:opacity-50"
+            className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-on-orange hover:bg-orange/90 disabled:opacity-50"
           >
             {uploading ? 'Uploading...' : 'Upload'}
           </button>

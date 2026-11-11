@@ -23,7 +23,7 @@ export function DoThisNext({
       <div className="lg3-dtn__card">
         <div className="lg3-dtn__header">
           <div className="flex items-center gap-2">
-            <span className="rounded-sm bg-orange px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-on-accent">
+            <span className="rounded-sm bg-orange px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-on-orange">
               Reply
             </span>
             <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-stone">

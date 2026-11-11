@@ -52,25 +52,25 @@ export default function TeamPage() {
         <h2 className="text-heading text-xl text-ink">Inviting a team member</h2>
         <ol className="space-y-3 text-[14px] text-graphite">
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               1
             </span>
             <span>Go to the Team page and enter the person&apos;s email address.</span>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               2
             </span>
             <span>They receive an invitation email and create their account.</span>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               3
             </span>
             <span>On first sign-in, they complete voice calibration.</span>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange/10 text-[12px] font-semibold text-orange">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-orange-faint text-[12px] font-semibold text-orange-ink">
               4
             </span>
             <span>They appear in your team roster and can start working.</span>

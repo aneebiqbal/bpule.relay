@@ -58,7 +58,7 @@ export function InvitePersonDialog({ isOwner }: { isOwner: boolean }) {
       <button
         type="button"
         onClick={open}
-        className="flex items-center gap-1.5 rounded bg-orange px-3 py-1.5 text-[12px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
+        className="flex items-center gap-1.5 rounded bg-orange px-3 py-1.5 text-[12px] font-medium text-on-orange transition-colors hover:bg-orange-dark"
       >
         <UserPlus className="size-3.5" aria-hidden="true" />
         Add person
@@ -115,7 +115,7 @@ export function InvitePersonDialog({ isOwner }: { isOwner: boolean }) {
             <button
               type="submit"
               disabled={busy || !email.trim()}
-              className="h-8 rounded bg-orange px-3 text-[12px] font-medium text-on-accent disabled:opacity-50"
+              className="h-8 rounded bg-orange px-3 text-[12px] font-medium text-on-orange disabled:opacity-50"
             >
               {busy ? 'Sending…' : 'Send invitation'}
             </button>

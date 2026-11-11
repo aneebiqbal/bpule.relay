@@ -257,7 +257,7 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-bone-raised px-2.5 py-1 text-[12px] font-medium text-ink ring-1 ring-line">
                 {CONVERSATION_STATE_LABEL[row.state] === 'Waiting on rep' ? 'Reply' : 'Message'}
-                <span className="text-[10px] font-normal text-[#9e4517]">suggested</span>
+                <span className="text-[10px] font-normal text-orange-ink">suggested</span>
               </span>
               <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-stone">
                 Sending as <span className="truncate font-medium text-graphite">{row.profileName ?? 'No profile'}</span>
@@ -265,7 +265,7 @@ export function InboxFixture({ showOwner = false, className }: { showOwner?: boo
               <div className="ml-auto flex items-center gap-1.5">
                 <button
                   type="button"
-                  className="inline-flex h-8 items-center rounded-lg bg-orange px-2.5 text-[12px] font-medium text-on-accent transition-opacity hover:opacity-90"
+                  className="inline-flex h-8 items-center rounded-lg bg-orange px-2.5 text-[12px] font-medium text-on-orange transition-opacity hover:opacity-90"
                 >
                   Reply now
                 </button>

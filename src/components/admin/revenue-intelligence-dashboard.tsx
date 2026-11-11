@@ -135,7 +135,7 @@ function Body({ data, rangeLabel }: { data: DashboardData; rangeLabel: string })
           <ul className="divide-y divide-line/70">
             {data.insights.slice(0, 4).map((insight) => (
               <li key={insight.id} className="flex items-start gap-3 px-4 py-3 sm:px-5">
-                <Lightbulb className={cn('mt-0.5 size-4 shrink-0', insight.severity === 'ACTION' ? 'text-status-danger' : insight.severity === 'WATCH' ? 'text-status-warning' : 'text-cobalt')} aria-hidden="true" />
+                <Lightbulb className={cn('mt-0.5 size-4 shrink-0', insight.severity === 'ACTION' ? 'text-status-danger' : insight.severity === 'WATCH' ? 'text-status-warning' : 'text-cobalt-ink')} aria-hidden="true" />
                 <div className="min-w-0">
                   <p className="text-[13px] font-medium text-ink">{insight.title}</p>
                   <p className="text-[12px] text-graphite">{insight.explanation}</p>

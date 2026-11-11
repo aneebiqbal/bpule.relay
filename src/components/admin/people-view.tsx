@@ -66,7 +66,7 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
           <p className="mt-1 text-[22px] font-medium text-ink">{data.owners.length}</p>
         </div>
         <div className="rounded border border-cobalt/20 bg-cobalt/5 px-4 py-3">
-          <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-cobalt">Admins</p>
+          <p className="text-mono-medium text-[9px] uppercase tracking-[0.14em] text-cobalt-ink">Admins</p>
           <p className="mt-1 text-[22px] font-medium text-ink">{data.admins.length}</p>
         </div>
         <div className="rounded border border-line px-4 py-3">
@@ -90,7 +90,7 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
       {/* Admins */}
       {data.admins.length > 0 && (
         <section className="space-y-2">
-          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">Admins</p>
+          <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt-ink">Admins</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {data.admins.map((person) => (
               <PersonCard key={person.id} person={person} isOwner={data.isOwner} />
@@ -113,7 +113,7 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
               className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-bone"
             >
               {isExpanded ? <ChevronDown className="size-4 text-stone" /> : <ChevronRight className="size-4 text-stone" />}
-              <Users className="size-4 text-cobalt" />
+              <Users className="size-4 text-cobalt-ink" />
               <div className="flex-1">
                 <p className="text-[14px] font-medium text-ink">{team.name}</p>
                 {team.description && <p className="text-[12px] text-graphite">{team.description}</p>}

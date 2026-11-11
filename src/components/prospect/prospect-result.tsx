@@ -486,9 +486,9 @@ function SenderMatch({
       )}
 
       {stronger && (
-        <div data-testid="sender-mismatch" className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2.5">
-          <p className="text-[12px] font-medium text-amber-800">Another sender is a stronger match</p>
-          <p className="mt-1 text-[12px] text-amber-700">
+        <div data-testid="sender-mismatch" className="mt-2 rounded-md border border-status-warning/30 bg-status-warning/10 p-2.5">
+          <p className="text-[12px] font-medium text-status-warning">Another sender is a stronger match</p>
+          <p className="mt-1 text-[12px] text-status-warning">
             <span className="font-medium">{stronger.name ?? 'Another profile'}</span> is +{delta}% stronger for this
             lead. Current sender: {active?.name ?? 'Unknown'} ({active?.profileMatch ?? 0}%).
           </p>

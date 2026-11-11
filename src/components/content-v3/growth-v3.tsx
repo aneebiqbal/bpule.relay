@@ -183,7 +183,7 @@ export function GrowthV3({ trends }: { trends: GrowthTrend[] }) {
                 <div className="flex items-start justify-between gap-2">
                   <p className="min-w-0 flex-1 text-[13px] font-medium text-ink">{trend.title}</p>
                   {trend.url && (
-                    <a href={trend.url} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-cobalt hover:underline">
+                    <a href={trend.url} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-cobalt-ink hover:underline">
                       Source
                     </a>
                   )}

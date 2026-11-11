@@ -312,7 +312,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cobalt/10 text-lg font-semibold text-cobalt">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cobalt/10 text-lg font-semibold text-cobalt-ink">
                 {(lead.contactName ?? lead.company ?? '?').charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0">
@@ -320,7 +320,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
                 <p className="text-[13px] text-graphite truncate flex items-center gap-1">
                   <Building2 className="size-3 shrink-0" /><span className="truncate">{formatRoleLine(lead.contactTitle, lead.company)}</span>
                   {lead.companyKey && (
-                    <Link href={`/account?companyKey=${encodeURIComponent(lead.companyKey)}`} className="ml-1 text-[10px] text-cobalt hover:underline shrink-0">
+                    <Link href={`/account?companyKey=${encodeURIComponent(lead.companyKey)}`} className="ml-1 text-[10px] text-cobalt-ink hover:underline shrink-0">
                       Account 360 →
                     </Link>
                   )}
@@ -342,7 +342,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
                   {leadScore.qualification && (
                     <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium',
                       leadScore.qualification === 'STRONG' || leadScore.qualification === 'WORTH_PURSUING' ? 'bg-status-success/10 text-status-success' :
-                      leadScore.qualification === 'MAYBE' ? 'bg-orange/10 text-orange-ink' : 'bg-stone-100 text-stone-500'
+                      leadScore.qualification === 'MAYBE' ? 'bg-orange/10 text-orange-ink' : 'bg-bone-raised text-stone'
                     )}>{leadScore.label}</span>
                   )}
                 </div>
@@ -352,7 +352,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
           </div>
           <div className="shrink-0 text-right">
             <StatusPill label={displayLabel} />
-            {lead.url && <a href={lead.url} target="_blank" rel="noopener" className="mt-1 inline-block text-[10px] text-cobalt hover:underline">LinkedIn ↗</a>}
+            {lead.url && <a href={lead.url} target="_blank" rel="noopener" className="mt-1 inline-block text-[10px] text-cobalt-ink hover:underline">LinkedIn ↗</a>}
             {(leadScore.qualification === 'STRONG' || leadScore.qualification === 'WORTH_PURSUING') && (
               <button
                 onClick={async () => {
@@ -446,7 +446,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
       {dimensions.length > 0 && (
         <details className="group rounded-2xl border border-line bg-bone-raised/20 overflow-hidden">
           <summary className="px-5 py-3 cursor-pointer flex items-center gap-2 select-none hover:bg-bone-raised/40 transition-colors">
-            <Target className="size-4 text-cobalt" />
+            <Target className="size-4 text-cobalt-ink" />
             <span className="text-sm font-medium text-ink">Score Breakdown</span>
             <span className="ml-auto text-stone group-open:hidden"><ChevronDown className="size-4" /></span>
             <span className="ml-auto text-stone hidden group-open:inline"><ChevronUp className="size-4" /></span>
@@ -653,9 +653,9 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
       {/* Timeline */}
       <details open className="group rounded-2xl border border-line bg-bone-raised/20 overflow-hidden">
         <summary className="px-5 py-3 cursor-pointer flex items-center gap-2 select-none hover:bg-bone-raised/40 transition-colors">
-          <MessageSquare className="size-4 text-cobalt" />
+          <MessageSquare className="size-4 text-cobalt-ink" />
           <span className="text-sm font-medium text-ink">History</span>
-          <span className="rounded-full bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-stone">{timelineEntries.length}</span>
+          <span className="rounded-full bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-graphite">{timelineEntries.length}</span>
           <span className="ml-auto text-stone group-open:hidden"><ChevronDown className="size-4" /></span>
           <span className="ml-auto text-stone hidden group-open:inline"><ChevronUp className="size-4" /></span>
         </summary>
@@ -681,7 +681,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
                 <div key={msg.id} className="px-5 py-3">
                   <div className="flex items-center gap-2 text-[10px] text-graphite mb-1">
                     <span className={cn('rounded px-1 py-0.5 text-[9px] font-medium uppercase',
-                      msg.direction === 'inbound' ? 'bg-orange/10 text-orange-ink' : 'bg-cobalt/10 text-cobalt'
+                      msg.direction === 'inbound' ? 'bg-orange/10 text-orange-ink' : 'bg-cobalt/10 text-cobalt-ink'
                     )}>
                       {msg.direction === 'inbound' ? '← Received' : '→ Sent'}
                     </span>
@@ -700,7 +700,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
       {(lead.company || lead.contactTitle || lead.signalEvidence || lead.rawInput || (lead.tags?.length ?? 0) > 0) && (
         <details className="group rounded-2xl border border-line bg-bone-raised/20 overflow-hidden">
           <summary className="px-5 py-3 cursor-pointer flex items-center gap-2 select-none hover:bg-bone-raised/40 transition-colors">
-            <Sparkles className="size-4 text-cobalt" />
+            <Sparkles className="size-4 text-cobalt-ink" />
             <span className="text-sm font-medium text-ink">Context</span>
             <span className="ml-auto text-stone group-open:hidden"><ChevronDown className="size-4" /></span>
             <span className="ml-auto text-stone hidden group-open:inline"><ChevronUp className="size-4" /></span>
@@ -722,7 +722,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
             )}
             {lead.rawInput?.trim() && (
               <details className="group/raw rounded-lg border border-line/50 bg-bone p-3 sm:col-span-2">
-                <summary className="cursor-pointer select-none text-[11px] font-medium text-cobalt hover:underline">
+                <summary className="cursor-pointer select-none text-[11px] font-medium text-cobalt-ink hover:underline">
                   View original pasted evidence
                 </summary>
                 <p className="mt-1 text-[10px] text-graphite">Exactly what was pasted when this lead was analyzed.</p>
@@ -779,10 +779,10 @@ function StatusPill({ label }: { label: string }) {
   const tone = /needs reply|follow-up|overdue/i.test(label)
     ? 'bg-orange/10 text-orange-ink'
     : /waiting|pending|accepted/i.test(label)
-      ? 'bg-cobalt/10 text-cobalt'
+      ? 'bg-cobalt/10 text-cobalt-ink'
       : /connected|closed/i.test(label)
         ? 'bg-status-success/10 text-status-success'
-        : 'bg-stone-100 text-stone-600'
+        : 'bg-bone-raised text-graphite'
   return <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-medium', tone)}>{label}</span>
 }
 

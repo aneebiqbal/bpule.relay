@@ -117,7 +117,7 @@ export function MergeTool({ targetProfileId, targetName, onMerged }: { targetPro
               className="ml-2 rounded border border-orange/20 bg-transparent px-2 py-0.5 text-[12px] text-ink" />
           </label>
           <button onClick={execute} disabled={!canExecute || busy} data-testid="merge-execute"
-            className="rounded bg-orange px-4 py-1.5 text-[12px] font-medium text-white disabled:opacity-40">
+            className="rounded bg-orange px-4 py-1.5 text-[12px] font-medium text-on-orange disabled:opacity-40">
             {busy ? 'Merging…' : 'Merge and archive duplicate'}
           </button>
         </div>

@@ -98,7 +98,7 @@ export function ChatFilters({
               <SlidersHorizontal className="size-3.5" aria-hidden="true" />
               Filters
               {activeFilterCount > 0 && (
-                <span className="rounded-full bg-orange/10 px-1.5 text-[11px] font-medium tabular-nums text-[#9e4517]">
+                <span className="rounded-full bg-orange/10 px-1.5 text-[11px] font-medium tabular-nums text-orange-ink">
                   {activeFilterCount}
                 </span>
               )}

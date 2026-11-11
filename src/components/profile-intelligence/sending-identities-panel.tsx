@@ -15,7 +15,7 @@ interface IdentityLite {
 }
 
 const CHANNEL: Record<string, { label: string; short: string; cls: string }> = {
-  linkedin: { label: 'LinkedIn', short: 'in', cls: 'bg-cobalt/10 text-cobalt' },
+  linkedin: { label: 'LinkedIn', short: 'in', cls: 'bg-cobalt/10 text-cobalt-ink' },
   email: { label: 'Email', short: '@', cls: 'bg-orange/10 text-orange-ink' },
   upwork: { label: 'Upwork', short: 'U', cls: 'bg-status-success/10 text-status-success' },
   other: { label: 'Other', short: '•', cls: 'bg-bone text-graphite' },
@@ -43,7 +43,7 @@ export function SendingIdentitiesPanel({ profileId }: { profileId: string }) {
           <h2 className="text-[14px] font-medium text-ink">Sending identities</h2>
           <p className="mt-0.5 text-[12px] text-graphite">How reps show up in outreach as this person.</p>
         </div>
-        <Link href={createHref} className="inline-flex items-center gap-1.5 rounded-md bg-orange px-3 py-1.5 text-[12px] font-medium text-on-accent hover:bg-orange-dark">
+        <Link href={createHref} className="inline-flex items-center gap-1.5 rounded-md bg-orange px-3 py-1.5 text-[12px] font-medium text-on-orange hover:bg-orange-dark">
           <Plus className="size-3.5" aria-hidden="true" />Create sending identity
         </Link>
       </div>
@@ -65,7 +65,7 @@ export function SendingIdentitiesPanel({ profileId }: { profileId: string }) {
                   <p className="truncate text-[13px] font-medium text-ink">{i.identityName}</p>
                   <p className="truncate text-[11px] text-stone">{[i.title, meta.label, i.status === 'archived' ? 'archived' : null].filter(Boolean).join(' · ')}</p>
                 </div>
-                <Link href="/profile-intelligence?tab=identities" className="text-[11px] font-medium text-cobalt hover:underline">Manage</Link>
+                <Link href="/profile-intelligence?tab=identities" className="text-[11px] font-medium text-cobalt-ink hover:underline">Manage</Link>
               </li>
             )
           })}

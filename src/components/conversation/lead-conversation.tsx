@@ -307,13 +307,13 @@ export function LeadConversation({
       <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-bone-raised" aria-label="Conversation">
         {variant === 'full' && (
           <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
-            <span className="rounded-full bg-cobalt/10 px-2 py-0.5 text-[11px] font-medium text-cobalt-dark">{view.stageLabel}</span>
-            <span className={cn('text-[12px] font-medium', view.nextAction.requiresAction ? 'text-[#9e4517]' : 'text-graphite')}>
+            <span className="rounded-full bg-cobalt/10 px-2 py-0.5 text-[11px] font-medium text-cobalt-ink">{view.stageLabel}</span>
+            <span className={cn('text-[12px] font-medium', view.nextAction.requiresAction ? 'text-orange-ink' : 'text-graphite')}>
               {view.nextAction.primaryLabel}
             </span>
             <span className="text-[11px] text-graphite">{view.nextAction.reason}</span>
             {view.url && (
-              <a href={view.url} target="_blank" rel="noopener" className="ml-auto inline-flex items-center gap-1 text-[11px] text-cobalt-dark hover:underline">
+              <a href={view.url} target="_blank" rel="noopener" className="ml-auto inline-flex items-center gap-1 text-[11px] text-cobalt-ink hover:underline">
                 Open on LinkedIn <ExternalLink className="size-3" aria-hidden="true" />
               </a>
             )}
@@ -357,7 +357,7 @@ export function LeadConversation({
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-bone-raised px-2.5 py-1 text-[12px] font-medium text-ink ring-1 ring-line">
                 {INTENT_LABEL[intent]}
-                {intent === view.suggestedIntent && <span className="text-[10px] font-normal text-[#9e4517]">suggested</span>}
+                {intent === view.suggestedIntent && <span className="text-[10px] font-normal text-orange-ink">suggested</span>}
               </span>
               <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-stone">
                 Sending as{' '}
@@ -366,7 +366,7 @@ export function LeadConversation({
                 ) : (
                   <>
                     <span className="text-status-warning">No sending profile</span>
-                    <Link href="/team/profiles" className="text-cobalt hover:underline">Assign profile</Link>
+                    <Link href="/team/profiles" className="text-cobalt-ink hover:underline">Assign profile</Link>
                   </>
                 )}
               </span>
@@ -375,7 +375,7 @@ export function LeadConversation({
                   <button
                     type="button"
                     onClick={() => textareaRef.current?.focus()}
-                    className="inline-flex h-8 items-center rounded-lg bg-orange px-2.5 text-[12px] font-medium text-on-accent transition-opacity hover:opacity-90"
+                    className="inline-flex h-8 items-center rounded-lg bg-orange px-2.5 text-[12px] font-medium text-on-orange transition-opacity hover:opacity-90"
                   >
                     {ctaLabel(view.nextAction.action)}
                   </button>
@@ -408,7 +408,7 @@ export function LeadConversation({
                           )}
                         >
                           {INTENT_LABEL[i]}
-                          {i === view.suggestedIntent && intent !== i && <span className="ml-1 text-[11px] text-[#9e4517]">suggested</span>}
+                          {i === view.suggestedIntent && intent !== i && <span className="ml-1 text-[11px] text-orange-ink">suggested</span>}
                         </button>
                       ))}
                       <div className="my-1 border-t border-line" />
@@ -619,7 +619,7 @@ export function LeadConversation({
                       aria-pressed={intent === i}
                       className={cn(
                         'rounded-full border px-2 py-0.5 text-[11px]',
-                        intent === i ? 'border-orange bg-orange/10 text-[#9e4517]' : 'border-line text-graphite hover:text-ink',
+                        intent === i ? 'border-orange bg-orange/10 text-orange-ink' : 'border-line text-graphite hover:text-ink',
                         i === view.suggestedIntent && intent !== i && 'border-orange/40',
                       )}
                     >
@@ -743,7 +743,7 @@ export function LeadConversation({
           <div className="rounded-2xl border border-line bg-bone-raised/20 p-4 text-[12px]">
             {facts.openQuestions.length > 0 && (
               <div>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-[#9e4517]">Waiting for your answer</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-orange-ink">Waiting for your answer</p>
                 <ul className="mt-1 space-y-0.5 text-ink">{facts.openQuestions.map((q) => <li key={q}>{q}</li>)}</ul>
               </div>
             )}

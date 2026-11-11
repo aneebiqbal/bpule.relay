@@ -88,7 +88,7 @@ export default async function ActivatePage() {
               ? 'flex size-9 items-center justify-center rounded bg-cobalt/10'
               : 'flex size-9 items-center justify-center rounded bg-orange/10'}
             >
-              <path.icon className={path.color === 'cobalt' ? 'size-4 text-cobalt' : 'size-4 text-orange'} aria-hidden="true" />
+              <path.icon className={path.color === 'cobalt' ? 'size-4 text-cobalt-ink' : 'size-4 text-orange'} aria-hidden="true" />
             </div>
             <h3 className="mt-3 text-[15px] font-medium text-ink">{path.title}</h3>
             <p className="mt-1 text-[13px] leading-relaxed text-graphite">{path.description}</p>

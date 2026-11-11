@@ -31,7 +31,7 @@ export default function StudioPage() {
             </p>
           </div>
           <div className="rounded-lg border border-cobalt/20 bg-cobalt/5 p-4">
-            <p className="text-[13px] font-medium text-cobalt">Studio</p>
+            <p className="text-[13px] font-medium text-cobalt-ink">Studio</p>
             <p className="mt-1 text-[13px] text-graphite">
               Surface topics from your identity, draft posts, approve, publish yourself.
             </p>
@@ -47,7 +47,7 @@ export default function StudioPage() {
         <h2 className="text-heading text-xl text-ink">The Studio loop</h2>
         <ol className="space-y-4 text-[14px] leading-relaxed text-graphite">
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[12px] font-semibold text-cobalt">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[12px] font-semibold text-cobalt-ink">
               1
             </span>
             <div>
@@ -60,7 +60,7 @@ export default function StudioPage() {
             </div>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[12px] font-semibold text-cobalt">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[12px] font-semibold text-cobalt-ink">
               2
             </span>
             <div>
@@ -73,7 +73,7 @@ export default function StudioPage() {
             </div>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[12px] font-semibold text-cobalt">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[12px] font-semibold text-cobalt-ink">
               3
             </span>
             <div>
@@ -85,7 +85,7 @@ export default function StudioPage() {
             </div>
           </li>
           <li className="flex gap-3">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[12px] font-semibold text-cobalt">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[12px] font-semibold text-cobalt-ink">
               4
             </span>
             <div>

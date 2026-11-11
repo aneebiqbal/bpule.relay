@@ -30,7 +30,7 @@ export function MetricStrip({ metrics, className }: { metrics: OpsMetric[]; clas
     >
       {metrics.map((m) => {
         const tone =
-          m.tone === 'critical' ? 'text-[#a8342a]' : m.tone === 'attention' ? 'text-[#b8531f]' : 'text-ink'
+          m.tone === 'critical' ? 'text-status-danger' : m.tone === 'attention' ? 'text-orange-ink' : 'text-ink'
         // A <dl> may only hold dt/dd or <div> groups, so the drill-down link sits
         // in the <dt> and stretches over the whole tile.
         return (
@@ -184,7 +184,7 @@ export function InlineError({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="alert"
-      className="rounded-xl border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-[#8f2b1e]"
+      className="rounded-xl border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[13px] text-status-danger"
     >
       {children}
     </p>

@@ -96,7 +96,7 @@ export function ScoringQaCenter() {
       {m && m.alerts.length > 0 && (
         <div className="space-y-1.5" data-testid="scoring-alerts">
           {m.alerts.map((a, i) => (
-            <div key={i} className={cn('flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px]', a.level === 'critical' ? 'border-status-danger/40 bg-status-danger/5 text-status-danger' : 'border-orange/40 bg-orange/5 text-orange')}>
+            <div key={i} className={cn('flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px]', a.level === 'critical' ? 'border-status-danger/40 bg-status-danger/5 text-status-danger' : 'border-orange/40 bg-orange-faint text-orange-ink')}>
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
               <span>{a.message}</span>
             </div>
@@ -130,7 +130,7 @@ export function ScoringQaCenter() {
       <Panel title="Decisions" subtitle="Filter, open a row, inspect why — and record feedback. Feedback never changes a score.">
         <div className="mb-3 flex flex-wrap gap-1.5">
           {FILTERS.map((f) => (
-            <button key={f.key} type="button" onClick={() => toggle(f.key)} className={cn('rounded-full px-2.5 py-1 text-[11px]', active.has(f.key) ? 'bg-cobalt text-bone' : 'border border-line text-graphite hover:bg-bone-raised')}>{f.label}</button>
+            <button key={f.key} type="button" onClick={() => toggle(f.key)} className={cn('rounded-full px-2.5 py-1 text-[11px]', active.has(f.key) ? 'bg-cobalt text-on-accent' : 'border border-line text-graphite hover:bg-bone-raised')}>{f.label}</button>
           ))}
         </div>
         {!loading && data && data.rows.length === 0 && <EmptyNote>No decisions match these filters.</EmptyNote>}
@@ -196,7 +196,7 @@ export function ScoringQaCenter() {
                         decisionRunId={r.decisionRunId}
                         observed={{ score: r.canonicalScore, displayScore: r.displayScore, qualification: r.qualification, action: r.action, buyerIntent: r.buyerIntent, relationshipRole: r.relationshipRole, versions: r.versions }}
                       />
-                      {r.kind === 'lead' && <Link href={`/leads/${r.id}`} className="text-[11px] text-cobalt hover:underline">Open lead</Link>}
+                      {r.kind === 'lead' && <Link href={`/leads/${r.id}`} className="text-[11px] text-cobalt-ink hover:underline">Open lead</Link>}
                     </div>
                   </div>
                 )}

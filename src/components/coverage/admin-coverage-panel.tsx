@@ -159,8 +159,8 @@ export function AdminCoveragePanel({
 
       <div className="mt-4 grid grid-cols-3 gap-3">
         <StatusFact label="Covered" value={summary.covered} tone="text-status-success" />
-        <StatusFact label="Backup active" value={summary.backupActive} tone="text-cobalt" />
-        <StatusFact label="At risk" value={summary.atRisk + summary.uncovered} tone="text-[#8f2b1e]" />
+        <StatusFact label="Backup active" value={summary.backupActive} tone="text-cobalt-ink" />
+        <StatusFact label="At risk" value={summary.atRisk + summary.uncovered} tone="text-status-danger" />
       </div>
 
       {/* Readiness — the gate AUTO_COVER will require, visible now. */}

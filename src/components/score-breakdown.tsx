@@ -129,7 +129,7 @@ function DimensionRow({ dim, boxed }: { dim: DisplayDimension; boxed: boolean })
         <span className="flex items-center gap-1.5 text-ink">
           {dim.label}
           {quotes.length === 0 && inference && (
-            <span title={inference.text} className="rounded-sm bg-line/50 px-1 py-px text-[9px] uppercase tracking-wide text-stone">
+            <span title={inference.text} className="rounded-sm bg-line/50 px-1 py-px text-[9px] uppercase tracking-wide text-graphite">
               Inferred
             </span>
           )}

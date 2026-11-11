@@ -143,7 +143,7 @@ export default function FounderSetupPage() {
         <p className="mt-2 text-[14px] leading-relaxed text-graphite">
           Relay Studio (the content side) is configured separately. Once your revenue
           pipeline is running, see{" "}
-          <Link href="/docs/studio" className="font-medium text-cobalt hover:underline">
+          <Link href="/docs/studio" className="font-medium text-cobalt-ink hover:underline">
             Studio
           </Link>{" "}
           for how to set up content identities, pillars, and personas.

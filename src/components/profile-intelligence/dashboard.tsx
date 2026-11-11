@@ -112,7 +112,7 @@ export function ProfileIntelligenceDashboard({ orgId, isAdmin, canManage = isAdm
             <p className="text-[13px] text-status-warning">{pauseMessage}</p>
             <button
               onClick={() => void processBatch(activeBatch.id)}
-              className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-white hover:bg-orange/90"
+              className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-on-orange hover:bg-orange/90"
             >
               Resume
             </button>
@@ -152,7 +152,7 @@ export function ProfileIntelligenceDashboard({ orgId, isAdmin, canManage = isAdm
             </div>
             <button
               onClick={() => { setActiveBatch(null); setResults([]); setRefreshKey((k) => k + 1) }}
-              className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-white hover:bg-orange/90"
+              className="rounded bg-orange px-4 py-2 text-[12px] font-medium text-on-orange hover:bg-orange/90"
             >
               View Profiles
             </button>

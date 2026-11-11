@@ -294,7 +294,7 @@ export function StudioHome({
                 <span
                   className={cn(
                     'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                    activeIdea.trendGrounded ? 'bg-cobalt/10 text-cobalt' : 'bg-bone text-graphite',
+                    activeIdea.trendGrounded ? 'bg-cobalt/10 text-cobalt-ink' : 'bg-bone text-graphite',
                   )}
                 >
                   {activeIdea.trendGrounded ? 'Trend-led' : 'Editorial'}

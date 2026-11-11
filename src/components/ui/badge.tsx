@@ -15,7 +15,7 @@ const badgeVariants = cva(
         ghost: "bg-bone-raised text-graphite",
         link: "text-ink underline-offset-4 hover:underline",
         orange: "bg-orange/10 text-orange-ink",
-        cobalt: "bg-cobalt/10 text-cobalt",
+        cobalt: "bg-cobalt/10 text-cobalt-ink",
         success: "bg-status-success/8 text-status-success",
         warning: "bg-status-warning/8 text-status-warning",
       },

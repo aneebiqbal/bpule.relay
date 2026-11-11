@@ -120,7 +120,7 @@ export function ConversationArchive({ threads, failed }: { threads: ArchiveThrea
                 href={`/leads/${thread.leadId}?tab=conversation`}
                 className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-bone-raised/60"
               >
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[13px] font-semibold text-cobalt">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-cobalt/10 text-[13px] font-semibold text-cobalt-ink">
                   {(thread.contactName ?? thread.company).charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -140,7 +140,7 @@ export function ConversationArchive({ threads, failed }: { threads: ArchiveThrea
                       <span className="rounded-full bg-orange/10 px-1.5 py-px text-[10px] text-orange-ink">Inbound</span>
                     )}
                     {thread.stageLabel && (
-                      <span className="rounded-full bg-cobalt/10 px-1.5 py-px text-[10px] text-cobalt">{thread.stageLabel}</span>
+                      <span className="rounded-full bg-cobalt/10 px-1.5 py-px text-[10px] text-cobalt-ink">{thread.stageLabel}</span>
                     )}
                     <span className="text-[10px] text-graphite">{thread.turnCount} {thread.turnCount === 1 ? 'turn' : 'turns'}</span>
                   </div>

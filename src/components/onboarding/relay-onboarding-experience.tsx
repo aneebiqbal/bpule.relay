@@ -817,7 +817,7 @@ export function RelayOnboardingExperience({ bootstrap }: { bootstrap: Onboarding
                       </p>
                     </div>
                     {identity.channel && identity.channel !== 'other' ? (
-                      <span className="shrink-0 rounded-sm bg-orange/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-orange">
+                      <span className="shrink-0 rounded-sm bg-orange-faint px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-orange-ink">
                         {identity.channel}
                       </span>
                     ) : null}

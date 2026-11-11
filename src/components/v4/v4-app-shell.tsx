@@ -165,7 +165,7 @@ export function V4AppShell({
           <Icon className="size-4 shrink-0" aria-hidden strokeWidth={active ? 2 : 1.75} />
           <span className={cn('flex-1 truncate text-left', collapsed && 'hidden')}>{item.label}</span>
           {badge && !collapsed && (
-            <span className="rounded-full bg-orange-faint px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-orange-dark">
+            <span className="rounded-full bg-orange-faint px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-orange-ink">
               {badge.label}
             </span>
           )}

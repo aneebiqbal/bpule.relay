@@ -101,7 +101,7 @@ export function ProfileDetail({ profileId, canImport = false, isAdmin = false }:
           </h1>
           {canImport && !profile.archivedAt && (
             <button onClick={() => setShowImport(true)} data-testid="add-import-data"
-              className="rounded bg-orange px-3 py-1.5 text-[12px] font-medium text-white hover:bg-orange/90">
+              className="rounded bg-orange px-3 py-1.5 text-[12px] font-medium text-on-orange hover:bg-orange/90">
               Add / Import Data
             </button>
           )}
@@ -129,10 +129,10 @@ export function ProfileDetail({ profileId, canImport = false, isAdmin = false }:
             <span className="rounded bg-success/10 px-2 py-0.5 text-[10px] text-success">Ready</span>
           )}
           {profile.seniority && (
-            <span className="rounded bg-orange/5 px-2 py-0.5 text-[10px] text-orange/80">{profile.seniority}</span>
+            <span className="rounded bg-orange-faint px-2 py-0.5 text-[10px] text-orange-ink">{profile.seniority}</span>
           )}
           {profile.yearsExperience != null && (
-            <span className="rounded bg-orange/5 px-2 py-0.5 text-[10px] text-orange/80">{profile.yearsExperience}+ yrs exp</span>
+            <span className="rounded bg-orange-faint px-2 py-0.5 text-[10px] text-orange-ink">{profile.yearsExperience}+ yrs exp</span>
           )}
           <span className="rounded bg-orange/5 px-2 py-0.5 text-[10px] text-graphite">
             {profile.sourceCount} sources · {profile.proofCount} proofs
@@ -226,7 +226,7 @@ export function ProfileDetail({ profileId, canImport = false, isAdmin = false }:
               <div key={pc.id} className="flex items-start gap-2">
                 <span className={`mt-0.5 flex-shrink-0 rounded px-1 text-[9px] font-medium ${
                   pc.strength === 'strong' ? 'bg-success text-success' :
-                  pc.strength === 'moderate' ? 'bg-warning/10 text-yellow-600' :
+                  pc.strength === 'moderate' ? 'bg-warning/10 text-status-warning' :
                   'bg-stone-light/10 text-stone'
                 }`}>
                   {pc.strength}

@@ -367,7 +367,7 @@ export function DailyJobs({
           return (
             <li key={job.key} className={cn('px-4 py-3', isNext && 'bg-orange/5')}>
               <div className="flex items-start gap-3">
-                <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-md', covered ? 'bg-status-success/10 text-status-success' : behind ? 'bg-status-danger/10 text-status-danger' : isNext ? 'bg-orange/10 text-orange' : 'bg-bone text-ink')}>
+                <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-md', covered ? 'bg-status-success/10 text-status-success' : behind ? 'bg-status-danger/10 text-status-danger' : isNext ? 'bg-orange-faint text-orange-ink' : 'bg-bone text-ink')}>
                   <Icon className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">

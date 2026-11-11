@@ -159,7 +159,7 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
       {/* Generated reply */}
       {replyText && (
         <div className="mb-4 rounded-lg border border-cobalt/20 bg-cobalt/5 p-3 space-y-2">
-          <p className="text-[10px] uppercase tracking-wide text-cobalt">Suggested reply</p>
+          <p className="text-[10px] uppercase tracking-wide text-cobalt-ink">Suggested reply</p>
           <textarea
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}

@@ -38,7 +38,7 @@ const VIEW_TABS: Array<{ key: UpworkView; label: string }> = [
 
 const STATUS_CHIP: Record<UpworkJobStatus, { label: string; cls: string }> = {
   SAVED: { label: 'Saved', cls: 'bg-bone text-graphite ring-line' },
-  DRAFT_READY: { label: 'Draft ready', cls: 'bg-cobalt/10 text-cobalt ring-cobalt/20' },
+  DRAFT_READY: { label: 'Draft ready', cls: 'bg-cobalt/10 text-cobalt-ink ring-cobalt/20' },
   APPLIED: { label: 'Applied', cls: 'bg-status-success/10 text-status-success ring-status-success/20' },
   CLIENT_REPLIED: { label: 'Client replied', cls: 'bg-orange/10 text-orange-ink ring-orange/20' },
   INTERVIEW: { label: 'Interview', cls: 'bg-orange/10 text-orange-ink ring-orange/20' },

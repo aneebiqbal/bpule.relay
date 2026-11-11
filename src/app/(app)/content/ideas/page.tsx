@@ -155,7 +155,7 @@ export default async function ContentIdeasPage({
                       </td>
                       <td className="px-3 py-2.5 text-graphite">{idea.territory ?? '—'}</td>
                       <td className="px-3 py-2.5">
-                        <span className={idea.trendGrounded ? 'text-cobalt' : 'text-stone'}>
+                        <span className={idea.trendGrounded ? 'text-cobalt-ink' : 'text-stone'}>
                           {idea.trendGrounded ? 'Trend' : 'Editorial'}
                         </span>
                       </td>
@@ -165,7 +165,7 @@ export default async function ContentIdeasPage({
                             status === 'posted'
                               ? 'text-status-success'
                               : status === 'used'
-                                ? 'text-cobalt'
+                                ? 'text-cobalt-ink'
                                 : status === 'recommended'
                                   ? 'text-orange'
                                   : 'text-graphite'
@@ -177,7 +177,7 @@ export default async function ContentIdeasPage({
                       <td className="px-3 py-2.5 text-right">
                         <Link
                           href={`/studio/drafts/new?personaId=${idea.personaId}&ideaId=${idea.id}`}
-                          className="text-[12px] font-medium text-cobalt hover:underline"
+                          className="text-[12px] font-medium text-cobalt-ink hover:underline"
                         >
                           Draft
                         </Link>
@@ -198,7 +198,7 @@ export default async function ContentIdeasPage({
                   <span className="text-[11px] text-stone">
                     {idea.territory ?? 'Editorial'} · {ideaStatus(idea)}
                   </span>
-                  <Link href={`/studio/drafts/new?personaId=${idea.personaId}&ideaId=${idea.id}`} className="text-[12px] font-medium text-cobalt">
+                  <Link href={`/studio/drafts/new?personaId=${idea.personaId}&ideaId=${idea.id}`} className="text-[12px] font-medium text-cobalt-ink">
                     Draft
                   </Link>
                 </div>

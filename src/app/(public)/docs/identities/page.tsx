@@ -66,7 +66,7 @@ export default function IdentitiesPage() {
         </p>
         <div className="flex flex-wrap gap-2">
           {["Expertise", "Experience", "Projects", "Audience", "Goals", "Territories", "Opinions", "Voice", "Journey"].map((dim) => (
-            <span key={dim} className="rounded-full border border-cobalt/20 bg-cobalt/5 px-3 py-1 text-[13px] font-medium text-cobalt">
+            <span key={dim} className="rounded-full border border-cobalt/20 bg-cobalt/5 px-3 py-1 text-[13px] font-medium text-cobalt-ink">
               {dim}
             </span>
           ))}

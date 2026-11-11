@@ -251,7 +251,7 @@ export default async function ChatsPage({
                   <Link
                     href={opsHref('/chats', linkState, { view: 'all', lead: null })}
                     scroll={false}
-                    className="text-[12px] font-medium text-[#9e4517] hover:underline"
+                    className="text-[12px] font-medium text-orange-ink hover:underline"
                   >
                     View all conversations
                   </Link>
@@ -262,7 +262,7 @@ export default async function ChatsPage({
                   <Link
                     href={opsHref('/chats', { view: null, rep: null, team: null, profile: null, source: null, q: null, age: null, cstage: null, lead: null })}
                     scroll={false}
-                    className="text-[12px] font-medium text-[#9e4517] hover:underline"
+                    className="text-[12px] font-medium text-orange-ink hover:underline"
                   >
                     Clear filters
                   </Link>
@@ -278,7 +278,7 @@ export default async function ChatsPage({
                     <Link
                       href={opsHref('/chats', linkState, { limit: 'all' })}
                       scroll={false}
-                      className="mt-0.5 inline-block text-[12px] font-medium text-[#9e4517] hover:underline"
+                      className="mt-0.5 inline-block text-[12px] font-medium text-orange-ink hover:underline"
                     >
                       Show all {queue.total} conversations
                     </Link>

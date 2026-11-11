@@ -520,7 +520,7 @@ export function TargetsManager() {
                     setConfirmDeleteId(null)
                     void deleteTarget(id)
                   }}
-                  className="rounded-lg bg-[#a8342a] px-3 py-1.5 text-[12px] font-medium text-white transition-transform active:scale-[0.98] disabled:opacity-50"
+                  className="rounded-lg bg-status-danger px-3 py-1.5 text-[12px] font-medium text-on-danger transition-transform active:scale-[0.98] disabled:opacity-50"
                 >
                   Remove daily plan
                 </button>

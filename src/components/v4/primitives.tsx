@@ -21,7 +21,7 @@ const TONE_TEXT: Record<V4Tone, string> = {
   danger: 'text-status-danger',
   warning: 'text-status-warning',
   success: 'text-status-success',
-  info: 'text-cobalt',
+  info: 'text-cobalt-ink',
 }
 
 const TONE_CHIP: Record<V4Tone, string> = {
@@ -29,7 +29,7 @@ const TONE_CHIP: Record<V4Tone, string> = {
   danger: 'bg-status-danger/10 text-status-danger ring-status-danger/20',
   warning: 'bg-status-warning/10 text-status-warning ring-status-warning/20',
   success: 'bg-status-success/10 text-status-success ring-status-success/20',
-  info: 'bg-cobalt/10 text-cobalt ring-cobalt/20',
+  info: 'bg-cobalt/10 text-cobalt-ink ring-cobalt/20',
 }
 
 const PRIORITY_DOT: Record<V4Priority, string> = {
@@ -42,7 +42,7 @@ const PRIORITY_DOT: Record<V4Priority, string> = {
 const PRIORITY_TEXT: Record<V4Priority, string> = {
   critical: 'text-status-danger',
   high: 'text-status-warning',
-  watch: 'text-cobalt',
+  watch: 'text-cobalt-ink',
   normal: 'text-graphite',
 }
 

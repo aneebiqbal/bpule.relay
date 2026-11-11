@@ -59,7 +59,7 @@ export function OnboardingGuide({ steps, className }: OnboardingGuideProps) {
           <a key={step.label} href={step.href} className="flex items-center gap-2.5 group">
             <span className={cn(
               "flex size-5 shrink-0 items-center justify-center rounded-full text-[9px] font-medium transition-colors",
-              step.done ? "bg-status-success/15 text-status-success" : "bg-line text-stone group-hover:bg-orange/10 group-hover:text-orange"
+              step.done ? "bg-status-success/15 text-status-success" : "bg-line text-graphite group-hover:bg-orange/10 group-hover:text-orange"
             )}>
               {step.done ? "✓" : "○"}
             </span>

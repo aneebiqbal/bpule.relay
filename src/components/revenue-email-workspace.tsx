@@ -132,7 +132,7 @@ export function RevenueEmailWorkspace() {
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <span className="text-[11px] text-stone">{new Date(row.updatedAt).toLocaleString()}</span>
-                <Link href={`/leads/${row.leadId}`} className="text-xs font-medium text-cobalt hover:underline">Review Email</Link>
+                <Link href={`/leads/${row.leadId}`} className="text-xs font-medium text-cobalt-ink hover:underline">Review Email</Link>
               </div>
             </div>
           ))}

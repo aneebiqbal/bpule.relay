@@ -35,7 +35,7 @@ import {
 } from '@/components/v4/primitives'
 
 function severityClass(severity: AttentionSeverity | string) {
-  if (severity === 'critical' || severity === 'Critical') return 'bg-status-danger/10 text-[#8f2b1e]'
+  if (severity === 'critical' || severity === 'Critical') return 'bg-status-danger/10 text-status-danger'
   if (severity === 'attention' || severity === 'Attention') return 'bg-status-warning/10 text-status-warning'
   return 'bg-status-success/10 text-status-success'
 }

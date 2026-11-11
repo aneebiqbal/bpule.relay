@@ -25,8 +25,8 @@ import {
 
 /** Canonical priority language on the pipeline card (never a score band). */
 const PRIORITY_STYLES: Record<LeadPriority, string> = {
-  critical: 'bg-status-danger/10 text-[#8f2b1e]',
-  high: 'bg-orange/10 text-[#9e4517]',
+  critical: 'bg-status-danger/10 text-status-danger',
+  high: 'bg-orange/10 text-orange-ink',
   normal: 'bg-bone-raised text-graphite',
   watch: 'bg-status-info/10 text-status-info',
 }
@@ -40,11 +40,11 @@ const STAGE_META: Record<PipelineStage, {
   color: string
   description: string
 }> = {
-  to_contact: { label: STAGE_LABELS.to_contact, icon: <Send className="size-3.5" />, color: 'text-stone-500', description: 'Qualified — waiting for first contact' },
+  to_contact: { label: STAGE_LABELS.to_contact, icon: <Send className="size-3.5" />, color: 'text-stone', description: 'Qualified — waiting for first contact' },
   observe: { label: STAGE_LABELS.observe, icon: <Eye className="size-3.5" />, color: 'text-status-warning', description: 'Not a fit yet — watch, do not contact' },
   needs_reply: { label: STAGE_LABELS.needs_reply, icon: <Reply className="size-3.5" />, color: 'text-orange', description: 'Prospect replied — respond now' },
   follow_up_due: { label: STAGE_LABELS.follow_up_due, icon: <Bell className="size-3.5" />, color: 'text-orange', description: 'Time to re-engage' },
-  waiting: { label: STAGE_LABELS.waiting, icon: <Clock className="size-3.5" />, color: 'text-cobalt', description: 'Sent, awaiting response' },
+  waiting: { label: STAGE_LABELS.waiting, icon: <Clock className="size-3.5" />, color: 'text-cobalt-ink', description: 'Sent, awaiting response' },
   done: { label: STAGE_LABELS.done, icon: <CheckCircle2 className="size-3.5" />, color: 'text-status-success', description: 'Won or closed' },
   cold: { label: STAGE_LABELS.cold, icon: <Snowflake className="size-3.5" />, color: 'text-status-warning', description: 'Unresponsive — will auto-archive' },
 }
@@ -215,7 +215,7 @@ export function LeadsBoardV2({
               onClick={() => { setFilter(f.key); setVisibleCount(PAGE_SIZE) }}
               className={cn(
                 'shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200',
-                filter === f.key ? 'bg-orange text-on-accent shadow-sm' : 'text-graphite hover:text-ink'
+                filter === f.key ? 'bg-orange text-on-orange shadow-sm' : 'text-graphite hover:text-ink'
               )}
             >
               {f.label}
@@ -257,7 +257,7 @@ export function LeadsBoardV2({
                     <div className="text-left">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-ink">{meta.label}</span>
-                        <span className="rounded-full bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-stone">
+                        <span className="rounded-full bg-line/60 px-1.5 py-0.5 text-[10px] font-medium text-graphite">
                           {counts[stage] ?? 0}
                         </span>
                       </div>
@@ -334,14 +334,14 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
       <div className="flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-bone-raised/30 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
         {/* Avatar + status dot */}
         <div className="relative shrink-0">
-          <div className="flex size-10 items-center justify-center rounded-full bg-cobalt/10 text-sm font-semibold text-[#2a46a8]">
+          <div className="flex size-10 items-center justify-center rounded-full bg-cobalt/10 text-sm font-semibold text-cobalt-ink">
             {getInitials(lead.contactName ?? lead.company ?? '?')}
           </div>
           {stage === 'needs_reply' && (
             <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-orange ring-2 ring-bone-raised" />
           )}
           {countdown !== null && (
-            <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-status-warning text-[8px] font-bold text-[#2a1408] ring-2 ring-bone-raised">
+            <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-status-warning text-[8px] font-bold text-on-warning ring-2 ring-bone-raised">
               {countdown}
             </span>
           )}
@@ -374,7 +374,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
 
           {/* Rep assignment (admin view) */}
           {lead.ownerName && (
-            <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-[#2a46a8]">
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-cobalt-ink">
               <Users className="size-3" />
               <span>{lead.ownerName}</span>
             </div>
@@ -383,7 +383,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
           {/* Source profile attribution. A lead with no sender is said so
               plainly — never silently dropped, never guessed from a name. */}
           <div className="mt-1 flex items-center gap-1.5 text-[11px] text-graphite">
-            <span className={lead.senderProfileName ? 'text-graphite' : 'font-medium text-[#7d5410]'}>
+            <span className={lead.senderProfileName ? 'text-graphite' : 'font-medium text-status-warning'}>
               {lead.senderProfileName ? `Profile: ${lead.senderProfileName}` : 'Profile not assigned'}
             </span>
           </div>
@@ -399,7 +399,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
             {stuck.map((signal) => (
               <span
                 key={signal}
-                className="inline-flex items-center gap-1 rounded-full bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7d5410]"
+                className="inline-flex items-center gap-1 rounded-full bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning"
               >
                 <AlertTriangle className="size-2.5" aria-hidden="true" />
                 {STUCK_SIGNAL_LABELS[signal]}
@@ -409,7 +409,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
 
           {/* Archival warning */}
           {countdown !== null && (
-            <div className="mt-1 flex items-center gap-1 text-[11px] text-[#7d5410]">
+            <div className="mt-1 flex items-center gap-1 text-[11px] text-status-warning">
               <AlertTriangle className="size-3" />
               <span>Auto-archiving in {countdown} day{countdown !== 1 ? 's' : ''}</span>
             </div>
@@ -421,7 +421,7 @@ function LeadCard({ lead, index }: { lead: LeadRow; index: number }) {
           <LeadScoreRing lead={lead} size={38} />
           <Link
             href={action.href}
-            className="flex items-center gap-1.5 rounded-lg bg-orange px-3 py-1.5 text-xs font-medium text-[#2a1408] transition-all duration-200 hover:bg-orange/90 hover:shadow-sm active:scale-[0.97]"
+            className="flex items-center gap-1.5 rounded-lg bg-orange px-3 py-1.5 text-xs font-medium text-on-orange transition-all duration-200 hover:bg-orange/90 hover:shadow-sm active:scale-[0.97]"
           >
             {action.label}
             <ExternalLink className="size-3" />
@@ -452,9 +452,9 @@ function StatCard({ icon, label, value, accent }: {
       <div className={cn(
         'flex items-center justify-center rounded-lg p-2',
         accent === 'orange' ? 'bg-orange/10 text-orange-ink' :
-        accent === 'red' ? 'bg-red-50 text-red-500' :
-        accent === 'stone' ? 'bg-stone-100 text-stone-500' :
-        'bg-cobalt/10 text-cobalt'
+        accent === 'red' ? 'bg-status-danger/10 text-status-danger' :
+        accent === 'stone' ? 'bg-bone-raised text-stone' :
+        'bg-cobalt/10 text-cobalt-ink'
       )}>
         {icon}
       </div>

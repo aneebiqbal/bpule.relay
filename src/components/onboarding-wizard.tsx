@@ -272,7 +272,7 @@ export function OnboardingWizard() {
   if (step === 'complete') {
     return (
       <div className="mx-auto max-w-lg space-y-6 px-4 py-12 text-center">
-        <div className="mx-auto h-12 w-12 rounded-full bg-green-100 p-3">
+        <div className="mx-auto h-12 w-12 rounded-full bg-status-success/10 p-3">
           <svg className="h-6 w-6 text-status-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
@@ -491,7 +491,7 @@ function StepUnderstanding({ state, update: _update }: { state: OnboardingState;
               <p className="text-xs font-medium uppercase tracking-wider text-graphite">Strongest expertise</p>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {identity.expertise.slice(0, 8).map((e) => (
-                  <span key={e.area} className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                  <span key={e.area} className="rounded-full bg-cobalt/10 px-2.5 py-0.5 text-xs font-medium text-cobalt-ink">
                     {e.area}
                   </span>
                 ))}
@@ -503,7 +503,7 @@ function StepUnderstanding({ state, update: _update }: { state: OnboardingState;
               <p className="text-xs font-medium uppercase tracking-wider text-graphite">Experience</p>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {identity.industries.map((ind) => (
-                  <span key={ind} className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                  <span key={ind} className="rounded-full bg-status-success/10 px-2.5 py-0.5 text-xs font-medium text-status-success">
                     {ind}
                   </span>
                 ))}
@@ -515,7 +515,7 @@ function StepUnderstanding({ state, update: _update }: { state: OnboardingState;
               <p className="text-xs font-medium uppercase tracking-wider text-graphite">You could credibly talk about</p>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {identity.territories.slice(0, 8).map((t) => (
-                  <span key={t} className="rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                  <span key={t} className="rounded-full bg-cobalt/10 px-2.5 py-0.5 text-xs font-medium text-cobalt-ink">
                     {t}
                   </span>
                 ))}

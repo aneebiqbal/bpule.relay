@@ -65,7 +65,7 @@ export default function ProspectCheckPage() {
             </span>
           </div>
           <div className="flex items-center gap-3 rounded-lg border border-line bg-bone-raised p-3">
-            <span className="rounded-md bg-stone/10 px-2 py-0.5 text-mono-medium text-[10px] text-stone">
+            <span className="rounded-md bg-stone/10 px-2 py-0.5 text-mono-medium text-[10px] text-graphite">
               SKIP (0–6)
             </span>
             <span className="text-[13px] text-graphite">

@@ -166,7 +166,7 @@ function NextActionCell({ lead }: { lead: LeadRow }) {
     <Link
       href={action.href}
       onClick={(event) => event.stopPropagation()}
-      className="inline-flex items-center gap-1 rounded-md bg-orange px-2.5 py-1 text-[12px] font-medium text-on-accent transition-colors hover:bg-orange-dark active:scale-[0.98]"
+      className="inline-flex items-center gap-1 rounded-md bg-orange px-2.5 py-1 text-[12px] font-medium text-on-orange transition-colors hover:bg-orange-dark active:scale-[0.98]"
     >
       {action.label}
       <ArrowRight className="size-3" aria-hidden="true" />
@@ -725,7 +725,7 @@ export function LeadsTable({
       action={
         <Link
           href="/prospect"
-          className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-accent transition-colors hover:bg-orange-dark"
+          className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2 text-[13px] font-medium text-on-orange transition-colors hover:bg-orange-dark"
         >
           <Plus className="size-4" aria-hidden="true" />
           Check a prospect

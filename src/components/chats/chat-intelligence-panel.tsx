@@ -28,7 +28,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function List({ title, items, tone }: { title: string; items: string[]; tone?: 'warning' | 'success' | 'orange' }) {
   if (items.length === 0) return null
-  const color = tone === 'warning' ? 'text-status-warning' : tone === 'success' ? 'text-status-success' : tone === 'orange' ? 'text-[#9e4517]' : 'text-stone'
+  const color = tone === 'warning' ? 'text-status-warning' : tone === 'success' ? 'text-status-success' : tone === 'orange' ? 'text-orange-ink' : 'text-stone'
   return (
     <div className="mt-2">
       <p className={`text-[10px] font-medium uppercase tracking-wider ${color}`}>{title}</p>
@@ -101,7 +101,7 @@ export function ChatIntelligencePanel({
               <StatusBadge
                 status={intel.buyerIntent}
                 variant={INTENT_VARIANT[intel.buyerIntent] ?? 'neutral'}
-                className={intel.buyerIntent === 'HIGH' ? 'text-[#1f5e3c]' : intel.buyerIntent === 'MEDIUM' ? 'text-cobalt-dark' : undefined}
+                className={intel.buyerIntent === 'HIGH' ? 'text-status-success' : intel.buyerIntent === 'MEDIUM' ? 'text-cobalt-ink' : undefined}
               />
             ) : (
               <span className="text-stone">Unknown</span>

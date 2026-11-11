@@ -47,10 +47,10 @@ const ATTENTION_TONE = {
 
 /** Darker status text tones that clear AA on the bone surface. */
 const FACT_TONE = {
-  danger: 'text-[#8f2b1e]',
-  warning: 'text-[#7d5410]',
-  success: 'text-[#256b4a]',
-  info: 'text-[#2f48b8]',
+  danger: 'text-status-danger',
+  warning: 'text-status-warning',
+  success: 'text-status-success',
+  info: 'text-cobalt-ink',
   neutral: 'text-ink',
 } as const
 

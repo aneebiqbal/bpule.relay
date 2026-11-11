@@ -71,7 +71,7 @@ export function GlobalCreateMenu({ isAdmin, isManager = false }: GlobalCreateMen
                 <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
                   {item.label}
                   {'default' in item && item.default && (
-                    <span className="rounded-full bg-orange-faint px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-orange-dark">
+                    <span className="rounded-full bg-orange-faint px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-orange-ink">
                       Default
                     </span>
                   )}

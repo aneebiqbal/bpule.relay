@@ -471,7 +471,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
           {/* Editor */}
           <div className="space-y-4">
             <section className="rounded-xl border border-cobalt/30 bg-cobalt/[0.03] p-4">
-              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt">01 / Write this</p>
+              <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt-ink">01 / Write this</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink">{sourceSummary}</p>
               <p className="mt-1.5 text-[11px] text-graphite">
                 This source context anchors the draft before visual concept and image prompt are generated.
@@ -555,7 +555,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
               {visual ? (
                 <>
                   <p className="mt-1.5 text-sm text-ink">{visual.idea}</p>
-                  <p className={`mt-1 text-[11px] ${isVisualStale ? 'text-amber-700' : 'text-graphite'}`}>
+                  <p className={`mt-1 text-[11px] ${isVisualStale ? 'text-status-warning' : 'text-graphite'}`}>
                     {isVisualStale ? 'Post changed. Refresh visual to sync the image prompt.' : 'Visual and prompt are synced with this draft.'}
                   </p>
                   {visualError ? <p className="mt-1 text-[11px] text-status-danger">{visualError}</p> : null}
@@ -591,7 +591,7 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
                       <p className="whitespace-pre-wrap text-xs leading-relaxed text-graphite">{visual.imagePrompt}</p>
                     </div>
                   )}
-                  <p className={`mt-2 text-[11px] ${isVisualStale ? 'text-amber-700' : 'text-graphite'}`}>
+                  <p className={`mt-2 text-[11px] ${isVisualStale ? 'text-status-warning' : 'text-graphite'}`}>
                     {isVisualStale ? 'Prompt may be stale after edits. Refresh visual concept first.' : 'Prompt is synced with your latest visual concept.'}
                   </p>
                   <div className="mt-1.5 flex items-center gap-3">
@@ -662,13 +662,13 @@ export function PostWorkspace({ initialDraft, initialVisual }: { initialDraft?: 
 }
 
 function SaveStatus({ status, onRetry }: { status: 'idle' | 'saving' | 'saved' | 'error'; onRetry: () => void }) {
-  if (status === 'saving') return <span className="text-xs text-amber-600">Saving…</span>
+  if (status === 'saving') return <span className="text-xs text-status-warning">Saving…</span>
   if (status === 'saved') return <span className="text-xs text-status-success">Saved</span>
   if (status === 'error') {
     return (
       <span className="text-xs text-status-danger">
         Couldn&apos;t save your edit —{' '}
-        <button type="button" onClick={onRetry} className="underline underline-offset-2 hover:text-red-700">
+        <button type="button" onClick={onRetry} className="underline underline-offset-2 hover:text-status-danger">
           retry
         </button>
       </span>
