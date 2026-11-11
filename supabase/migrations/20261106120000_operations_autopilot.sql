@@ -115,8 +115,7 @@ create table if not exists profile_coverage (
   active boolean not null default true,
   created_by uuid references reps(id) on delete set null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-
+  updated_at timestamptz not null default now()
 );
 
 -- Uniqueness applies to the ACTIVE chain only. Reconfiguring a profile
@@ -328,7 +327,7 @@ create policy "pr_update" on profile_readiness for update
   );
 
 comment on table profile_readiness is
-  'A rep\'s explicit confirmation that a profile is usable on their device. Not a credential store; revocable by the same rep.';
+  'A rep''s explicit confirmation that a profile is usable on their device. Not a credential store; revocable by the same rep.';
 
 -- ---------------------------------------------------------------------------
 -- 6. Operating policy: coverage mode + overload limit
@@ -347,7 +346,7 @@ alter table organization_operating_policy
 comment on column organization_operating_policy.coverage_policy is
   'How structural coverage changes are applied. APPROVAL_REQUIRED is the only mode the first release acts on; the engine derives the plan in every mode.';
 comment on column organization_operating_policy.coverage_limits is
-  'Overload protection ceilings. maxProfilesPerRep bounds a rep\'s own profiles plus active coverage.';
+  'Overload protection ceilings. maxProfilesPerRep bounds a rep''s own profiles plus active coverage.';
 
 -- ---------------------------------------------------------------------------
 -- Verification (run manually after applying):
