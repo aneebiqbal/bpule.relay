@@ -304,16 +304,16 @@ export function LeadConversation({
     <div className={cn('grid gap-4 h-full', variant === 'full' && 'lg:grid-cols-[minmax(0,1fr)_300px]')}>
       {/* h-full + internal scroll: the thread must fill the workspace instead of
           stopping at a fixed 520px and leaving a dead band above the composer. */}
-      <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-bone-raised/20" aria-label="Conversation">
+      <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-bone-raised" aria-label="Conversation">
         {variant === 'full' && (
           <header className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
-            <span className="rounded-full bg-cobalt/10 px-2 py-0.5 text-[11px] font-medium text-cobalt">{view.stageLabel}</span>
+            <span className="rounded-full bg-cobalt/10 px-2 py-0.5 text-[11px] font-medium text-cobalt-dark">{view.stageLabel}</span>
             <span className={cn('text-[12px] font-medium', view.nextAction.requiresAction ? 'text-[#9e4517]' : 'text-graphite')}>
               {view.nextAction.primaryLabel}
             </span>
-            <span className="text-[11px] text-stone">{view.nextAction.reason}</span>
+            <span className="text-[11px] text-graphite">{view.nextAction.reason}</span>
             {view.url && (
-              <a href={view.url} target="_blank" rel="noopener" className="ml-auto inline-flex items-center gap-1 text-[11px] text-cobalt hover:underline">
+              <a href={view.url} target="_blank" rel="noopener" className="ml-auto inline-flex items-center gap-1 text-[11px] text-cobalt-dark hover:underline">
                 Open on LinkedIn <ExternalLink className="size-3" aria-hidden="true" />
               </a>
             )}
