@@ -231,6 +231,8 @@ function TeamProfilesTableInner({
               <tr className="border-b border-line text-[10px] uppercase tracking-[0.12em] text-stone">
                 <th className="px-4 py-2 font-medium">Person</th>
                 <th className="px-4 py-2 font-medium">Channels</th>
+                <th className="px-4 py-2 font-medium">Primary</th>
+                <th className="px-4 py-2 font-medium">Working</th>
                 <th className="px-4 py-2 font-medium">Today</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2"><span className="sr-only">Actions</span></th>
@@ -283,6 +285,10 @@ function PersonRow({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: 
   const pendingAckNames = reps
     .filter((rep) => profile.pendingAcknowledgementRepIds.includes(rep.id))
     .map((rep) => rep.name)
+  // Aggregated across a person's channels so "who works this" is scannable in its
+  // own columns instead of buried inside the channel text.
+  const primaryNames = [...new Set(profile.channelDetails.map((c) => c.primaryRepName).filter(Boolean))] as string[]
+  const operatorNames = [...new Set(profile.channelDetails.flatMap((c) => c.operators))] as string[]
   return (
     <>
       <tr className="border-b border-line/60 align-top last:border-0">
@@ -293,6 +299,12 @@ function PersonRow({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: 
               ? profile.channels.map((channel, index) => <ChannelBadge key={`${profile.profileId}-${index}`} channel={channel} />)
               : '—'}
           </span>
+        </td>
+        <td className="px-4 py-3 text-[12px] font-medium text-ink">
+          {primaryNames.length > 0 ? primaryNames.join(', ') : <span className="font-normal text-status-warning">No primary</span>}
+        </td>
+        <td className="px-4 py-3 text-[12px] text-graphite">
+          {operatorNames.length > 0 ? operatorNames.join(', ') : '—'}
         </td>
         <td className="px-4 py-3">
           <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
@@ -319,7 +331,7 @@ function PersonRow({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: 
       </tr>
       {profile.channelDetails.length > 0 && (
         <tr className="border-b border-line/60 bg-bone/60 last:border-0">
-          <td colSpan={5} className="px-4 py-2.5">
+          <td colSpan={7} className="px-4 py-2.5">
             <ul className="space-y-1.5">
               {profile.channelDetails.map((channel) => (
                 <li key={channel.identityId} className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
@@ -356,7 +368,7 @@ function PersonRow({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: 
       )}
       {manageChannel && (
         <tr>
-          <td colSpan={5} className="px-4 py-2.5 bg-bone/60">
+          <td colSpan={7} className="px-4 py-2.5 bg-bone/60">
             <ManagePeopleDialog
               profileId={manageChannel.profileId ?? profile.profileId}
               identityName={manageChannel.identityName}
