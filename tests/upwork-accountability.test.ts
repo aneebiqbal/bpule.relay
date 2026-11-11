@@ -36,14 +36,30 @@ const SUBMIT = {
   boostConnects: 0,
 }
 
+/** The channel plan plus the canonical execution scope for the fixture rep. */
+function planSeed(plans: Array<{ activity_type: string; target_count: number }>) {
+  return {
+    revenue_identities: [{ id: IDENTITY_ID, organization_id: ORG_ID, profile_id: 'p-up', status: 'active' }],
+    identity_assignments: [{ organization_id: ORG_ID, revenue_identity_id: IDENTITY_ID, rep_id: REP_ID }],
+    profile_coverage: [{ organization_id: ORG_ID, profile_id: 'p-up', rep_id: REP_ID, role: 'PRIMARY', priority: 1, active: true }],
+    daily_target_plans: plans.map((row, index) => ({
+      id: `dtp-${index + 1}`,
+      organization_id: ORG_ID,
+      revenue_identity_id: IDENTITY_ID,
+      active: true,
+      ...row,
+    })),
+  }
+}
+
 describe('submitUpworkApplication — accountability increment (TEAM-001)', () => {
   it('calls record_activity_event for the "application" activity type when the rep has an active Upwork target', async () => {
     const fake = createFakeSupabase({
       upwork_jobs: [{ id: JOB_ID, organization_id: ORG_ID, owner_rep_id: REP_ID, status: 'SAVED' }],
-      daily_targets: [
-        { id: 'dt-1', organization_id: ORG_ID, rep_id: REP_ID, revenue_identity_id: IDENTITY_ID, activity_type: 'application', target_count: 10, active: true },
-        { id: 'dt-2', organization_id: ORG_ID, rep_id: REP_ID, revenue_identity_id: IDENTITY_ID, activity_type: 'proposal', target_count: 10, active: true },
-      ],
+      ...planSeed([
+        { activity_type: 'application', target_count: 10 },
+        { activity_type: 'proposal', target_count: 10 },
+      ]),
     })
 
     const store = new SupabaseStore(makeRep(), fake.client as never, makeOrg())
@@ -62,7 +78,7 @@ describe('submitUpworkApplication — accountability increment (TEAM-001)', () =
   it('still creates the application and marks the job applied even when accountability RPC fails (non-fatal)', async () => {
     const fake = createFakeSupabase({
       upwork_jobs: [{ id: JOB_ID, organization_id: ORG_ID, owner_rep_id: REP_ID, status: 'SAVED' }],
-      daily_targets: [],
+      daily_target_plans: [],
     })
 
     const store = new SupabaseStore(makeRep(), fake.client as never, makeOrg())
@@ -77,7 +93,7 @@ describe('submitUpworkApplication — accountability increment (TEAM-001)', () =
   it('does not call record_activity_event when the rep has no active "application" target (no target, no phantom credit)', async () => {
     const fake = createFakeSupabase({
       upwork_jobs: [{ id: JOB_ID, organization_id: ORG_ID, owner_rep_id: REP_ID, status: 'SAVED' }],
-      daily_targets: [],
+      daily_target_plans: [],
     })
 
     const store = new SupabaseStore(makeRep(), fake.client as never, makeOrg())
@@ -90,7 +106,7 @@ describe('submitUpworkApplication — accountability increment (TEAM-001)', () =
   it('is idempotent: a double-click creates exactly one application', async () => {
     const fake = createFakeSupabase({
       upwork_jobs: [{ id: JOB_ID, organization_id: ORG_ID, owner_rep_id: REP_ID, status: 'SAVED' }],
-      daily_targets: [],
+      daily_target_plans: [],
     })
 
     const store = new SupabaseStore(makeRep(), fake.client as never, makeOrg())

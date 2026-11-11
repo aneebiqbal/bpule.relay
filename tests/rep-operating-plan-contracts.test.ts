@@ -37,11 +37,11 @@ describe('REP_OPERATING_PLAN_EXECUTABLE_ONLY', () => {
 })
 
 describe('PRIMARY_ASSIGNMENT_CREATES_EXECUTION', () => {
-  it('the assignment module writes eligibility, PRIMARY coverage and targets', () => {
+  it('the assignment module writes eligibility, PRIMARY coverage and the channel plan', () => {
     const source = read('src/lib/profiles/assignment.ts')
     expect(source).toContain("from('identity_assignments')")
     expect(source).toContain("from('profile_coverage')")
-    expect(source).toContain("from('daily_targets')")
+    expect(source).toContain("from('daily_target_plans')")
     expect(source).toContain("role: 'PRIMARY'")
   })
 
@@ -57,7 +57,7 @@ describe('BACKUP_HAS_NO_DAILY_TARGET', () => {
     const backup = source.slice(source.indexOf('assignBackupResponsibility'))
     const body = backup.slice(0, backup.indexOf('export async function removeResponsibility'))
     expect(body).toContain("role: 'BACKUP'")
-    expect(body).not.toContain("from('daily_targets')")
+    expect(body).not.toContain("from('daily_target_plans')")
   })
 })
 
@@ -70,9 +70,9 @@ describe('ASSIGNMENT_AND_TARGET_ATOMIC', () => {
 })
 
 describe('TARGET_EDITOR_SCOPED_BY_REP_IDENTITY_ACTIVITY', () => {
-  it('the profile channel editor only shows the primary rep\'s lanes', () => {
+  it('the profile channel editor shows the channel plan\'s targetable lanes', () => {
     const source = read('src/lib/profiles/operating-model.ts')
-    expect(source).toContain('row.rep_id === primary.rep_id')
+    expect(source).toContain('row.targetable')
   })
 
   it('admin targets returns only executable lanes', () => {
@@ -83,22 +83,22 @@ describe('TARGET_EDITOR_SCOPED_BY_REP_IDENTITY_ACTIVITY', () => {
   })
 })
 
-describe('REMOVE_ASSIGNMENT_DEACTIVATES_TARGET', () => {
-  it('removing a responsibility retires coverage and deactivates targets', () => {
+describe('REMOVE_ASSIGNMENT_PRESERVES_PLAN', () => {
+  it('removing a responsibility retires coverage and leaves the channel plan alone', () => {
     const source = read('src/lib/profiles/assignment.ts')
     const remove = source.slice(source.indexOf('export async function removeResponsibility'))
     const body = remove.slice(0, remove.indexOf('export async function transferResponsibility'))
     expect(body).toContain("from('profile_coverage')")
-    expect(body).toContain("from('daily_targets')")
+    expect(body).not.toContain("from('daily_target_plans')")
     expect(body).toContain('active: false')
   })
 })
 
 describe('TRANSFER_PRESERVES_HISTORY', () => {
-  it('transferring moves the target pack and never touches leads/messages', () => {
+  it('transferring keeps the channel plan and never touches leads/messages', () => {
     const source = read('src/lib/profiles/assignment.ts')
     const transfer = source.slice(source.indexOf('export async function transferResponsibility'))
-    expect(transfer).toContain('rep_id: input.toRepId')
+    expect(transfer).not.toContain("from('daily_target_plans')")
     expect(transfer).not.toContain("from('leads')")
     expect(transfer).not.toContain("from('messages')")
   })

@@ -193,8 +193,17 @@ function ResponsibilityRow({
           </p>
           <p className="text-[11px] text-stone">
             {row.readiness ? 'Ready' : 'Access not confirmed'}
-            {row.target > 0 ? ` · ${row.remaining} of ${row.target} left` : ' · No daily target'}
+            {row.target > 0
+              ? row.contributorCount > 1
+                ? ` · Profile ${row.profileCompleted}/${row.target} · Your contribution ${row.completed}`
+                : ` · ${row.remaining} of ${row.target} left`
+              : ' · No daily plan'}
           </p>
+          {row.contributorCount > 1 && (
+            <p className="mt-0.5 text-[11px] text-stone">
+              Shared requirement · {row.contributorCount} operators
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {row.isNew && (
@@ -560,8 +569,8 @@ function TransferDialog({
     <Dialog title={`Transfer ${row.personName} · ${channelLabel(row.channel)}`} onClose={onClose}>
       <div className="space-y-3">
         <p className="text-[13px] text-graphite">
-          Primary moves from this rep to the selected rep. The daily target pack moves with it; lead and
-          message history is unchanged.
+          Primary moves from this rep to the selected rep. The daily plan for the channel and its
+          completion history stay exactly where they are; lead and message history is unchanged.
         </p>
         <TransferTargetSelect value={targetRepId} onChange={setTargetRepId} />
         {error && <p role="alert" className="text-[12px] text-status-danger">{error}</p>}
@@ -659,7 +668,7 @@ function RemoveDialog({
         </p>
         <ul className="space-y-0.5 rounded-lg bg-bone px-3 py-2.5 text-[12px] text-graphite ring-1 ring-line/70">
           <li>The primary assignment is deactivated</li>
-          {row.target > 0 && <li>The active daily target ({row.target}/day) ends</li>}
+          {row.target > 0 && <li>The daily plan for the channel stays; it is not deleted</li>}
           <li>The readiness requirement ends</li>
           <li>Leads, messages and completed work are preserved</li>
         </ul>

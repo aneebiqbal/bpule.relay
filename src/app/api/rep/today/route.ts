@@ -51,9 +51,8 @@ export async function GET() {
     identity: identityById.get(row.id) ?? null,
   }))
   const { data: targets } = await supabase
-    .from('daily_targets')
+    .from('daily_target_plans')
     .select('*')
-    .eq('rep_id', rep.id)
     .in('revenue_identity_id', identityIds)
     .eq('active', true)
 

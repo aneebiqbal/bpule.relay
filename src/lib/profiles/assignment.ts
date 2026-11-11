@@ -124,43 +124,30 @@ export async function assignPrimaryResponsibility(
     })
   }
 
-  // 3. Target lanes follow the primary. Move the previous primary's active
-  //    rows for this identity to the new rep so the daily plan is continuous.
-  let targetsTransferred = 0
-  if (previousPrimaryRepId && previousPrimaryRepId !== input.repId) {
-    const { data: moved, error: moveError } = await client
-      .from('daily_targets')
-      .update({ rep_id: input.repId, updated_at: now })
-      .eq('organization_id', input.orgId)
-      .eq('revenue_identity_id', input.identityId)
-      .eq('rep_id', previousPrimaryRepId)
-      .eq('active', true)
-      .select('id')
-    if (moveError) throw moveError
-    targetsTransferred = moved?.length ?? 0
-  }
+  // 3. The plan belongs to the CHANNEL, not the operator, so a transfer never
+  //    moves it. Ownership changes; the requirement does not.
+  const targetsTransferred = 0
 
-  // 4. Seed the default pack when the new primary has no active lane.
+  // 4. Seed the identity's plan only when it has none.
   let targetsSeeded = 0
-  const { data: existingTargets } = await client
-    .from('daily_targets')
+  const { data: existingPlans } = await client
+    .from('daily_target_plans')
     .select('id')
     .eq('organization_id', input.orgId)
     .eq('revenue_identity_id', input.identityId)
-    .eq('rep_id', input.repId)
     .eq('active', true)
     .limit(1)
-  if ((!existingTargets || existingTargets.length === 0) && input.ensureTargets !== false) {
+  if ((!existingPlans || existingPlans.length === 0) && input.ensureTargets !== false) {
     const pack = defaultTargetsForChannel(normalizeChannel(identity.channel))
     const { data: seeded, error: seedError } = await client
-      .from('daily_targets')
+      .from('daily_target_plans')
       .insert(
         pack.map((row) => ({
           organization_id: input.orgId,
-          rep_id: input.repId,
           revenue_identity_id: input.identityId,
           activity_type: row.activityType,
           target_count: row.targetCount,
+          targetable: row.activityType !== 'proposal',
           active: true,
           created_by: input.actorRepId,
         })),
@@ -303,12 +290,8 @@ export async function removeResponsibility(
       .eq('rep_id', input.repId)
   }
 
-  await client
-    .from('daily_targets')
-    .update({ active: false, updated_at: now })
-    .eq('organization_id', input.orgId)
-    .eq('revenue_identity_id', input.identityId)
-    .eq('rep_id', input.repId)
+  // The channel's plan and its completion history are untouched: removing an
+  // operator never rewrites what the profile still owes or has already done.
 
   await client.from('accountability_audit_log').insert({
     organization_id: input.orgId,
@@ -333,16 +316,9 @@ export async function transferResponsibility(
   const identity = await readIdentity(client, input.orgId, input.identityId)
   const now = new Date().toISOString()
 
-  // Move the target lanes first so a failure leaves them with the old owner.
-  const { data: moved, error: moveError } = await client
-    .from('daily_targets')
-    .update({ rep_id: input.toRepId, updated_at: now })
-    .eq('organization_id', input.orgId)
-    .eq('revenue_identity_id', input.identityId)
-    .eq('rep_id', input.fromRepId)
-    .eq('active', true)
-    .select('id')
-  if (moveError) throw moveError
+  // The plan belongs to the channel, so a transfer never moves it. Ownership
+  // changes; the requirement and its completion history stay put.
+  const moved: never[] = []
 
   const { error: removeAssignmentError } = await client
     .from('identity_assignments')

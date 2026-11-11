@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
-import { safeErrorResponse } from '@/lib/errors'
+import { reportError, safeErrorResponse } from '@/lib/errors'
 import {
   assignBackupResponsibility,
   assignPrimaryResponsibility,
@@ -100,6 +100,15 @@ export async function POST(request: Request) {
     if (message === 'IDENTITY_ARCHIVED') {
       return NextResponse.json({ error: 'That channel is archived. Restore it before assigning it.' }, { status: 400 })
     }
+    // Surface the exact failing step: the generic message is all the rep sees,
+    // the log carries the request context and the driver error.
+    reportError(error, {
+      route: 'admin/responsibilities',
+      identityId,
+      repId,
+      fromRepId,
+      role: typeof body.role === 'string' ? body.role : 'primary',
+    })
     return safeErrorResponse(error, 500, 'Failed to assign responsibility.', 'admin/responsibilities')
   }
 }

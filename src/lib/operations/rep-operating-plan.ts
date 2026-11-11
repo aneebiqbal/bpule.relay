@@ -39,8 +39,13 @@ export interface OperatingResponsibility {
   readiness: boolean
   targets: OperatingTarget[]
   target: number
+  /** This rep's contribution today. */
   completed: number
   remaining: number
+  /** The channel's total across every operator (the shared requirement). */
+  profileCompleted: number
+  /** How many reps contributed today; >1 means the requirement is shared. */
+  contributorCount: number
   assignedAt: string | null
   /** Assigned on the current operating day and access not yet confirmed. */
   isNew: boolean
@@ -102,13 +107,12 @@ export async function loadRepOperatingPlan(
     (personRows.data ?? []).map((row) => [row.id as string, personNameFromProfile(row)]),
   )
 
-  const [targetRows, accountabilityRows, readinessRows] = await Promise.all([
+  const [targetRows, accountabilityRows, profileAccountabilityRows, readinessRows] = await Promise.all([
     executable.length
       ? client
-          .from('daily_targets')
-          .select('id, revenue_identity_id, activity_type, target_count, active')
+          .from('daily_target_plans')
+          .select('id, revenue_identity_id, activity_type, target_count, targetable, active')
           .eq('organization_id', input.orgId)
-          .eq('rep_id', input.repId)
           .eq('active', true)
           .in('revenue_identity_id', executable.map((row) => row.id))
           .limit(500)
@@ -123,6 +127,17 @@ export async function loadRepOperatingPlan(
           .in('revenue_identity_id', executable.map((row) => row.id))
           .limit(500)
       : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null }),
+    // Every operator's contribution to the same channel plan, so a shared
+    // requirement is never presented as one rep's personal target.
+    executable.length
+      ? client
+          .from('daily_accountability')
+          .select('revenue_identity_id, rep_id, completed_count')
+          .eq('organization_id', input.orgId)
+          .eq('target_date', businessDate)
+          .in('revenue_identity_id', executable.map((row) => row.id))
+          .limit(1000)
+      : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null }),
     executable.length
       ? client
           .from('profile_readiness')
@@ -135,7 +150,21 @@ export async function loadRepOperatingPlan(
   ])
   if (targetRows.error) throw targetRows.error
   if (accountabilityRows.error) throw accountabilityRows.error
+  if (profileAccountabilityRows.error) throw profileAccountabilityRows.error
   if (readinessRows.error) throw readinessRows.error
+
+  const profileCompletedByIdentity = new Map<string, number>()
+  const contributorsByIdentity = new Map<string, Set<string>>()
+  for (const row of profileAccountabilityRows.data ?? []) {
+    const identityId = row.revenue_identity_id as string
+    profileCompletedByIdentity.set(
+      identityId,
+      (profileCompletedByIdentity.get(identityId) ?? 0) + (row.completed_count as number),
+    )
+    const contributors = contributorsByIdentity.get(identityId) ?? new Set<string>()
+    contributors.add(row.rep_id as string)
+    contributorsByIdentity.set(identityId, contributors)
+  }
 
   const accountabilityByKey = new Map(
     (accountabilityRows.data ?? []).map((row) => [
@@ -188,6 +217,8 @@ export async function loadRepOperatingPlan(
       target,
       completed,
       remaining: Math.max(0, target - completed),
+      profileCompleted: profileCompletedByIdentity.get(row.id as string) ?? 0,
+      contributorCount: contributorsByIdentity.get(row.id as string)?.size ?? 0,
       assignedAt,
       isNew,
     })
@@ -220,7 +251,7 @@ export async function loadRepOperatingPlan(
       identityId: row.identityId,
       personName: row.personName,
       channel: row.channel,
-      reason: row.target === 0 ? 'No daily target' : 'Access not confirmed',
+      reason: row.target === 0 ? 'No daily plan' : 'Access not confirmed',
     }))
 
   return {

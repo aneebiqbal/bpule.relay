@@ -13,6 +13,8 @@ import { createServiceSupabase } from '@/lib/supabase/service'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { primaryRepByIdentity } from '@/lib/targets/plan-scope'
+import type { DbClient } from '@/lib/db/types'
 import {
   computeExecutionResult,
   mapActionEventToCanonical,
@@ -109,13 +111,20 @@ export async function GET(req: NextRequest) {
     .gte('occurred_at', dayStart)
     .lt('occurred_at', dayEnd)
 
-  // 5. Get daily targets
-  const { data: dailyTargets } = await store
-    .from('daily_targets')
-    .select('activity_type, target_count')
+  // 5. Get the channel's daily plans, projected onto this rep as current operator
+  const { data: plans } = await store
+    .from('daily_target_plans')
+    .select('revenue_identity_id, activity_type, target_count')
     .eq('organization_id', auth.orgId)
-    .eq('rep_id', repId)
     .eq('active', true)
+  const repByIdentity = await primaryRepByIdentity(
+    store as unknown as DbClient,
+    auth.orgId,
+    (plans ?? []).map((row) => row.revenue_identity_id as string),
+  )
+  const dailyTargets = (plans ?? []).filter(
+    (row) => repByIdentity.get(row.revenue_identity_id as string) === repId,
+  )
 
   // 6. Count actuals from canonical action_events only
   const counts: Record<string, number> = {}

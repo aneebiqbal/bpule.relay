@@ -356,22 +356,22 @@ describe('RESPONSIBILITY_STATUS_COMPONENT', () => {
 })
 
 describe('BACKUP_ONLY_HAS_NO_ACTIVE_EXECUTION_TARGET', () => {
-  it('production: no backup-only row carries an active target', async () => {
+  it('production: no active plan sits on a profile without an active PRIMARY', async () => {
     const client = neonServiceDbClient()
     if (await dataIsBeingMutated(client)) {
       console.warn('[audit] coverage changed in the last 10m — skipping live audit while a writer is active')
       return
     }
-    const [{ data: targets, error: targetError }, { data: coverage }, { data: identities }] = await Promise.all([
-      client.from('daily_targets').select('revenue_identity_id, rep_id').eq('organization_id', ORG).eq('active', true).limit(1000),
+    const [{ data: plans, error: planError }, { data: coverage }, { data: identities }] = await Promise.all([
+      client.from('daily_target_plans').select('revenue_identity_id').eq('organization_id', ORG).eq('active', true).limit(1000),
       client.from('profile_coverage').select('profile_id, rep_id, role').eq('organization_id', ORG).eq('active', true).limit(1000),
       client.from('revenue_identities').select('id, profile_id').eq('organization_id', ORG).limit(1000),
     ])
-    expect(targetError).toBeNull()
+    expect(planError).toBeNull()
     const profileByIdentity = new Map((identities ?? []).map((row) => [row.id as string, row.profile_id as string]))
-    const roleByProfileRep = new Map((coverage ?? []).map((row) => [`${row.profile_id as string}:${row.rep_id as string}`, row.role as string]))
-    const violations = (targets ?? []).filter(
-      (row) => roleByProfileRep.get(`${profileByIdentity.get(row.revenue_identity_id as string)}:${row.rep_id as string}`) === 'BACKUP',
+    const primaryProfiles = new Set((coverage ?? []).filter((row) => row.role === 'PRIMARY').map((row) => row.profile_id as string))
+    const violations = (plans ?? []).filter(
+      (row) => !primaryProfiles.has(profileByIdentity.get(row.revenue_identity_id as string) ?? ''),
     )
     expect(violations).toEqual([])
   }, 120_000)
@@ -384,23 +384,29 @@ describe('ELIGIBILITY_DOES_NOT_GRANT_EXECUTION', () => {
     expect(source).not.toMatch(/role\s*===?\s*'BACKUP'/)
   })
 
-  it('production: every active target belongs to a PRIMARY', async () => {
+  it('production: every active plan belongs to a profile with exactly one active PRIMARY', async () => {
     const client = neonServiceDbClient()
     if (await dataIsBeingMutated(client)) {
       console.warn('[audit] coverage changed in the last 10m — skipping live audit while a writer is active')
       return
     }
-    const [{ data: targets, error: targetError }, { data: coverage }, { data: identities }] = await Promise.all([
-      client.from('daily_targets').select('revenue_identity_id, rep_id').eq('organization_id', ORG).eq('active', true).limit(1000),
+    const [{ data: plans, error: planError }, { data: coverage }, { data: identities }] = await Promise.all([
+      client.from('daily_target_plans').select('revenue_identity_id').eq('organization_id', ORG).eq('active', true).limit(1000),
       client.from('profile_coverage').select('profile_id, rep_id, role').eq('organization_id', ORG).eq('active', true).limit(1000),
       client.from('revenue_identities').select('id, profile_id').eq('organization_id', ORG).limit(1000),
     ])
-    expect(targetError).toBeNull()
+    expect(planError).toBeNull()
     const profileByIdentity = new Map((identities ?? []).map((row) => [row.id as string, row.profile_id as string]))
-    const roleByProfileRep = new Map((coverage ?? []).map((row) => [`${row.profile_id as string}:${row.rep_id as string}`, row.role as string]))
-    const violations = (targets ?? []).filter(
-      (row) => roleByProfileRep.get(`${profileByIdentity.get(row.revenue_identity_id as string)}:${row.rep_id as string}`) !== 'PRIMARY',
-    )
+    const primaryCountByProfile = new Map<string, number>()
+    for (const row of coverage ?? []) {
+      if (row.role !== 'PRIMARY') continue
+      const profileId = row.profile_id as string
+      primaryCountByProfile.set(profileId, (primaryCountByProfile.get(profileId) ?? 0) + 1)
+    }
+    const violations = (plans ?? []).filter((row) => {
+      const profileId = profileByIdentity.get(row.revenue_identity_id as string) ?? ''
+      return primaryCountByProfile.get(profileId) !== 1
+    })
     expect(violations).toEqual([])
   }, 120_000)
 })

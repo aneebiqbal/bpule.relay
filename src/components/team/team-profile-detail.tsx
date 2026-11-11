@@ -408,6 +408,16 @@ function ChannelBlock({
         ) : (
           <p className="mt-2 text-[12px] text-stone">No targets configured for this channel.</p>
         )}
+        {channel.contributions.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone">
+            <span className="uppercase tracking-[0.12em]">Working now</span>
+            {channel.contributions.map((row) => (
+              <span key={row.repId}>
+                {row.repName} <span className="tabular-nums text-ink">{row.completedCount}</span>
+              </span>
+            ))}
+          </div>
+        )}
         {canManage && (
           <ChannelTargetsEditor channel={channel} repId={channel.primaryRepId} />
         )}

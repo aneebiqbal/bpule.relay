@@ -17,6 +17,7 @@ import { isMissingRelation } from '@/lib/operations/db-errors'
 import { MEETING_EVENT } from '@/lib/sales/meetings'
 import { CONNECTION_EVENTS, SENT_MESSAGE_EVENTS } from '@/lib/sales/send-truth'
 import { targetProgressSql } from '@/lib/analytics/aggregates'
+import { primaryRepByIdentity } from '@/lib/targets/plan-scope'
 
 export type TargetType = 'CONNECTIONS' | 'MESSAGES_SENT' | 'UPWORK_APPLICATIONS' | 'MEETINGS' | 'PROPOSALS'
 export type TargetPeriod = 'DAY' | 'WEEK' | 'MONTH'
@@ -196,27 +197,33 @@ export async function loadTargets(
   if (repIds.length === 0) {
     return { ...assembleTargets({ ...input, dailyTargets: [], events: [] }), available: true, truncated: false }
   }
-  const [targetRows, targetRead] = await Promise.all([
-    chunkedIn<{ rep_id: string; activity_type: string; target_count: number }>(repIds, (chunk) =>
-      client
-        .from('daily_targets')
-        .select('rep_id, activity_type, target_count')
-        .eq('organization_id', input.orgId)
-        .eq('active', true)
-        .in('rep_id', chunk),
-    ).catch((err) => {
-      if (isMissingRelation(err)) return null
-      throw err
-    }),
+  const [planRead, targetRead] = await Promise.all([
+    client
+      .from('daily_target_plans')
+      .select('revenue_identity_id, activity_type, target_count')
+      .eq('organization_id', input.orgId)
+      .eq('active', true),
     loadTargetEvents(client, input, repIds),
   ])
+  if (planRead.error && !isMissingRelation(planRead.error)) throw planRead.error
+  // The requirement is channel-owned; project it onto the current operator.
+  const repByIdentity = await primaryRepByIdentity(
+    client,
+    input.orgId,
+    (planRead.data ?? []).map((row) => row.revenue_identity_id as string),
+  )
+  const targetRows = (planRead.data ?? []).map((row) => ({
+    rep_id: repByIdentity.get(row.revenue_identity_id as string) ?? 'unassigned',
+    activity_type: row.activity_type,
+    target_count: row.target_count,
+  })).filter((row) => repIds.includes(row.rep_id))
   const assembled = assembleTargets({
     ...input,
-    dailyTargets: targetRows ?? [],
+    dailyTargets: targetRows,
     events: targetRead.rows ?? [],
     progress: targetRead.grouped ?? undefined,
   })
-  return { ...assembled, available: targetRows !== null, truncated: targetRead.rows ? targetRead.rows.length >= EVENT_CAP : false }
+  return { ...assembled, available: !planRead.error, truncated: targetRead.rows ? targetRead.rows.length >= EVENT_CAP : false }
 }
 
 /**

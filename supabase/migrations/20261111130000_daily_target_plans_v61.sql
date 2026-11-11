@@ -52,7 +52,19 @@ alter table daily_target_plans enable row level security;
 
 drop policy if exists "dtp_select" on daily_target_plans;
 create policy "dtp_select" on daily_target_plans
-  for select to authenticated using (organization_id = current_org_id());
+  for select to authenticated using (
+    organization_id = current_org_id()
+    and (
+      is_org_admin()
+      or exists (
+        select 1 from profile_coverage pc
+        join revenue_identities ri on ri.profile_id = pc.profile_id
+        where ri.id = daily_target_plans.revenue_identity_id
+          and pc.rep_id = current_rep_id()
+          and pc.active
+      )
+    )
+  );
 
 drop policy if exists "dtp_insert" on daily_target_plans;
 create policy "dtp_insert" on daily_target_plans

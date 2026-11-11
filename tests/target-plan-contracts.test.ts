@@ -5,7 +5,7 @@
  * operators never duplicate the requirement, and a REPLACE never resets it.
  */
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import {
   computeProfileProgress,
   computeRepPlanTotal,
@@ -166,6 +166,29 @@ describe('ONE_COMPLETION_AUTHORITY', () => {
     // No direct accountability writes and no local pace logic.
     expect(source).not.toMatch(/\.from\('daily_accountability'\)/)
     expect(source).not.toMatch(/computeStatus/)
+  })
+})
+
+describe('PLAN_AUTHORITY_SINGLE', () => {
+  it('no application code reads the retired rep-scoped daily_targets table', () => {
+    const roots = ['src/lib', 'src/app', 'src/components']
+    const offenders: string[] = []
+    const walk = (dir: string): string[] => {
+      const out: string[] = []
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = `${dir}/${entry.name}`
+        if (entry.isDirectory()) out.push(...walk(path))
+        else if (/\.tsx?$/.test(entry.name)) out.push(path)
+      }
+      return out
+    }
+    for (const root of roots) {
+      for (const file of walk(root)) {
+        const source = readFileSync(file, 'utf8')
+        if (/from\(\s*['"]daily_targets['"]\s*\)/.test(source)) offenders.push(file)
+      }
+    }
+    expect(offenders).toEqual([])
   })
 })
 

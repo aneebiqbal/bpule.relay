@@ -38,6 +38,8 @@ export interface ProfileChannelModel {
     status: string | null
   }>
   today: { completed: number; target: number; remaining: number }
+  /** Per-operator contribution today; more than one entry means a shared requirement. */
+  contributions: Array<{ repId: string; repName: string; completedCount: number }>
 }
 
 export interface ProfileKnowledgeModel {
@@ -204,7 +206,7 @@ export async function loadProfileOperatingModel(
       .limit(200),
     supabase
       .from('daily_accountability')
-      .select('revenue_identity_id, activity_type, completed_count, status')
+      .select('revenue_identity_id, rep_id, activity_type, completed_count, status')
       .eq('organization_id', orgId)
       .eq('target_date', businessDate)
       .limit(200),
@@ -312,14 +314,14 @@ export async function loadProfileOperatingModel(
       : Promise.resolve({ data: [] as Array<{ revenue_identity_id: string; rep_id: string; created_at: string }> }),
     identityIds.length > 0
       ? supabase
-          .from('daily_targets')
-          .select('id, revenue_identity_id, rep_id, activity_type, target_count')
+          .from('daily_target_plans')
+          .select('id, revenue_identity_id, activity_type, target_count, targetable')
           .eq('organization_id', orgId)
           .in('revenue_identity_id', identityIds)
           .eq('active', true)
           .limit(200)
       : Promise.resolve({
-          data: [] as Array<{ id: string; revenue_identity_id: string; rep_id: string; activity_type: string; target_count: number }>,
+          data: [] as Array<{ id: string; revenue_identity_id: string; activity_type: string; target_count: number; targetable: boolean }>,
         }),
   ])
 
@@ -331,12 +333,13 @@ export async function loadProfileOperatingModel(
   const targets = (targetRes.data ?? []) as Array<{
     id: string
     revenue_identity_id: string
-    rep_id: string
     activity_type: string
     target_count: number
+    targetable: boolean
   }>
   const accountability = (accountabilityRes.data ?? []) as Array<{
     revenue_identity_id: string
+    rep_id: string
     activity_type: string
     completed_count: number
     status: string | null
@@ -369,6 +372,13 @@ export async function loadProfileOperatingModel(
     : { data: [] as Array<{ id: string; name: string }> }
   const repNameById = new Map(((repRows ?? []) as Array<{ id: string; name: string }>).map((rep) => [rep.id, rep.name]))
 
+  const contributionsByIdentity = new Map<string, Map<string, number>>()
+  for (const row of accountability) {
+    const byRep = contributionsByIdentity.get(row.revenue_identity_id) ?? new Map<string, number>()
+    byRep.set(row.rep_id, (byRep.get(row.rep_id) ?? 0) + row.completed_count)
+    contributionsByIdentity.set(row.revenue_identity_id, byRep)
+  }
+
   const channels: ProfileChannelModel[] = identities.map((identity) => {
     const identityId = identity.id
     const channelProfileId = identity.profile_id ?? personKey
@@ -383,7 +393,7 @@ export async function loadProfileOperatingModel(
         priority: row.priority,
       }))
     const channelTargets = targets
-      .filter((row) => row.revenue_identity_id === identityId && primary != null && row.rep_id === primary.rep_id)
+      .filter((row) => row.revenue_identity_id === identityId && row.targetable)
       .map((row) => {
         const accountabilityRow = accountability.find(
           (entry) =>
@@ -429,6 +439,13 @@ export async function loadProfileOperatingModel(
         target: channelTargets.reduce((sum, target) => sum + target.targetCount, 0),
         remaining: channelTargets.reduce((sum, target) => sum + target.remaining, 0),
       },
+      contributions: [...(contributionsByIdentity.get(identityId) ?? new Map()).entries()]
+        .map(([repId, completedCount]) => ({
+          repId,
+          repName: repNameById.get(repId) ?? 'Unknown',
+          completedCount,
+        }))
+        .sort((a, b) => b.completedCount - a.completedCount),
     }
   })
 

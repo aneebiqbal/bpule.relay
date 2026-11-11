@@ -8,8 +8,8 @@
  * to REPLACE, then restored. The service client removes the fixture rows so the
  * suite leaves nothing behind.
  */
-import { describe, expect, it } from 'vitest'
-import { neonDbClient, neonServiceDbClient } from '@/lib/db/neon'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { closeNeonPool, neonDbClient, neonServiceDbClient } from '@/lib/db/neon'
 import { approveCoveragePlan, restorePrimaryCoverage } from '@/lib/coverage/actions'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 import {
@@ -28,6 +28,14 @@ const ACTOR = 'aaaaaaaa-0000-0000-0000-000000000001' // Aneeb (admin)
 const AUTH_USER = '4803f9c8-48ef-4f9f-9ef3-c0a59c6414c6' // Aneeb
 
 const TODAY = new Date().toISOString().slice(0, 10)
+
+/** One client for the whole suite: the pooler drops connections under churn. */
+let client: ReturnType<typeof neonDbClient>
+let admin: ReturnType<typeof neonServiceDbClient>
+beforeAll(() => {
+  client = neonDbClient(AUTH_USER)
+  admin = neonServiceDbClient()
+})
 
 function scope(client: ReturnType<typeof neonDbClient>, repId: string) {
   return listExecutableIdentitiesForRep(client, ORG, repId, TODAY)
@@ -71,7 +79,14 @@ async function restore(client: ReturnType<typeof neonDbClient>) {
 
 /** Remove every row the fixture created. relay_app cannot delete coverage. */
 async function cleanupFixture() {
-  const admin = neonServiceDbClient()
+  // End any coverage an interrupted run left active, so a mode conflict from a
+  // previous test can never cascade into the next one.
+  await admin
+    .from('coverage_assignments')
+    .update({ status: 'COMPLETED', effective_until: TODAY, updated_at: new Date().toISOString() })
+    .eq('organization_id', ORG)
+    .eq('profile_id', PROFILE)
+    .eq('status', 'ACTIVE')
   const { data } = await admin
     .from('coverage_assignments')
     .select('id')
@@ -88,12 +103,14 @@ async function cleanupFixture() {
   await admin.from('notifications').delete().like('dedupe_key', `%${PROFILE}%`)
 }
 
+afterAll(async () => { await closeNeonPool() })
+beforeEach(async () => { await cleanupFixture() })
+
 describe('V6 live coverage acceptance', () => {
   it('SHARED keeps the primary executing, adds the covering rep, hides the backup', async () => {
-    const client = neonDbClient(AUTH_USER)
     try {
       const result = await cover(client, 'SHARED')
-      expect(result.ok).toBe(true)
+      expect(result.results?.[0]?.error ?? null).toBeNull()
 
       const primary = ids(await scope(client, PRIMARY))
       const covering = ids(await scope(client, COVERING))
@@ -109,7 +126,6 @@ describe('V6 live coverage acceptance', () => {
   }, 120_000)
 
   it('REPLACE excludes the primary, keeps the covering rep, never changes ownership', async () => {
-    const client = neonDbClient(AUTH_USER)
     try {
       const result = await cover(client, 'REPLACE')
       expect(result.ok).toBe(true)
@@ -128,7 +144,6 @@ describe('V6 live coverage acceptance', () => {
   }, 120_000)
 
   it('RESTORE returns execution to the primary and removes the covering rep', async () => {
-    const client = neonDbClient(AUTH_USER)
     try {
       await cover(client, 'REPLACE')
       const restored = await restore(client)
@@ -148,7 +163,6 @@ describe('V6 live coverage acceptance', () => {
 
 describe('V6 acknowledgement and readiness separation', () => {
   it('acknowledging coverage clears the banner but leaves readiness unconfirmed', async () => {
-    const client = neonDbClient(AUTH_USER)
     try {
       await cover(client, 'SHARED')
       const now = new Date().toISOString()
@@ -169,7 +183,7 @@ describe('V6 acknowledgement and readiness separation', () => {
       )
 
       const pending = await listAcknowledgementsForRep(client, ORG, COVERING, now, { modeByAssignment })
-      const ack = pending.find((row) => row.profileId === PROFILE)
+      const ack = pending.find((row) => row.profileId === PROFILE && row.subject === 'COVERAGE')
       expect(ack).toBeTruthy()
       expect(ack?.subject).toBe('COVERAGE')
       expect(ack?.mode).toBe('SHARED')
@@ -202,13 +216,12 @@ describe('V6 acknowledgement and readiness separation', () => {
   }, 120_000)
 
   it('an access issue changes neither ownership, acknowledgement nor coverage mode', async () => {
-    const client = neonDbClient(AUTH_USER)
     try {
       await cover(client, 'SHARED')
       const now = new Date().toISOString()
 
       const pending = await listAcknowledgementsForRep(client, ORG, COVERING, now)
-      const ack = pending.find((row) => row.profileId === PROFILE)
+      const ack = pending.find((row) => row.profileId === PROFILE && row.subject === 'COVERAGE')
       expect(ack).toBeTruthy()
 
       const result = await reportAccessIssue({

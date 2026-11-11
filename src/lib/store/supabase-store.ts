@@ -1870,22 +1870,27 @@ export class SupabaseStore implements ScoutStore {
     if (type !== 'reply') {
       try {
         const activityType = type === 'connection' ? 'connection_request' : type
-        const { data: targets } = await this.client
-          .from('daily_targets')
+        const businessDate = await this.businessDate()
+        const executable = await listExecutableIdentitiesForRep(this.client, this.orgId, this.rep.id, businessDate)
+        const executableIds = new Set(executable.map((row) => row.id))
+        const { data: plans } = await this.client
+          .from('daily_target_plans')
           .select('revenue_identity_id')
-          .eq('rep_id', this.rep.id)
           .eq('activity_type', activityType)
           .eq('active', true)
-        if (targets && targets.length > 0) {
-          for (const t of targets) {
+        const identityIds = (plans ?? [])
+          .map((row) => row.revenue_identity_id as string)
+          .filter((id) => executableIds.has(id))
+        if (identityIds.length > 0) {
+          for (const identityId of identityIds) {
             try {
               await this.client.rpc('record_activity_event', {
                 p_rep_id: this.rep.id,
-                p_identity_id: t.revenue_identity_id as string,
+                p_identity_id: identityId,
                 p_activity_type: activityType,
                 p_org_id: this.orgId,
-                p_source_event_id: `activity:${leadId}:${idempotencyKey ?? 'none'}:${t.revenue_identity_id}`,
-                p_date: await this.businessDate(),
+                p_source_event_id: `activity:${leadId}:${idempotencyKey ?? 'none'}:${identityId}`,
+                p_date: businessDate,
               })
             } catch {
               // Non-fatal per-target
@@ -1904,12 +1909,12 @@ export class SupabaseStore implements ScoutStore {
             const metricKey = metricKeyMap[type] ?? null
             if (metricKey) {
               const sourceEventId = `canonical:${leadId}:${idempotencyKey ?? 'none'}`
-              for (const t of targets) {
+              for (const identityId of identityIds) {
                 try {
                   await this.client.rpc('record_canonical_progress', {
                     p_org_id: this.orgId,
                     p_person_id: this.rep.id,
-                    p_revenue_identity_id: t.revenue_identity_id as string,
+                    p_revenue_identity_id: identityId,
                     p_event_type: 'OUTREACH_RECORDED',
                     p_metric_key: metricKey,
                     p_source_event_id: sourceEventId,
@@ -3411,22 +3416,27 @@ export class SupabaseStore implements ScoutStore {
   /** Daily target + canonical progress. One application counts once. */
   private async creditUpworkApplication(jobId: string, repId: string): Promise<void> {
     try {
-      const { data: targets } = await this.client
-        .from('daily_targets')
+      const businessDate = await this.businessDate()
+      const executable = await listExecutableIdentitiesForRep(this.client, this.orgId, repId, businessDate)
+      const executableIds = new Set(executable.map((row) => row.id))
+      const { data: plans } = await this.client
+        .from('daily_target_plans')
         .select('revenue_identity_id')
-        .eq('rep_id', repId)
         .eq('activity_type', 'application')
         .eq('active', true)
-      if (!targets || targets.length === 0) return
-      for (const t of targets) {
+      const identityIds = (plans ?? [])
+        .map((row) => row.revenue_identity_id as string)
+        .filter((id) => executableIds.has(id))
+      if (identityIds.length === 0) return
+      for (const identityId of identityIds) {
         try {
           await this.client.rpc('record_activity_event', {
             p_rep_id: repId,
-            p_identity_id: t.revenue_identity_id as string,
+            p_identity_id: identityId,
             p_activity_type: 'application',
             p_org_id: this.orgId,
-            p_source_event_id: `activity:upwork:${jobId}:${t.revenue_identity_id}`,
-            p_date: await this.businessDate(),
+            p_source_event_id: `activity:upwork:${jobId}:${identityId}`,
+            p_date: businessDate,
           })
         } catch {
           // Non-fatal per-target
@@ -3434,12 +3444,12 @@ export class SupabaseStore implements ScoutStore {
       }
       try {
         const sourceEventId = `canonical:upwork:${jobId}:${repId}`
-        for (const t of targets) {
+        for (const identityId of identityIds) {
           try {
             await this.client.rpc('record_canonical_progress', {
               p_org_id: this.orgId,
               p_person_id: repId,
-              p_revenue_identity_id: t.revenue_identity_id as string,
+              p_revenue_identity_id: identityId,
               p_event_type: 'OUTREACH_RECORDED',
               p_metric_key: 'applications',
               p_source_event_id: sourceEventId,
@@ -5949,22 +5959,29 @@ export class SupabaseStore implements ScoutStore {
    */
   async recordProspectExtracted(revenueIdentityId?: string | null): Promise<void> {
     try {
-      const { data: targets } = await this.client
-        .from('daily_targets')
+      const businessDate = await this.businessDate()
+      const executable = await listExecutableIdentitiesForRep(this.client, this.orgId, this.rep.id, businessDate)
+      const executableIds = new Set(executable.map((row) => row.id))
+      // The requirement belongs to the channel; a rep's execution scope decides
+      // which of those plans they contribute to.
+      const { data: plans } = await this.client
+        .from('daily_target_plans')
         .select('revenue_identity_id')
-        .eq('rep_id', this.rep.id)
         .eq('activity_type', 'prospect_extracted')
         .eq('active', true)
-      if (!targets || targets.length === 0) return
+      const identityIds = (plans ?? [])
+        .map((row) => row.revenue_identity_id as string)
+        .filter((id) => executableIds.has(id))
+      if (identityIds.length === 0) return
 
-      for (const t of targets) {
+      for (const identityId of identityIds) {
         try {
           await this.client.rpc('record_activity_event', {
             p_rep_id: this.rep.id,
-            p_identity_id: t.revenue_identity_id as string,
+            p_identity_id: identityId,
             p_activity_type: 'prospect_extracted',
             p_org_id: this.orgId,
-            p_date: await this.businessDate(),
+            p_date: businessDate,
           })
         } catch {
           // Non-fatal per-target
@@ -6449,18 +6466,81 @@ export class SupabaseStore implements ScoutStore {
     })
   }
 
+  /**
+   * The plan is channel-owned. The current operator is the profile's active
+   * PRIMARY, resolved here so rep-scoped consumers keep working.
+   */
+  private async primaryRepByIdentity(identityIds: string[]): Promise<Map<string, string>> {
+    const result = new Map<string, string>()
+    if (identityIds.length === 0) return result
+    const { data: identityRows } = await this.client
+      .from('revenue_identities').select('id, profile_id').eq('organization_id', this.orgId).in('id', identityIds).limit(500)
+    const profileBydentity = new Map((identityRows ?? []).map((r) => [r.id as string, r.profile_id as string]))
+    const profileIds = [...new Set((identityRows ?? []).map((r) => r.profile_id as string).filter(Boolean))]
+    const { data: coverageRows } = profileIds.length > 0
+      ? await this.client
+          .from('profile_coverage').select('profile_id, rep_id')
+          .eq('organization_id', this.orgId).eq('active', true).eq('role', 'PRIMARY')
+          .in('profile_id', profileIds).limit(500)
+      : { data: [] as Array<Record<string, unknown>> }
+    const primaryByProfile = new Map((coverageRows ?? []).map((r) => [r.profile_id as string, r.rep_id as string]))
+    for (const [identityId, profileId] of profileBydentity) {
+      const repId = primaryByProfile.get(profileId)
+      if (repId) result.set(identityId, repId)
+    }
+    return result
+  }
+
   async listDailyTargetsAdmin(): Promise<DailyTarget[]> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
     const { data, error } = await this.client
-      .from('daily_targets').select('*').eq('organization_id', this.orgId)
+      .from('daily_target_plans').select('*').eq('organization_id', this.orgId)
       .order('created_at', { ascending: false })
     if (error) throw error
-    return (data ?? []).map((r) => ({
-      id: r.id as string, organizationId: r.organization_id as string, repId: r.rep_id as string,
+    const rows = (data ?? []) as Array<Record<string, unknown>>
+    const repByIdentity = await this.primaryRepByIdentity(rows.map((r) => r.revenue_identity_id as string))
+    return rows.map((r) => ({
+      id: r.id as string, organizationId: r.organization_id as string,
+      repId: repByIdentity.get(r.revenue_identity_id as string) ?? 'unassigned',
       revenueIdentityId: r.revenue_identity_id as string, activityType: r.activity_type as ActivityType,
       targetCount: r.target_count as number, active: r.active as boolean,
       createdBy: (r.created_by as string) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
     }))
+  }
+
+  /**
+   * §27: a plan change notifies every current operator of the channel, deduped
+   * per day. The plan is channel-owned, so recipients are the profile's active
+   * coverage chain, not just the rep who edited it.
+   */
+  private async notifyPlanChanged(identityId: string, detail: string) {
+    try {
+      const businessDate = await this.businessDate()
+      const { data: identityRow } = await this.client
+        .from('revenue_identities').select('profile_id, identity_name')
+        .eq('id', identityId).eq('organization_id', this.orgId)
+        .maybeSingle()
+      const profileId = identityRow?.profile_id as string | null
+      if (!profileId) return
+      const { data: coverageRows } = await this.client
+        .from('profile_coverage').select('rep_id')
+        .eq('organization_id', this.orgId).eq('profile_id', profileId).eq('active', true)
+        .limit(50)
+      for (const row of coverageRows ?? []) {
+        const recipientId = row.rep_id as string
+        await this.client.from('notifications').insert({
+          organization_id: this.orgId,
+          recipient_id: recipientId,
+          notification_type: 'target_updated',
+          title: 'Daily plan updated',
+          body: `${identityRow?.identity_name ?? 'A channel'} · ${detail}`,
+          link: '/dashboard',
+          dedupe_key: `target_updated:${identityId}:${recipientId}:${businessDate}`,
+        })
+      }
+    } catch {
+      // A notification must never fail a committed plan change.
+    }
   }
 
   async createDailyTargetAdmin(input: { repId: string; revenueIdentityId: string; activityType: ActivityType; targetCount: number }): Promise<DailyTarget> {
@@ -6475,16 +6555,40 @@ export class SupabaseStore implements ScoutStore {
     if (!assigned) {
       throw new Error('REVENUE_IDENTITY_NOT_ASSIGNED_TO_REP: The selected Revenue Identity is not assigned to this Rep.')
     }
-    const { data, error } = await this.client
-      .from('daily_targets')
-      .upsert({ organization_id: this.orgId, rep_id: input.repId, revenue_identity_id: input.revenueIdentityId, activity_type: input.activityType, target_count: input.targetCount, active: true, created_by: this.rep.id }, { onConflict: 'rep_id,revenue_identity_id,activity_type' })
-      .select('*').single()
-    if (error) throw error
+    // The requirement is channel-owned: one row per (identity, activity). The
+    // partial unique index is on active lanes, so resolve-then-write.
+    const { data: existing } = await this.client
+      .from('daily_target_plans').select('id')
+      .eq('organization_id', this.orgId)
+      .eq('revenue_identity_id', input.revenueIdentityId)
+      .eq('activity_type', input.activityType)
+      .limit(1)
+    const writing = (existing && existing.length > 0)
+      ? await this.client
+          .from('daily_target_plans')
+          .update({ target_count: input.targetCount, active: true, updated_at: new Date().toISOString() })
+          .eq('id', existing[0].id as string)
+          .select('*').single()
+      : await this.client
+          .from('daily_target_plans')
+          .insert({
+            organization_id: this.orgId,
+            revenue_identity_id: input.revenueIdentityId,
+            activity_type: input.activityType,
+            target_count: input.targetCount,
+            targetable: input.activityType !== 'proposal',
+            active: true,
+            created_by: this.rep.id,
+          })
+          .select('*').single()
+    if (writing.error) throw writing.error
+    const data = writing.data as Record<string, unknown>
     await this.client.from('accountability_audit_log').insert({
       organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: input.revenueIdentityId,
       event_type: 'target_created', detail: { rep_id: input.repId, activity_type: input.activityType, target_count: input.targetCount },
     })
-    return { id: data.id as string, organizationId: data.organization_id as string, repId: data.rep_id as string, revenueIdentityId: data.revenue_identity_id as string, activityType: data.activity_type as ActivityType, targetCount: data.target_count as number, active: data.active as boolean, createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string }
+    await this.notifyPlanChanged(input.revenueIdentityId, `${input.activityType} ${input.targetCount}`)
+    return { id: data.id as string, organizationId: data.organization_id as string, repId: input.repId, revenueIdentityId: data.revenue_identity_id as string, activityType: data.activity_type as ActivityType, targetCount: data.target_count as number, active: data.active as boolean, createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string }
   }
 
   async ensureDefaultDailyTargetsAdmin(input: { repId: string; revenueIdentityId: string }): Promise<DailyTarget[]> {
@@ -6493,10 +6597,9 @@ export class SupabaseStore implements ScoutStore {
     if (!identity) throw new Error('Identity not found')
 
     const { data: existing, error } = await this.client
-      .from('daily_targets')
+      .from('daily_target_plans')
       .select('activity_type')
       .eq('organization_id', this.orgId)
-      .eq('rep_id', input.repId)
       .eq('revenue_identity_id', input.revenueIdentityId)
     if (error) throw error
 
@@ -6534,19 +6637,21 @@ export class SupabaseStore implements ScoutStore {
     if (patches.targetCount !== undefined) update.target_count = patches.targetCount
     if (patches.active !== undefined) update.active = patches.active
     const { data, error } = await this.client
-      .from('daily_targets').update(update).eq('id', id).eq('organization_id', this.orgId)
+      .from('daily_target_plans').update(update).eq('id', id).eq('organization_id', this.orgId)
       .select('*').single()
     if (error) throw error
     await this.client.from('accountability_audit_log').insert({
       organization_id: this.orgId, rep_id: this.rep.id, event_type: 'target_changed',
       detail: { target_id: id, changes: update },
     })
-    return { id: data.id as string, organizationId: data.organization_id as string, repId: data.rep_id as string, revenueIdentityId: data.revenue_identity_id as string, activityType: data.activity_type as ActivityType, targetCount: data.target_count as number, active: data.active as boolean, createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string }
+    const repByIdentity = await this.primaryRepByIdentity([data.revenue_identity_id as string])
+    await this.notifyPlanChanged(data.revenue_identity_id as string, `target ${data.target_count as number}`)
+    return { id: data.id as string, organizationId: data.organization_id as string, repId: repByIdentity.get(data.revenue_identity_id as string) ?? 'unassigned', revenueIdentityId: data.revenue_identity_id as string, activityType: data.activity_type as ActivityType, targetCount: data.target_count as number, active: data.active as boolean, createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string }
   }
 
   async deleteDailyTargetAdmin(id: string): Promise<void> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
-    const { error } = await this.client.from('daily_targets').delete().eq('id', id).eq('organization_id', this.orgId)
+    const { error } = await this.client.from('daily_target_plans').delete().eq('id', id).eq('organization_id', this.orgId)
     if (error) throw error
     await this.client.from('accountability_audit_log').insert({
       organization_id: this.orgId, rep_id: this.rep.id, event_type: 'target_deleted', detail: { target_id: id },
@@ -6556,11 +6661,13 @@ export class SupabaseStore implements ScoutStore {
   async getDailyTargetAdmin(id: string): Promise<DailyTarget | null> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
     const { data, error } = await this.client
-      .from('daily_targets').select('*').eq('id', id).eq('organization_id', this.orgId).maybeSingle()
+      .from('daily_target_plans').select('*').eq('id', id).eq('organization_id', this.orgId).maybeSingle()
     if (error) throw error
     if (!data) return null
+    const repByIdentity = await this.primaryRepByIdentity([data.revenue_identity_id as string])
     return {
-      id: data.id as string, organizationId: data.organization_id as string, repId: data.rep_id as string,
+      id: data.id as string, organizationId: data.organization_id as string,
+      repId: repByIdentity.get(data.revenue_identity_id as string) ?? 'unassigned',
       revenueIdentityId: data.revenue_identity_id as string, activityType: data.activity_type as ActivityType,
       targetCount: data.target_count as number, active: data.active as boolean,
       createdBy: (data.created_by as string) ?? null, createdAt: data.created_at as string, updatedAt: data.updated_at as string,
@@ -6575,10 +6682,9 @@ export class SupabaseStore implements ScoutStore {
   async deactivateDailyPlanAdmin(repId: string, revenueIdentityId: string): Promise<{ deactivated: number }> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
     const { data, error } = await this.client
-      .from('daily_targets')
+      .from('daily_target_plans')
       .update({ active: false, updated_at: new Date().toISOString() })
       .eq('organization_id', this.orgId)
-      .eq('rep_id', repId)
       .eq('revenue_identity_id', revenueIdentityId)
       .eq('active', true)
       .select('id')
@@ -6631,7 +6737,9 @@ export class SupabaseStore implements ScoutStore {
   async getCommandCenterAdmin(): Promise<CommandCenterView> {
     if (this.rep.role !== 'admin') throw new Error('Admin only')
     const today = await this.businessDate()
-    const { data: targets } = await this.client.from('daily_targets').select('*').eq('organization_id', this.orgId).eq('active', true)
+    const { data: plans } = await this.client.from('daily_target_plans').select('*').eq('organization_id', this.orgId).eq('active', true)
+    const repByIdentity = await this.primaryRepByIdentity((plans ?? []).map((row) => row.revenue_identity_id as string))
+    const targets = (plans ?? []).map((row) => ({ ...row, rep_id: repByIdentity.get(row.revenue_identity_id as string) ?? 'unassigned' }))
     const { data: accountability } = await this.client.from('daily_accountability').select('*').eq('organization_id', this.orgId).eq('target_date', today)
     const { data: identities } = await this.client.from('revenue_identities').select('id, identity_name, status').eq('organization_id', this.orgId).eq('status', 'active')
     const { data: reps } = await this.client.from('reps').select('id, name').eq('organization_id', this.orgId)
@@ -6770,7 +6878,7 @@ export class SupabaseStore implements ScoutStore {
       ]),
     )
     const identityIds = [...executable.keys()]
-    const { data: targets } = await this.client.from('daily_targets').select('*').eq('rep_id', repId).in('revenue_identity_id', identityIds).eq('active', true)
+    const { data: targets } = await this.client.from('daily_target_plans').select('*').in('revenue_identity_id', identityIds).eq('active', true)
     const { data: accountability } = await this.client.from('daily_accountability').select('*').eq('rep_id', repId).eq('target_date', today).eq('organization_id', this.orgId)
     const targetList = (targets ?? []) as Record<string, unknown>[]
     const accMap = new Map(((accountability ?? []) as Record<string, unknown>[]).map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]))
@@ -8319,13 +8427,20 @@ export class SupabaseStore implements ScoutStore {
 
     const repIds = memberships.map((m) => m.person_id)
 
-    const { data: targets } = await this.client
-      .from('daily_targets')
-      .select('rep_id, revenue_identity_id, activity_type, target_count, active')
-      .in('rep_id', repIds)
+    const { data: plans } = await this.client
+      .from('daily_target_plans')
+      .select('revenue_identity_id, activity_type, target_count, active')
       .eq('active', true)
 
-    if (!targets || targets.length === 0) return []
+    if (!plans || plans.length === 0) return []
+    const repByIdentity = await this.primaryRepByIdentity(plans.map((row) => row.revenue_identity_id as string))
+    const targets = plans.map((row) => ({
+      rep_id: repByIdentity.get(row.revenue_identity_id as string) ?? 'unassigned',
+      revenue_identity_id: row.revenue_identity_id,
+      activity_type: row.activity_type,
+      target_count: row.target_count,
+      active: row.active,
+    })).filter((row) => repIds.includes(row.rep_id))
 
     const { data: accountability } = await this.client
       .from('daily_accountability')
@@ -8479,10 +8594,18 @@ export class SupabaseStore implements ScoutStore {
     const teamIds = memberships.map((m) => m.team_id)
     const today = await this.businessDate()
 
-    const { data: allTargets } = await this.client
-      .from('daily_targets')
-      .select('rep_id, revenue_identity_id, activity_type, target_count, active')
+    const { data: allPlans } = await this.client
+      .from('daily_target_plans')
+      .select('revenue_identity_id, activity_type, target_count, active')
       .eq('active', true)
+    const repByIdentity = await this.primaryRepByIdentity((allPlans ?? []).map((row) => row.revenue_identity_id as string))
+    const allTargets = (allPlans ?? []).map((row) => ({
+      rep_id: repByIdentity.get(row.revenue_identity_id as string) ?? 'unassigned',
+      revenue_identity_id: row.revenue_identity_id,
+      activity_type: row.activity_type,
+      target_count: row.target_count,
+      active: row.active,
+    }))
 
     const { data: allAcc } = await this.client
       .from('daily_accountability')

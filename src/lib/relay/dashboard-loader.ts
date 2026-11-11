@@ -468,7 +468,7 @@ async function load(): Promise<AccountabilityDashboardData | null> {
     // targets/completions saw "No revenue identity assigned" and an all-zero
     // My Day view, because this section only ever read from `contracts`.
     identityIds.length > 0
-      ? supabase.from('daily_targets').select('*').eq('rep_id', ctx.repId).in('revenue_identity_id', identityIds).eq('active', true)
+      ? supabase.from('daily_target_plans').select('*').in('revenue_identity_id', identityIds).eq('active', true)
       : Promise.resolve({ data: [] }),
     identityIds.length > 0
       ? supabase.from('daily_accountability').select('*').eq('rep_id', ctx.repId).eq('target_date', today).eq('organization_id', ctx.orgId)
@@ -631,7 +631,7 @@ async function load(): Promise<AccountabilityDashboardData | null> {
     ] = await Promise.all([
       supabase.from('reps').select('id, name').eq('organization_id', ctx.orgId),
       supabase.from('identity_assignments').select('rep_id, revenue_identity_id').eq('organization_id', ctx.orgId),
-      supabase.from('daily_targets').select('*').eq('organization_id', ctx.orgId).eq('active', true),
+      supabase.from('daily_target_plans').select('*').eq('organization_id', ctx.orgId).eq('active', true),
       supabase.from('daily_accountability').select('*').eq('organization_id', ctx.orgId).eq('target_date', today),
       // day_closes is best-effort enrichment only — an org that has never
       // provisioned contracts must not lose the rest of this view over it.

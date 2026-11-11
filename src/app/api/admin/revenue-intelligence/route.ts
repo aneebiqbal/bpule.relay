@@ -4,6 +4,7 @@ import { getAuthContext, can } from '@/lib/auth/organization'
 import { validateFunnelOrdering, computeCostCoverage, validateLatencyConsistency, overallFunnelHealth, classifyFallback } from '@/lib/revenue-intelligence/metrics-health'
 import { generateInsights } from '@/lib/revenue-intelligence/insights'
 import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
+import { primaryRepByIdentity } from '@/lib/targets/plan-scope'
 
 export const maxDuration = 30
 
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
     supabase.from('messages').select('id, lead_id, rep_id, type, send_disposition, reject_reasons, model_used, sent_at, created_at').eq('organization_id', authCtx.orgId).gte('created_at', start).lte('created_at', end).order('created_at', { ascending: false }).limit(2000),
     supabase.from('conversation_states').select('lead_id, stage, last_sent_at, last_reply_at, followup_count, won_at, lost_at, lost_reason, commercial_state').eq('organization_id', authCtx.orgId),
     supabase.from('ai_traces').select('id, task_class, provider, model, latency_ms, estimated_cost_usd, fallback, fallback_reason, error, quality, created_at').eq('organization_id', authCtx.orgId).gte('created_at', start).lte('created_at', end).order('created_at', { ascending: false }).limit(5000),
-    supabase.from('daily_targets').select('id, rep_id, revenue_identity_id, activity_type, target_count, active').eq('organization_id', authCtx.orgId).eq('active', true),
+    supabase.from('daily_target_plans').select('id, revenue_identity_id, activity_type, target_count, active').eq('organization_id', authCtx.orgId).eq('active', true),
     supabase.from('daily_accountability').select('id, rep_id, revenue_identity_id, activity_type, target_date, target_count, completed_count, status').eq('organization_id', authCtx.orgId).gte('target_date', startStr).lte('target_date', endStr),
     supabase.from('revenue_identities').select('id, slug, identity_name, title, channel, status').eq('organization_id', authCtx.orgId),
     supabase.from('extraction_runs').select('id, rep_id, success, latency_ms, model, error_message, created_at').eq('organization_id', authCtx.orgId).gte('created_at', start).lte('created_at', end).limit(5000),
@@ -71,7 +72,15 @@ export async function GET(request: Request) {
   const messages = messagesResult.data ?? []
   const conversations = conversationsResult.data ?? []
   const aiTraces = aiTracesResult.data ?? []
-  const targets = targetsResult.data ?? []
+  const repByIdentity = await primaryRepByIdentity(
+    supabase,
+    authCtx.orgId,
+    (targetsResult.data ?? []).map((row) => row.revenue_identity_id as string),
+  )
+  const targets = (targetsResult.data ?? []).map((row) => ({
+    ...row,
+    rep_id: repByIdentity.get(row.revenue_identity_id as string) ?? 'unassigned',
+  }))
   const accountability = accountabilityResult.data ?? []
   const identities = identitiesResult.data ?? []
   const extractionRuns = extractionRunsResult.data ?? []

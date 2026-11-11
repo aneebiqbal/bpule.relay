@@ -153,7 +153,7 @@ export function RepProfilesToday({
             <span className="font-semibold tabular-nums text-ink">{summary.percent}%</span>
           </span>
         ) : (
-          <span className="text-[12px] text-stone">No daily target</span>
+          <span className="text-[12px] text-stone">No daily plan</span>
         )}
         {exceptions.length > 0 && (
           <span className="ml-auto text-[12px] text-stone">{exceptions.join(' · ')}</span>
@@ -333,7 +333,7 @@ function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: str
           </div>
         </div>
       ) : (
-        <p className="mt-3 text-[12px] text-stone">No daily target</p>
+        <p className="mt-3 text-[12px] text-stone">No daily plan</p>
       )}
 
       {breakdown.items.length > 0 && (

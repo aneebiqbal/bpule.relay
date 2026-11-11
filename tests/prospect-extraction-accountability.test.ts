@@ -32,6 +32,18 @@ function makeOrg(): Organization {
   return { id: ORG_ID, name: 'Test Org', plan: 'active', billingCustomerId: null, timezone: 'UTC', workingDays: [1, 2, 3, 4, 5], holidays: [], createdAt: '2026-01-01T00:00:00.000Z' }
 }
 
+/** The channel plan plus the canonical execution scope for the fixture rep. */
+function planSeed() {
+  return {
+    revenue_identities: [{ id: IDENTITY_ID, organization_id: ORG_ID, profile_id: 'p-1', status: 'active' }],
+    identity_assignments: [{ organization_id: ORG_ID, revenue_identity_id: IDENTITY_ID, rep_id: REP_ID }],
+    profile_coverage: [{ organization_id: ORG_ID, profile_id: 'p-1', rep_id: REP_ID, role: 'PRIMARY', priority: 1, active: true }],
+    daily_target_plans: [
+      { id: 'dtp-1', organization_id: ORG_ID, revenue_identity_id: IDENTITY_ID, activity_type: 'prospect_extracted', target_count: 15, active: true },
+    ],
+  }
+}
+
 function captureInput(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     rawInput: 'Sarah Chen, CTO at Acme. Hiring senior engineers.',
@@ -83,11 +95,7 @@ describe('captureProspect — isNewCapture signal', () => {
 
 describe('recordProspectExtracted — accountability increment', () => {
   it('calls record_activity_event for "prospect_extracted" for every active target', async () => {
-    const fake = createFakeSupabase({
-      daily_targets: [
-        { id: 'dt-1', organization_id: ORG_ID, rep_id: REP_ID, revenue_identity_id: IDENTITY_ID, activity_type: 'prospect_extracted', target_count: 15, active: true },
-      ],
-    })
+    const fake = createFakeSupabase(planSeed())
     const store = new SupabaseStore(makeRep(), fake.client as never, makeOrg())
 
     await store.recordProspectExtracted(IDENTITY_ID)
@@ -103,7 +111,7 @@ describe('recordProspectExtracted — accountability increment', () => {
   })
 
   it('does nothing (no RPC calls) when the rep has no active prospect_extracted target', async () => {
-    const fake = createFakeSupabase({ daily_targets: [] })
+    const fake = createFakeSupabase({ daily_target_plans: [] })
     const store = new SupabaseStore(makeRep(), fake.client as never, makeOrg())
 
     await store.recordProspectExtracted(IDENTITY_ID)
@@ -112,7 +120,7 @@ describe('recordProspectExtracted — accountability increment', () => {
   })
 
   it('never throws even if the underlying lookup fails — non-fatal by design', async () => {
-    const fake = createFakeSupabase({ daily_targets: [] })
+    const fake = createFakeSupabase({ daily_target_plans: [] })
     // Simulate a broken client whose .from() throws synchronously.
     const brokenClient = {
       from() {
@@ -129,9 +137,7 @@ describe('extraction credit fires once per genuine new capture, not on reuse (in
   it('a caller that gates recordProspectExtracted on isNewCapture credits exactly once across a capture + re-analyze', async () => {
     const fake = createFakeSupabase({
       captured_prospects: [],
-      daily_targets: [
-        { id: 'dt-1', organization_id: ORG_ID, rep_id: REP_ID, revenue_identity_id: IDENTITY_ID, activity_type: 'prospect_extracted', target_count: 15, active: true },
-      ],
+      ...planSeed(),
     })
     const store = new SupabaseStore(makeRep(), fake.client as never, makeOrg())
 

@@ -461,10 +461,9 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
         .maybeSingle(),
       listExecutableIdentitiesForRep(supabase, ctx.orgId, repId, businessDate),
       supabase
-        .from('daily_targets')
-        .select('revenue_identity_id, activity_type, target_count')
+        .from('daily_target_plans')
+        .select('revenue_identity_id, activity_type, target_count, targetable')
         .eq('organization_id', ctx.orgId)
-        .eq('rep_id', repId)
         .eq('active', true),
       supabase
         .from('daily_accountability')

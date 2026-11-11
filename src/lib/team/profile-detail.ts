@@ -60,7 +60,7 @@ export async function loadTeamProfileDetail(
       ? supabase.from('identity_assignments').select('rep_id').eq('organization_id', orgId).in('revenue_identity_id', identityIds).limit(200)
       : Promise.resolve({ data: [] as Array<{ rep_id: string }> }),
     identityIds.length > 0
-      ? supabase.from('daily_targets').select('revenue_identity_id, activity_type, target_count').eq('organization_id', orgId).in('revenue_identity_id', identityIds).eq('active', true).limit(200)
+      ? supabase.from('daily_target_plans').select('revenue_identity_id, activity_type, target_count, targetable').eq('organization_id', orgId).in('revenue_identity_id', identityIds).eq('active', true).limit(200)
       : Promise.resolve({ data: [] as Array<{ revenue_identity_id: string; activity_type: string; target_count: number }> }),
     identityIds.length > 0
       ? supabase.from('daily_accountability').select('revenue_identity_id, activity_type, completed_count, status').eq('organization_id', orgId).in('revenue_identity_id', identityIds).eq('target_date', businessDate).limit(200)

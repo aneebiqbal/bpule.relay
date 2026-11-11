@@ -113,7 +113,7 @@ export async function PATCH(
   // counting work the rep can no longer do.
   if (update.status === 'archived') {
     await supabase
-      .from('daily_targets')
+      .from('daily_target_plans')
       .update({ active: false, updated_at: new Date().toISOString() })
       .eq('revenue_identity_id', id)
       .eq('organization_id', authCtx.orgId)
@@ -155,7 +155,7 @@ export async function DELETE(
   const [leads, messages, targets, assignments] = await Promise.all([
     supabase.from('leads').select('id').eq('revenue_identity_id', id).limit(1),
     supabase.from('messages').select('id').eq('revenue_identity_id', id).limit(1),
-    supabase.from('daily_targets').select('id').eq('revenue_identity_id', id).limit(1),
+    supabase.from('daily_target_plans').select('id').eq('revenue_identity_id', id).limit(1),
     supabase.from('identity_assignments').select('id').eq('revenue_identity_id', id).limit(1),
   ])
   const hasHistory = [leads, messages, targets, assignments].some(
