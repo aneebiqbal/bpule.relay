@@ -135,14 +135,14 @@ export function ConversationArchive({ threads, failed }: { threads: ArchiveThrea
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <LanePill lane={thread.lane} />
-                    <span className="rounded-full bg-bone px-1.5 py-px text-[10px] text-stone">{STATUS_LABEL[thread.status] ?? thread.status}</span>
+                    <span className="rounded-full bg-bone px-1.5 py-px text-[10px] text-graphite">{STATUS_LABEL[thread.status] ?? thread.status}</span>
                     {thread.direction === 'inbound' && (
-                      <span className="rounded-full bg-orange/10 px-1.5 py-px text-[10px] text-orange">Inbound</span>
+                      <span className="rounded-full bg-orange/10 px-1.5 py-px text-[10px] text-orange-ink">Inbound</span>
                     )}
                     {thread.stageLabel && (
                       <span className="rounded-full bg-cobalt/10 px-1.5 py-px text-[10px] text-cobalt">{thread.stageLabel}</span>
                     )}
-                    <span className="text-[10px] text-stone">{thread.turnCount} {thread.turnCount === 1 ? 'turn' : 'turns'}</span>
+                    <span className="text-[10px] text-graphite">{thread.turnCount} {thread.turnCount === 1 ? 'turn' : 'turns'}</span>
                   </div>
                 </div>
               </Link>
@@ -158,7 +158,7 @@ export function ConversationArchive({ threads, failed }: { threads: ArchiveThrea
 
 function LanePill({ lane }: { lane: ArchiveLane }) {
   const label = LANES.find((item) => item.key === lane)?.label ?? lane
-  const tone = lane === 'reply' || lane === 'followup' ? 'text-orange bg-orange/10' : 'text-graphite bg-bone'
+  const tone = lane === 'reply' || lane === 'followup' ? 'text-orange-ink bg-orange/10' : 'text-graphite bg-bone'
   return <span className={cn('rounded-full px-1.5 py-px text-[10px]', tone)}>{label}</span>
 }
 

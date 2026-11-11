@@ -81,7 +81,7 @@ export function DecisionTraceView({ trace }: DecisionTraceViewProps) {
                       {node.dimension ? `${node.dimension.replace(/([A-Z])/g, ' $1').trim()} evidence` : 'supporting evidence'}
                     </p>
                     {node.evidence.slice(0, 2).map((e, j) => (
-                      <p key={j} className="text-[10px] text-stone italic truncate">&quot;{e}&quot;</p>
+                      <p key={j} className="text-[10px] text-graphite italic truncate">&quot;{e}&quot;</p>
                     ))}
                   </div>
                 )}
@@ -96,7 +96,7 @@ export function DecisionTraceView({ trace }: DecisionTraceViewProps) {
         {trace.trace.length > 3 && !expanded && (
           <button
             onClick={() => setExpanded(true)}
-            className="mt-2 text-[11px] text-orange hover:underline"
+            className="mt-2 text-[11px] text-orange-ink hover:underline"
           >
             Show all {trace.trace.length} steps
           </button>

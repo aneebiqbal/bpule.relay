@@ -255,7 +255,7 @@ function LeadPreviewPanel({
         {tab === 'overview' ? (
           <dl className="divide-y divide-line">
             <PreviewField label="Next action">
-              <Link href={preview.nextAction.href} onClick={onClose} className="text-[13px] font-medium text-orange hover:underline">
+              <Link href={preview.nextAction.href} onClick={onClose} className="text-[13px] font-medium text-orange-ink hover:underline">
                 {preview.nextAction.label}
               </Link>
             </PreviewField>

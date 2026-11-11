@@ -163,12 +163,12 @@ export function LeadDecisionContextCard({ context }: Props) {
             <span className={cn(
               'rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide',
               context.actionConfidence === 'high' ? 'bg-status-success/10 text-status-success' :
-              context.actionConfidence === 'medium' ? 'bg-orange/10 text-orange' :
+              context.actionConfidence === 'medium' ? 'bg-orange/10 text-orange-ink' :
               'bg-stone-100 text-stone-500'
             )}>{context.actionConfidence}</span>
           </div>
           <p className="mt-1 text-[11px] text-cobalt-ink">{context.actionReason}</p>
-          <p className="mt-1 text-[10px] text-stone">
+          <p className="mt-1 text-[10px] text-graphite">
             Cold score: {context.opportunityScore ?? '—'}/100 ({context.coldAction ?? '—'}).{' '}
             Effective action: <span className="font-medium">{context.effectiveAction}</span>.
           </p>
@@ -275,7 +275,7 @@ function SenderMatchCard({ context }: { context: DecisionContext }) {
                 {isCurrent && <span className="rounded-full bg-bone-raised px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-graphite">current</span>}
                 {isBest && <span className="rounded-full bg-cobalt/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-cobalt">best</span>}
                 {!r.accessibleToRep && (
-                  <span className="rounded-full bg-orange/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-orange">held by {r.holders.join(', ') || 'another rep'}</span>
+                  <span className="rounded-full bg-orange/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-orange-ink">held by {r.holders.join(', ') || 'another rep'}</span>
                 )}
               </li>
             )
