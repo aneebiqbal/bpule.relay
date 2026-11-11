@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { LeadScoreRing } from '@/components/score-ring'
 import { formatRelativeTime } from '@/lib/ui/time'
 import { ProspectAnalyze } from './prospect-analyze'
+import { FreshProspectsView } from './fresh-prospects'
 import {
   derivePipelineStage,
   leadIntentLevel,
@@ -25,13 +26,14 @@ import {
   PROSPECT_STATUS_VARIANT,
   decisionLabelForScore,
 } from '@/lib/prospect/display'
-import type { ProspectTab, RecentProspect } from '@/lib/prospect/prospects-view'
+import type { ProspectTab, RecentProspect, ProspectsViewData } from '@/lib/prospect/prospects-view'
 
 export function ProspectsWorkspace({
   tab,
   recent,
   saved,
   watchlist,
+  fresh,
   workspaceName,
   orgView,
   profiles,
@@ -41,6 +43,7 @@ export function ProspectsWorkspace({
   recent: RecentProspect[]
   saved: LeadRow[]
   watchlist: LeadRow[]
+  fresh: ProspectsViewData['fresh']
   workspaceName: string | null
   orgView: boolean
   profiles: Record<string, string>
@@ -264,6 +267,7 @@ export function ProspectsWorkspace({
               { value: 'recent', label: 'Recent', hint: 'Every prospect you have analyzed, newest first.' },
               { value: 'saved', label: 'Saved', hint: 'Prospects that became active leads.' },
               { value: 'watchlist', label: 'Watchlist', hint: 'Observe — research_more and not-now cases. Not active outreach.' },
+              { value: 'fresh', label: 'Fresh', hint: 'Provider-discovered prospects awaiting your decision.' },
             ]}
             value={tab}
             onChange={selectTab}
@@ -273,6 +277,8 @@ export function ProspectsWorkspace({
 
       {tab === 'analyze' ? (
         <ProspectAnalyze />
+      ) : tab === 'fresh' ? (
+        <FreshProspectsView rows={fresh} orgView={orgView} workspace={workspaceName ? { identityName: workspaceName } : null} />
       ) : tab === 'recent' ? (
         <DataTable
           caption="Recent prospects"

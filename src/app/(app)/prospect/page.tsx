@@ -38,6 +38,7 @@ export default async function ProspectPage({
         recent={data.recent}
         saved={data.saved}
         watchlist={data.watchlist}
+        fresh={data.fresh}
         workspaceName={data.workspace?.identityName ?? null}
         orgView={data.orgView}
         profiles={data.profiles}

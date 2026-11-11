@@ -32,8 +32,9 @@ import { reconcileAcceptedSend } from '@/lib/email/reconcile'
 import { buildSendDecision } from '@/lib/email/send-decision'
 import { createStoreForRep } from '@/lib/email/store-context'
 import { sendPreparedEmail } from '@/lib/email/service'
-import { planOperationalJobs, recoveredRepIds, type OperationalJobKind } from './plan'
+import { planDiscoveryJobs, planOperationalJobs, recoveredRepIds, type OperationalJobKind } from './plan'
 import { emitUpworkLifecycleNotifications } from '@/lib/upwork/sweep'
+import { runSavedSearch } from '@/lib/enrichment/search-service'
 
 export interface SchedulerSummary {
   ok: boolean
@@ -806,6 +807,13 @@ async function executeJob(client: DbClient, row: JobRow): Promise<Record<string,
       // Handled by the same worker once planned; not yet planned because the
       // follow-up generator that produces them does not exist yet.
       return { skipped: 'not_planned' }
+    case 'DISCOVER_PROSPECTS':
+      return runSavedSearch({
+        client,
+        organizationId,
+        searchId: typeof row.payload?.searchId === 'string' ? row.payload.searchId : '',
+        businessDate,
+      }).then((runId) => ({ runId }))
   }
 }
 
@@ -845,7 +853,12 @@ export async function runOperationalScheduler(options: {
 
     const policy = await loadOperatingPolicy(organizationId, client)
     const businessDate = orgDate(now, policy.timezone)
-    const jobs = planOperationalJobs({ policy, businessDate, now })
+    const jobs = [
+      ...planOperationalJobs({ policy, businessDate, now }),
+      // Provider discovery is external and calendar-daily, so it is planned even
+      // when Relay considers the day a non-working day.
+      ...(await planDiscoveryJobs(client, organizationId, businessDate)),
+    ]
     summary.planned += jobs.length
 
     for (const job of jobs) {

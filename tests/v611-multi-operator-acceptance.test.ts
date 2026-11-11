@@ -21,6 +21,8 @@ import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 import { loadRepOperatingPlan } from '@/lib/operations/rep-operating-plan'
 import { loadRepCoverage } from '@/lib/coverage/load'
 import { setRepAvailability } from '@/lib/coverage/actions'
+import { currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const PROFILE = '6e92e611-dd09-464e-8b07-b82ef009e813' // Fizza · Upwork
@@ -29,7 +31,7 @@ const HASSAN = 'aaaaaaaa-0000-0000-0000-000000000002'
 const AHMAD = 'aaaaaaaa-0000-0000-0000-000000000004'
 const MADIHA = 'aaaaaaaa-0000-0000-0000-000000000003'
 const ACTOR = 'aaaaaaaa-0000-0000-0000-000000000001' // Aneeb (admin)
-const TODAY = new Date().toISOString().slice(0, 10)
+let TODAY = new Date().toISOString().slice(0, 10)
 
 /** Live acceptance needs the real database; CI has no credentials. */
 const liveDb = Boolean(process.env.SERVICE_DATABASE_URL ?? process.env.DATABASE_URL)
@@ -58,8 +60,12 @@ function rpcRecorded(result: { data: unknown }): boolean {
   return payload?.recorded === true
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   client = neonServiceDbClient()
+  // The org's business date, not the UTC date: the whole app (and
+  // loadRepOperatingPlan) reads the org clock.
+  const policy = await loadOperatingPolicy(ORG, client)
+  TODAY = orgDate(currentInstant(), policy.timezone)
 })
 
 afterAll(async () => { await closeNeonPool() })

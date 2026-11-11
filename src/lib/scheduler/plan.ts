@@ -17,6 +17,7 @@ import {
   type OperatingPolicy,
   type WarningThresholds,
 } from '@/lib/org-clock'
+import type { DbClient } from '@/lib/db/types'
 
 export type OperationalJobKind =
   | 'OPEN_DAY'
@@ -32,6 +33,7 @@ export type OperationalJobKind =
   | 'SEND_FOLLOWUP'
   | 'PROCESS_INBOUND_EMAIL'
   | 'RETRY_EMAIL'
+  | 'DISCOVER_PROSPECTS'
 
 export type DayStage = 'early' | 'midday' | 'at_risk' | 'final' | 'end'
 
@@ -121,9 +123,35 @@ export function planOperationalJobs(input: {
 }
 
 /**
- * Reps who were escalated as CRITICAL and are no longer critical.
- * Pure so the recovery contract can be tested without a database.
+ * Provider discovery is an external, calendar-day job: it runs regardless of
+ * whether Relay considers the org's day a working day.
+ *
+ * One job per enabled saved search, each carrying its own cursor, so a replay
+ * resumes exactly where the last run stopped.
  */
+export async function planDiscoveryJobs(
+  client: DbClient,
+  organizationId: string,
+  businessDate: string,
+): Promise<PlannedJob[]> {
+  const { data, error } = await client
+    .from('provider_saved_searches')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('enabled', true)
+    .limit(200)
+  if (error || !data) return []
+  return (data as Array<{ id: string }>).map((row) => ({
+    organizationId,
+    businessDate,
+    repId: null,
+    jobKind: 'DISCOVER_PROSPECTS' as const,
+    timeBucket: row.id,
+    dedupeKey: `${businessDate}:DISCOVER_PROSPECTS:${row.id}`,
+    payload: { searchId: row.id },
+  }))
+}
+
 export function recoveredRepIds(
   escalated: Iterable<string>,
   alreadyRecovered: Iterable<string>,

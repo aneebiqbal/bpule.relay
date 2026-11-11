@@ -42,6 +42,7 @@ const ROUTES = [
   { name: 'recent', path: '/prospect?tab=recent' },
   { name: 'saved', path: '/prospect?tab=saved' },
   { name: 'watchlist', path: '/prospect?tab=watchlist' },
+  { name: 'fresh', path: '/prospect?tab=fresh' },
 ]
 
 const AXE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js'

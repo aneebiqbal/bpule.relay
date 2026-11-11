@@ -21,16 +21,18 @@ import { loadBoardData, scopeLeadsToWorkspace } from '@/lib/leads/board-rows'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { derivePipelineStage, type LeadRow } from '@/components/leads/pipeline-utils'
 import type { RecentProspectRow } from '@/lib/domain/types'
+import type { FreshProspectRow } from '@/lib/enrichment/fresh-prospects'
+import { loadFreshProspects } from '@/lib/enrichment/fresh-prospects'
 import { prospectStatus, type ProspectStatus } from '@/lib/prospect/display'
 
-/** The four Prospect views. Analyze is the default route; the rest are `?tab=`. */
-export type ProspectTab = 'analyze' | 'recent' | 'saved' | 'watchlist'
+/** The Prospect views. Analyze is the default route; the rest are `?tab=`. */
+export type ProspectTab = 'analyze' | 'recent' | 'saved' | 'watchlist' | 'fresh'
 
-/** True for the three URL-backed views; Analyze needs no `?tab=` parameter. */
+/** True for the URL-backed views; Analyze needs no `?tab=` parameter. */
 export function isProspectTabParam(
   value: string | undefined,
 ): value is Exclude<ProspectTab, 'analyze'> {
-  return value === 'recent' || value === 'saved' || value === 'watchlist'
+  return value === 'recent' || value === 'saved' || value === 'watchlist' || value === 'fresh'
 }
 
 /** A captured prospect plus its derived workspace status. */
@@ -41,6 +43,7 @@ export interface ProspectsViewData {
   recent: RecentProspect[]
   saved: LeadRow[]
   watchlist: LeadRow[]
+  fresh: import('@/lib/enrichment/fresh-prospects').FreshProspectRow[]
   workspace: WorkspaceIdentity | null
   orgView: boolean
   /** sender profile id → display name, for row attribution. */
@@ -99,13 +102,16 @@ async function loadProfileNames(
 export async function loadProspectsView(tab: ProspectTab): Promise<ProspectsViewData> {
   const user = await getCurrentUser()
   const authCtx = await getAuthContext()
+  if (!authCtx) {
+    return { tab, recent: [], saved: [], watchlist: [], fresh: [], workspace: null, orgView: false, profiles: {} }
+  }
   const store = await createScoutStore()
   const orgView = isProductAdmin(user, authCtx)
   const workspace = await loadWorkspace()
 
   // The default view. Nothing here needs the lead board.
   if (tab === 'analyze') {
-    return { tab, recent: [], saved: [], watchlist: [], workspace, orgView, profiles: {} }
+    return { tab, recent: [], saved: [], watchlist: [], fresh: [], workspace, orgView, profiles: {} }
   }
 
   // The board feeds Saved, Watchlist and Recent's converted-lead status. A
@@ -126,6 +132,7 @@ export async function loadProspectsView(tab: ProspectTab): Promise<ProspectsView
       recent: [],
       saved: [],
       watchlist: leads.filter((lead) => stageById.get(lead.id) === 'observe'),
+      fresh: [],
       workspace,
       orgView,
       profiles: {},
@@ -146,9 +153,24 @@ export async function loadProspectsView(tab: ProspectTab): Promise<ProspectsView
       recent,
       saved: [],
       watchlist: [],
+      fresh: [],
       workspace,
       orgView,
       profiles: await loadProfileNames(recent, authCtx),
+    }
+  }
+
+  if (tab === 'fresh') {
+    const client = await createServerSupabase()
+    return {
+      tab,
+      recent: [],
+      saved: [],
+      watchlist: [],
+      fresh: await loadFreshRows(authCtx.orgId),
+      workspace,
+      orgView,
+      profiles: {},
     }
   }
 
@@ -162,8 +184,19 @@ export async function loadProspectsView(tab: ProspectTab): Promise<ProspectsView
     recent: [],
     saved: leads.filter((lead) => convertedLeadIds.has(lead.id)),
     watchlist: [],
+    fresh: [],
     workspace,
     orgView,
     profiles: {},
   }
+}
+
+/**
+ * Fresh Prospects — provider-discovered candidates awaiting a human decision.
+ * Scoped by the suggested/selected profile; the canonical Leads filter stays the
+ * only filtering authority once a candidate is promoted (§18).
+ */
+async function loadFreshRows(orgId: string): Promise<FreshProspectRow[]> {
+  const client = await createServerSupabase()
+  return loadFreshProspects(client, orgId)
 }

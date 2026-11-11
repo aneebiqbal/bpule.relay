@@ -36,6 +36,12 @@ type ActionEventType =
   | 'LEAD_ARCHIVED'
   | 'RECOMMENDATION_SHOWN'
   | 'RECOMMENDATION_ACTED'
+  | 'PROSPECT_DISCOVERED'
+  | 'PROSPECT_QUALIFIED'
+  | 'EMAIL_ENRICHED'
+  | 'EMAIL_VERIFIED'
+  | 'EMAIL_SENT'
+  | 'EMAIL_REPLY_RECEIVED'
 
 interface EmitActionParams {
   orgId: string
