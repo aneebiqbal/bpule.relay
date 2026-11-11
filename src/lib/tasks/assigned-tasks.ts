@@ -2,6 +2,9 @@ import type { AuthContext } from '@/lib/auth/organization'
 import type { AssignedTaskKind, AssignedTaskRow, UnifiedTaskPriority, UnifiedTaskStatus } from '@/lib/tasks/types'
 import { notifyForEvent, notifyOnce } from '@/lib/notifications/deliver'
 import type { DbClient } from '@/lib/db/types'
+import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export type TaskEventType =
   | 'TASK_CREATED'
@@ -82,7 +85,26 @@ export async function resolveTaskAssigneeScope(
     ids.add(auth.repId)
     return { mode: 'team', assigneeIds: [...ids] }
   }
-  return { mode: 'own', assigneeIds: [auth.repId] }
+  // A plain rep also sees the tasks of every operator sharing their profiles:
+  // the profile's work is channel work, not one person's private list.
+  const policy = await loadOperatingPolicy(auth.orgId, client)
+  const businessDate = orgDate(currentInstant(), policy.timezone)
+  const executable = await listExecutableIdentitiesForRep(client, auth.orgId, auth.repId, businessDate)
+  const profileIds = [
+    ...new Set(executable.map((row) => row.profileId).filter((id): id is string => Boolean(id))),
+  ]
+  const ids = new Set<string>([auth.repId])
+  if (profileIds.length > 0) {
+    const { data: coverageRows } = await client
+      .from('profile_coverage')
+      .select('rep_id')
+      .eq('organization_id', auth.orgId)
+      .eq('active', true)
+      .in('profile_id', profileIds)
+      .limit(500)
+    for (const row of (coverageRows ?? []) as Array<{ rep_id: string }>) ids.add(row.rep_id)
+  }
+  return { mode: 'own', assigneeIds: [...ids] }
 }
 
 export async function listAssignedTaskRows(

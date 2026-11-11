@@ -31,6 +31,10 @@ const MADIHA = 'aaaaaaaa-0000-0000-0000-000000000003'
 const ACTOR = 'aaaaaaaa-0000-0000-0000-000000000001' // Aneeb (admin)
 const TODAY = new Date().toISOString().slice(0, 10)
 
+/** Live acceptance needs the real database; CI has no credentials. */
+const liveDb = Boolean(process.env.SERVICE_DATABASE_URL ?? process.env.DATABASE_URL)
+const describeLive = liveDb ? describe : describe.skip
+
 let client: ReturnType<typeof neonServiceDbClient>
 
 interface CoverageSnapshot {
@@ -153,7 +157,7 @@ function ids(rows: Array<{ id: string }>) {
   return rows.map((row) => row.id)
 }
 
-describe('MULTI_OPERATOR_ACCEPTANCE', () => {
+describeLive('MULTI_OPERATOR_ACCEPTANCE', () => {
   it('one profile, one primary, two operators, one shared plan', async () => {
     await snapshot()
     try {

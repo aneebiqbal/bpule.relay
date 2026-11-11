@@ -196,9 +196,10 @@ describe('TASK_COMPLETED_WORK_NOT_REASSIGNED_ON_RETURN', () => {
 })
 
 describe('REP_TASK_VISIBILITY', () => {
-  it('a rep sees only their own assigned work', () => {
+  it('a rep sees their own work plus the co-operators on their profiles', () => {
     const source = read('src/lib/tasks/assigned-tasks.ts')
-    expect(source).toMatch(/return \{ mode: 'own', assigneeIds: \[auth\.repId\] \}/)
+    expect(source).toMatch(/return \{ mode: 'own', assigneeIds: \[\.\.\.ids\] \}/)
+    expect(source).toMatch(/listExecutableIdentitiesForRep/)
     expect(source).toMatch(/query = query\.in\('assignee_rep_id', scope\.assigneeIds\)/)
   })
 

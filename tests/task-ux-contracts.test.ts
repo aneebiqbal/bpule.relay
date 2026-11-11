@@ -215,8 +215,10 @@ describe('ADMIN_TEAM_WORK_ORG_SCOPE', () => {
 })
 
 describe('REP_TASK_SCOPE', () => {
-  it('a rep work query is pinned to their own assignee id', () => {
-    expect(read('src/lib/tasks/assigned-tasks.ts')).toMatch(/mode: 'own', assigneeIds: \[auth\.repId\]/)
+  it('a rep work query is pinned to their own assignee id and their co-operators', () => {
+    const source = read('src/lib/tasks/assigned-tasks.ts')
+    expect(source).toMatch(/mode: 'own', assigneeIds: \[\.\.\.ids\]/)
+    expect(source).toMatch(/listExecutableIdentitiesForRep/)
   })
 })
 
