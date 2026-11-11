@@ -64,15 +64,14 @@ export function leadBelongsToAnyWorkspace(
 }
 
 /**
- * The workspace a new lead is saved under. The sender argument is ignored:
- * sending as another profile does not change which workspace owns the row.
+ * Lead visibility is resolved from the selected sender by
+ * `resolveSenderContext` (src/lib/profiles/sender-context.ts).
+ *
+ * This module used to export `workspaceIdentityForSender`, which ignored the
+ * selected sender and always returned the active workspace identity. That made
+ * an explicitly selected sender unresolvable: a lead created "as Aneeb ·
+ * LinkedIn" was stored under whichever profile happened to be active (BUG-32).
  */
-export function workspaceIdentityForSender(
-  identity: { id: string; profileId?: string | null } | null | undefined,
-  _senderProfileId?: string | null,
-): string | null {
-  return identity?.id ?? null
-}
 
 export interface LeadVisibility {
   ownerRepId: string

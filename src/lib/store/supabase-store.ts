@@ -836,7 +836,9 @@ export class SupabaseStore implements ScoutStore {
     const fuzzy = companyFuzzyKey(input.company)
     const normalizedUrl = normalizeLeadUrl(input.url ?? null)
     const normalizedContact = contactKey(input.contactName ?? null)
-    const all = await this.fetchLeadsAll()
+    // Archived leads are included: an archived duplicate must be reported as
+    // such, never silently re-created (BUG-36).
+    const all = await this.fetchLeadsAll(false, true)
 
     const priorNo = all.find(
       (l) => l.companyKey === key && (l.status === 'no' || l.status === 'dead'),
@@ -860,17 +862,17 @@ export class SupabaseStore implements ScoutStore {
 
     const exact = isUnknownCompany
       ? undefined
-      : all.find((l) => l.companyKey === key && l.status !== 'dead' && !l.archived)
+      : all.find((l) => l.companyKey === key && l.status !== 'dead')
     const urlHit = normalizedUrl && !isUnknownCompany
-      ? all.find((l) => normalizeLeadUrl(l.url ?? null) === normalizedUrl && l.companyKey === key && l.status !== 'dead' && !l.archived)
+      ? all.find((l) => normalizeLeadUrl(l.url ?? null) === normalizedUrl && l.companyKey === key && l.status !== 'dead')
       : null
     const contactHit = isUnknownCompany || !normalizedContact
       ? undefined
-      : all.find((l) => l.companyKey === key && contactKey(l.contactName) === normalizedContact && l.status !== 'dead' && !l.archived)
+      : all.find((l) => l.companyKey === key && contactKey(l.contactName) === normalizedContact && l.status !== 'dead')
     const fuzzyHit = isUnknownCompany
       ? undefined
       : all.find(
-        (l) => l.companyKey !== key && companyFuzzyKey(l.company) === fuzzy && l.status !== 'dead' && !l.archived,
+        (l) => l.companyKey !== key && companyFuzzyKey(l.company) === fuzzy && l.status !== 'dead',
       )
     const hit = urlHit ?? contactHit ?? exact ?? fuzzyHit
     if (hit) {
@@ -889,6 +891,8 @@ export class SupabaseStore implements ScoutStore {
           existingOwnerName: await this.repName(hit.ownerRepId),
           lead: hit,
           duplicateKind,
+          existingLeadArchived: Boolean(hit.archived),
+          existingLeadSenderProfileId: hit.senderProfileId ?? null,
         }
       }
     }
@@ -1389,6 +1393,17 @@ export class SupabaseStore implements ScoutStore {
     } else if (input.profile && input.profile !== 'all') {
       const id = input.profile.replace(/[^a-zA-Z0-9-]/g, '')
       if (id) query = query.or(`revenue_identity_id.eq.${id},sender_profile_id.eq.${id}`)
+    }
+
+    // The viewer's execution scope, expressed in SQL so the count and the page
+    // rows share one predicate. `scopeLeadsToIdentities` applies the same rule
+    // in memory for the derived-filter path.
+    if (input.identities && input.identities.length > 0) {
+      const clauses = input.identities.flatMap((row) => [
+        `revenue_identity_id.eq.${row.id}`,
+        ...(row.profileId ? [`sender_profile_id.eq.${row.profileId}`] : []),
+      ])
+      if (clauses.length > 0) query = query.or(clauses.join(','))
     }
 
     if (input.source) query = query.eq('source', input.source)

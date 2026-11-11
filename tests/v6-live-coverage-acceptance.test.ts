@@ -19,8 +19,12 @@ import {
 } from '@/lib/responsibility/load'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
-const PROFILE = '37ee6e21-17ec-4041-a5cc-1cfafe60ffd3' // Zaira
-const IDENTITY = 'ab50b6a7-0b85-44c2-b8c9-52816f8adf93' // Zaira · Upwork
+// Aneeb · LinkedIn. This profile is used because its PRIMARY is the same rep
+// the assertions below name, and Hassan/Madiha both hold eligibility on it.
+// (The fixture previously used Zaira · Upwork, whose live PRIMARY changed, so
+// the suite was red on production data it no longer described.)
+const PROFILE = '87c10cd5-58e3-4742-910d-4de549d522c7' // Aneeb · LinkedIn
+const IDENTITY = 'e57519a5-bc62-4bfe-b29d-2be809e8d9af' // Aneeb · LinkedIn
 const PRIMARY = 'aaaaaaaa-0000-0000-0000-000000000004' // Ahmad
 const COVERING = 'aaaaaaaa-0000-0000-0000-000000000002' // Hassan
 const BACKUP = 'aaaaaaaa-0000-0000-0000-000000000003' // Madiha

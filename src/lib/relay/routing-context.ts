@@ -87,16 +87,21 @@ export async function loadSenderProfiles(client: DbClient, orgId: string, repId:
   ])
   const { data: industryRows } = await client
     .from('profiles')
-    .select('id, industries')
+    .select('id, person_id, industries')
     .eq('organization_id', orgId)
     .is('archived_at', null)
-  const industriesById = new Map<string, string[]>()
-  for (const row of (industryRows ?? []) as Array<{ id: string; industries?: string[] | null }>) {
-    industriesById.set(row.id, (row.industries ?? []).filter((x): x is string => typeof x === 'string'))
+  // Industries describe the person, so every channel row of that person
+  // offers the same industry match (BUG-33).
+  const industriesByPerson = new Map<string, Set<string>>()
+  for (const row of (industryRows ?? []) as Array<{ id: string; person_id?: string | null; industries?: string[] | null }>) {
+    const personId = row.person_id ?? row.id
+    const set = industriesByPerson.get(personId) ?? new Set<string>()
+    for (const industry of (row.industries ?? []).filter((x): x is string => typeof x === 'string')) set.add(industry)
+    industriesByPerson.set(personId, set)
   }
   return candidates.map((c) => ({
     ...c,
-    industries: industriesById.get(c.id) ?? [],
+    industries: [...(industriesByPerson.get(c.personId) ?? new Set<string>())],
     historicalOutcomes: toRoutingFormat(historicalMap.get(c.id)),
   }))
 }

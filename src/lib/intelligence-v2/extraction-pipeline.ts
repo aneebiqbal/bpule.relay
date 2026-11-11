@@ -1554,10 +1554,17 @@ function extractName(lines: string[]): string | null {
       if (index === 0 && line.split(/\s+/).length <= 4) return line.trim()
       continue
     }
-    // Match a plain name ("Brian Maccaba") OR a name with a parenthetical
+    // Match a plain name ("Brian Maccaba"), a name with a title or prefix
+    // ("Dr Ahmad Israr", "Dr. Ahmad Israr"), OR a name with a parenthetical
     // nickname ("Ephraim (Effy) Gittler", 'Justus ("riptide") Hanna').
-    // LinkedIn renders the nickname in quotes inside parentheses. Strip both.
-    const nameMatch = line.match(/^([A-Z][A-Za-z'-]+)(?:\s+[\("']*[A-Za-z]+[\)"']*)?\s+([A-Za-z'-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2})$/)
+    //
+    // The nickname group MUST carry real parentheses or quotes. The old
+    // `[\("']*` / `[\)"']*` allowed it to match a bare middle name, so
+    // "Muhammad Aneeb Iqbal" collapsed to "Muhammad Iqbal" and "Dr Ahmad
+    // Israr" to "Dr Israr" — the source display name was silently rewritten.
+    // The rest of the line is kept whole: a title or a middle name is never
+    // dropped from what the rep sees.
+    const nameMatch = line.match(/^([A-Z][A-Za-z'.-]+)(?:\s+[\("']+[A-Za-z]+[\)"']+)?\s+([A-Za-z'-]+(?:\s+[A-Z][A-Za-z'.-]+){0,2})$/)
     if (nameMatch) {
       return [nameMatch[1], nameMatch[2]].join(' ').trim()
     }

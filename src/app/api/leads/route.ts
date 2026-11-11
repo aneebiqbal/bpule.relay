@@ -275,6 +275,8 @@ export async function POST(request: Request) {
         existingOwnerName: result.existingOwnerName,
         existingLeadId: result.lead?.id ?? null,
         existingLeadCompany: result.lead?.company ?? null,
+        existingLeadArchived: result.existingLeadArchived === true,
+        existingLeadSenderProfileId: result.existingLeadSenderProfileId ?? null,
         canCreateSeparate: duplicateKind === 'potential',
       },
       { status: 409 },

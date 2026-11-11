@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import { readSse } from '@/lib/sse/client'
 import { cn } from 'cn'
 import type { ExtractedLead, Profile, MatchedProof } from '@/lib/domain/types'
@@ -18,7 +19,8 @@ import { pasteGuard } from '@/lib/prospect/paste-guard'
 import { trackEvent } from '@/lib/analytics/tracker'
 import type { RejectedSignalView } from '@/components/scoring/rejected-signal-inspector'
 import { useActiveIdentity } from '@/components/workspace/active-identity-provider'
-import { workspaceIdentityForSender } from '@/lib/workspace/active-identity'
+import { normalizeChannel } from '@/lib/profiles/channel'
+import { resolveSenderContext, type SenderContextEntry } from '@/lib/profiles/sender-context'
 import {
   PROSPECT_DRAFT_KEY,
   isProspectDraftWorthSaving,
@@ -27,6 +29,14 @@ import {
 } from '@/lib/prospect/draft'
 import { ProspectCreated, ProspectLoadingSteps, ProspectResult } from './prospect-result'
 import { decisionWordFor, primaryActionFor } from '@/lib/prospect/display'
+
+/** A sender the rep can pick for this check, with the identity it sends as. */
+interface SenderProfileOption {
+  id: string
+  label: string
+  platform: 'linkedin' | 'upwork'
+  identities: SenderContextEntry['identities']
+}
 
 /** Canonical decision detail returned by /api/prospect/analyze (Phase 25-31). */
 interface DecisionDetail {
@@ -186,13 +196,15 @@ export function ProspectAnalyze() {
   const [showSource, setShowSource] = useState(false)
   /** Milestones the SSE stream actually reported, in order. */
   const [steps, setSteps] = useState<string[]>([])
-  const [profiles, setProfiles] = useState<Array<{ id: string; label: string }>>([])
+  const [profiles, setProfiles] = useState<SenderProfileOption[]>([])
   const [createdLead, setCreatedLead] = useState<{ id: string; company: string | null } | null>(null)
   const [duplicateConflict, setDuplicateConflict] = useState<{
     existingLeadId: string
     existingLeadCompany: string
     duplicateKind: 'hard' | 'potential'
     canCreateSeparate: boolean
+    existingLeadArchived: boolean
+    existingLeadSenderProfileId: string | null
     reason?: string
   } | null>(null)
   const rawRef = useRef<HTMLTextAreaElement | null>(null)
@@ -207,6 +219,29 @@ export function ProspectAnalyze() {
   // Preserve sender preference across re-analyses. The sidebar workspace
   // is the default sender; changing sender here is only for this check.
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
+
+  // The selected sender is authoritative: it decides the revenue identity the
+  // lead is attributed to, not the workspace that happened to be active.
+  const senderOptions = useMemo(
+    () =>
+      profiles.map((profile) => ({
+        profileId: profile.id,
+        platform: profile.platform,
+        identities: profile.identities,
+      })),
+    [profiles],
+  )
+  const identityForProfile = useCallback(
+    (profileId: string | null) =>
+      resolveSenderContext(senderOptions, profileId, workspace.active?.id ?? null)?.identity.id
+      ?? workspace.active?.id
+      ?? null,
+    [senderOptions, workspace.active?.id],
+  )
+  const senderContext = useMemo(
+    () => resolveSenderContext(senderOptions, selectedProfileId, workspace.active?.id ?? null),
+    [senderOptions, selectedProfileId, workspace.active?.id],
+  )
 
   // Resilient workspace: the draft and the last completed result survive a
   // refresh, back/forward and navigation away (QA BUG-13-01). Explicit Clear
@@ -282,14 +317,28 @@ export function ProspectAnalyze() {
 
   // The sender list backs the "Working as" selector. Best-effort: without it
   // the selector falls back to the active workspace identity.
+  //
+  // Every channel the rep can execute is offered, and each entry carries the
+  // revenue identity it sends as. Filtering to LinkedIn made an explicitly
+  // selected Upwork sender unresolvable, so the server fell back to the first
+  // LinkedIn profile and the lead was attributed to the wrong channel (BUG-32).
   useEffect(() => {
     let cancelled = false
+    // LinkedIn analysis offers LinkedIn senders, each carrying the revenue
+    // identity it sends as, so a sender choice is never overwritten by the
+    // active workspace (BUG-32).
     fetch('/api/profiles?assigned=1&channel=linkedin')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data || !Array.isArray(data.profiles)) return
         setProfiles(
-          (data.profiles as Array<{ id?: unknown; label?: unknown; displayName?: unknown }>)
+          (data.profiles as Array<{
+            id?: unknown
+            label?: unknown
+            displayName?: unknown
+            platform?: unknown
+            identities?: Array<{ id?: unknown; channel?: unknown }>
+          }>)
             .map((profile) => ({
               id: typeof profile.id === 'string' ? profile.id : '',
               label:
@@ -298,6 +347,14 @@ export function ProspectAnalyze() {
                   : typeof profile.displayName === 'string'
                     ? profile.displayName
                     : 'Profile',
+              platform: profile.platform === 'upwork' ? ('upwork' as const) : ('linkedin' as const),
+              identities: Array.isArray(profile.identities)
+                ? profile.identities.flatMap((identity) =>
+                    typeof identity.id === 'string' && identity.id
+                      ? [{ id: identity.id, channel: normalizeChannel(typeof identity.channel === 'string' ? identity.channel : null) }]
+                      : [],
+                  )
+                : [],
             }))
             .filter((profile) => profile.id.length > 0),
         )
@@ -325,7 +382,7 @@ export function ProspectAnalyze() {
     const existingCanonical = mode === 'try-another-angle' ? result?.canonical ?? null : null
 
     const effectiveProfileId = profileIdOverride ?? selectedProfileId ?? workspace.active?.profileId ?? null
-    const revenueIdentityId = workspaceIdentityForSender(workspace.active, effectiveProfileId)
+    const revenueIdentityId = identityForProfile(effectiveProfileId)
 
     resetResult()
     setAnalyzing(true)
@@ -466,8 +523,7 @@ export function ProspectAnalyze() {
           verbatimQuote: result.extracted.verbatimQuote,
           tags: result.extracted.tags,
           senderProfileId: selectedProfileId ?? result.bestSender?.id ?? workspace.active?.profileId ?? null,
-          revenueIdentityId: workspaceIdentityForSender(
-            workspace.active,
+          revenueIdentityId: identityForProfile(
             selectedProfileId ?? result.bestSender?.id ?? workspace.active?.profileId ?? null,
           ),
           connectionNote: result.connectionNote,
@@ -492,6 +548,11 @@ export function ProspectAnalyze() {
               : 'Existing lead',
           duplicateKind: data.duplicateKind === 'potential' ? 'potential' : 'hard',
           canCreateSeparate: Boolean(data.canCreateSeparate),
+          existingLeadArchived: data.existingLeadArchived === true,
+          existingLeadSenderProfileId:
+            typeof data.existingLeadSenderProfileId === 'string' && data.existingLeadSenderProfileId.trim().length > 0
+              ? data.existingLeadSenderProfileId
+              : null,
           reason: typeof data.reason === 'string' ? data.reason : undefined,
         })
         return
@@ -535,7 +596,11 @@ export function ProspectAnalyze() {
 
   function openCreatedLead() {
     if (!createdLead) return
-    router.push(`/leads/${createdLead.id}?next=generate-connection`)
+    // Land on the lead and let the rep choose. This used to append
+    // `?next=generate-connection`, which made the lead page auto-fire the
+    // connection-note draft on mount — the note was generated (and billed)
+    // before the rep ever saw the "Send without note" option (BUG-37).
+    router.push(`/leads/${createdLead.id}`)
   }
 
   function resetAfterCreate() {
@@ -565,11 +630,24 @@ export function ProspectAnalyze() {
   return (
     <div className="space-y-5">
       {/* The workspace supplies the page header; this line is the profile
-          attribution (BUG-24/29/30) and must stay visible. */}
+          attribution (BUG-24/29/30) and must stay visible. It names the
+          SELECTED sender, not the active workspace, so a sender switch is
+          never invisible (BUG-32 / §38). */}
       {workspace.active ? (
-        <p className="text-[13px] text-ink">
-          Prospecting as <span className="font-medium">{workspace.active.identityName}</span>
-          {workspace.active.title ? <span className="text-graphite"> · {workspace.active.title}</span> : null}
+        <p className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink">
+          <span>Prospecting as</span>
+          <span className="inline-flex items-center gap-1 font-medium">
+            {senderContext ? (
+              <ChannelBadge channel={senderContext.channel} />
+            ) : null}
+            <span>
+              {senderContext
+                ? (profiles.find((profile) => profile.id === senderContext.profileId)?.label
+                  ?? workspace.active.identityName)
+                : workspace.active.identityName}
+            </span>
+            {workspace.active.title ? <span className="text-graphite"> · {workspace.active.title}</span> : null}
+          </span>
         </p>
       ) : null}
 
@@ -582,13 +660,30 @@ export function ProspectAnalyze() {
 
       {duplicateConflict && duplicateCopy ? (
         <Alert ref={error ? undefined : errorRef}>
-          <AlertTitle>{duplicateCopy.title}</AlertTitle>
+          <AlertTitle>
+            Already in Relay{duplicateConflict.existingLeadArchived ? ' · Archived' : ''}
+          </AlertTitle>
           <AlertDescription className="space-y-2">
             <p>{duplicateCopy.description}</p>
+            {duplicateConflict.existingLeadSenderProfileId ? (
+              <p className="text-[11px] text-stone">
+                This prospect already exists under{' '}
+                <span className="font-medium text-ink">
+                  {profiles.find((profile) => profile.id === duplicateConflict.existingLeadSenderProfileId)?.label
+                    ?? 'another profile'}
+                </span>
+                .
+              </p>
+            ) : null}
+            {duplicateConflict.existingLeadArchived ? (
+              <p className="text-[11px] text-stone">
+                This lead is archived. Open it to review, or restore it from the lead page.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2">
               {duplicateConflict.existingLeadId ? (
                 <Button variant="secondary" size="sm" onClick={() => router.push(`/leads/${duplicateConflict.existingLeadId}`)}>
-                  View existing
+                  Open existing lead
                 </Button>
               ) : null}
               {duplicateConflict.canCreateSeparate ? (

@@ -23,6 +23,7 @@ import { FilterBar, type FilterChip } from '@/components/ui/filter-bar'
 import { DataTable, type Column, type SortState } from '@/components/ui/data-table'
 import { Tabs } from '@/components/ui/tabs'
 import { StatusBadge } from '@/components/ui/status-badge'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Button } from '@/components/ui/button'
 import { LeadScoreRing } from '@/components/score-ring'
@@ -522,6 +523,10 @@ export function LeadsTable({
               <p className="truncate text-[11px] text-graphite">
                 {[formatRoleLine(lead.contactTitle, null), lead.company].filter(Boolean).join(' · ') || '—'}
               </p>
+              <p className="mt-0.5 flex items-center gap-1 text-[11px] text-graphite">
+                {lead.senderProfileChannel ? <ChannelBadge channel={lead.senderProfileChannel} /> : null}
+                <span className="truncate">{lead.senderProfileName ?? 'No profile'}</span>
+              </p>
             </div>
           </div>
         ),
@@ -644,6 +649,10 @@ export function LeadsTable({
               </p>
               <p className="truncate text-[11px] text-graphite">
                 {[formatRoleLine(lead.contactTitle, null), lead.company].filter(Boolean).join(' · ') || '—'}
+              </p>
+              <p className="mt-0.5 flex items-center gap-1 text-[11px] text-graphite">
+                {lead.senderProfileChannel ? <ChannelBadge channel={lead.senderProfileChannel} /> : null}
+                <span className="truncate">{lead.senderProfileName ?? 'No profile'}</span>
               </p>
             </div>
           </div>
@@ -820,14 +829,14 @@ export function LeadsTable({
                 <option value="normal">Normal</option>
                 <option value="watch">Watch</option>
               </select>
-              {orgView ? (
+              {profiles.length > 0 ? (
                 <select
                   aria-label="Profile"
                   value={query.profile ?? 'all'}
                   onChange={(event) => navigate({ profile: event.target.value === 'all' ? undefined : event.target.value })}
                   className="rounded-lg border border-line bg-bone px-2 py-1.5 text-[12px] text-ink"
                 >
-                  <option value="all">All profiles</option>
+                  <option value="all">{orgView ? 'All profiles' : 'All my profiles'}</option>
                   <option value="unassigned">No profile</option>
                   {profiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>{profile.identity_name}</option>

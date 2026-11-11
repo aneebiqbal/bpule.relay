@@ -15,6 +15,8 @@ import { profileDisplayName, profileDisplayRole } from '@/lib/profile-intelligen
 
 export interface SenderCandidate {
   id: string
+  /** Canonical person this profile belongs to (`profiles.person_id ?? id`). */
+  personId: string
   name: string | null
   role: string | null
   platform: string | null
@@ -198,6 +200,42 @@ export async function loadSenderCandidates(
     }
   }
 
+  // Knowledge is shared per PERSON, not per channel row. A person's Upwork
+  // profile must inherit the CV, skills, projects and proof captured on their
+  // LinkedIn profile — otherwise a perfectly good sender scores 0 and every
+  // match except the one fully-populated row looks broken (BUG-33).
+  const asArray = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
+  const personIdOf = (p: { id: string; person_id?: string | null }): string => p.person_id ?? p.id
+
+  const skillsByPerson = new Map<string, Set<string>>()
+  const proofByPerson = new Map<string, SenderCandidate['proof']>()
+  for (const p of data ?? []) {
+    const personId = personIdOf(p as { id: string; person_id?: string | null })
+    const skills = skillsByPerson.get(personId) ?? new Set<string>()
+    for (const skill of [
+      ...asArray((p as { primary_skills?: unknown }).primary_skills),
+      ...asArray((p as { secondary_skills?: unknown }).secondary_skills),
+      ...asArray((p as { technologies?: unknown }).technologies),
+      ...asArray((p as { specialties?: unknown }).specialties),
+      ...asArray((p as { service_capabilities?: unknown }).service_capabilities),
+      ...(portfolioByProfile.get((p as { id: string }).id) ?? []).flatMap((pp: any) => asArray(pp.technologies)),
+    ]) skills.add(skill)
+    skillsByPerson.set(personId, skills)
+
+    const proof = proofByPerson.get(personId) ?? []
+    for (const c of cardsByProfile.get((p as { id: string }).id) ?? []) {
+      proof.push({ text: c.safe_claim, tags: [...(c.tags ?? []), c.capability ?? ''], strong: c.strength === 'strong', verified: !!c.verified })
+    }
+    for (const i of itemsByProfile.get((p as { id: string }).id) ?? []) {
+      proof.push({ text: i.project_summary, tags: i.tags ?? [], strong: !!i.review_quote, verified: !!i.permission_on_file })
+    }
+    for (const pp of portfolioByProfile.get((p as { id: string }).id) ?? []) {
+      proof.push({ text: [pp.project_title, pp.description].filter(Boolean).join(' — '), tags: pp.technologies ?? [], strong: false, verified: false })
+    }
+    proofByPerson.set(personId, proof)
+  }
+
   return (data ?? []).map((p: any) => {
     const holders = new Map<string, string>()
     for (const a of assignmentsByProfile.get(p.id) ?? []) {
@@ -206,28 +244,15 @@ export async function loadSenderCandidates(
     for (const r of holdersByProfile.get(p.id) ?? []) holders.set(r.id, r.name)
     if (p.rep_id) holders.set(p.rep_id, ownerNameById.get(p.rep_id) ?? 'Unknown')
     const owner = p.rep_id ? { id: p.rep_id, name: ownerNameById.get(p.rep_id) ?? 'Unknown' } : null
-    const proofCards = cardsByProfile.get(p.id) ?? []
-    const proofItems = itemsByProfile.get(p.id) ?? []
-    const portfolioProjects = portfolioByProfile.get(p.id) ?? []
-    // A malformed jsonb column (object instead of array) must not crash routing.
-    const asArray = (value: unknown): string[] =>
-      Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
-    const skills = [
-      ...asArray(p.primary_skills), ...asArray(p.secondary_skills), ...asArray(p.technologies),
-      ...asArray(p.specialties), ...asArray(p.service_capabilities),
-      ...portfolioProjects.flatMap((pp: any) => asArray(pp.technologies)),
-    ].filter((s: unknown): s is string => typeof s === 'string')
+    const personId = personIdOf(p)
     return {
       id: p.id,
+      personId,
       name: profileDisplayName({ ...p, rep: owner }),
       role: profileDisplayRole(p),
       platform: p.platform ?? null,
-      skills: [...new Set(skills)],
-      proof: [
-        ...proofCards.map((c: any) => ({ text: c.safe_claim, tags: [...(c.tags ?? []), c.capability ?? ''], strong: c.strength === 'strong', verified: !!c.verified })),
-        ...proofItems.map((i: any) => ({ text: i.project_summary, tags: i.tags ?? [], strong: !!i.review_quote, verified: !!i.permission_on_file })),
-        ...portfolioProjects.map((pp: any) => ({ text: [pp.project_title, pp.description].filter(Boolean).join(' — '), tags: pp.technologies ?? [], strong: false, verified: false })),
-      ].filter((x) => x.text),
+      skills: [...(skillsByPerson.get(personId) ?? new Set<string>())],
+      proof: (proofByPerson.get(personId) ?? []).filter((x) => x.text),
       holders: [...holders].map(([id, name]) => ({ repId: id, name })),
       accessibleToRep: p.rep_id === repId || holders.has(repId),
     }

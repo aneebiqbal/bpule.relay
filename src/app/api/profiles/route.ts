@@ -41,7 +41,12 @@ export async function GET(request: Request) {
     const profiles = channel
       ? filterAssignedProfilesByChannel(await listAssignedProfiles(), channel as RevenueIdentityChannel)
       : await listAssignedProfiles()
-    return NextResponse.json({ profiles: profiles.map((a) => a.profile) })
+    // `identities` lets the caller resolve a selected profile to the revenue
+    // identity it sends as, so a sender choice is never overwritten by the
+    // active workspace (BUG-32).
+    return NextResponse.json({
+      profiles: profiles.map((a) => ({ ...a.profile, channels: a.channels, identities: a.identities })),
+    })
   }
 
   const profiles = await store.listProfiles()

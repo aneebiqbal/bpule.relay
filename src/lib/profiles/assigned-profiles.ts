@@ -8,11 +8,18 @@ import { normalizeChannel } from '@/lib/profiles/channel'
 
 export { normalizeChannel } from '@/lib/profiles/channel'
 
+export interface AssignedIdentity {
+  id: string
+  channel: RevenueIdentityChannel
+}
+
 export interface AssignedProfile {
   profile: Profile
   channels: RevenueIdentityChannel[]
   assignedIdentityIds: string[]
   assignmentIds: string[]
+  /** The executable identities behind this profile, with their channel. */
+  identities: AssignedIdentity[]
 }
 
 export function assignedProfileName(profile: AssignedProfile): string {
@@ -40,13 +47,14 @@ export function groupAssignedProfiles(
 
     let entry = grouped.get(profile.id)
     if (!entry) {
-      entry = { profile, channels: [], assignedIdentityIds: [], assignmentIds: [] }
+      entry = { profile, channels: [], assignedIdentityIds: [], assignmentIds: [], identities: [] }
       grouped.set(profile.id, entry)
     }
     const channel = normalizeChannel(identity.channel)
     if (!entry.channels.includes(channel)) entry.channels.push(channel)
     entry.assignedIdentityIds.push(identity.revenueIdentityId)
     entry.assignmentIds.push(identity.assignmentId)
+    entry.identities.push({ id: identity.revenueIdentityId, channel })
   }
 
   return [...grouped.values()]

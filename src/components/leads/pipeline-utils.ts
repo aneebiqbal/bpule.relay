@@ -1,4 +1,4 @@
-import type { Lead } from '@/lib/domain/types'
+import type { Lead, RevenueIdentityChannel } from '@/lib/domain/types'
 import type { LeadsPageInput } from '@/lib/store/types'
 import { getComparableLeadScore } from '@/lib/score/rubric'
 import { isLeadLocked } from '@/lib/leads/lock'
@@ -12,6 +12,8 @@ export type LeadRow = Lead & {
   ownerName?: string
   lastActivityAt?: string | null
   senderProfileName?: string | null
+  /** Channel of the profile that generated this lead — the row's origin. */
+  senderProfileChannel?: RevenueIdentityChannel | null
   lastOutboundAt?: string | null
   lastInboundAt?: string | null
   followupCount?: number

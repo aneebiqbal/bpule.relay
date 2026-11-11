@@ -11,8 +11,9 @@ import { isProductAdmin } from '@/lib/auth/admin-page'
 import { computeLifecycleState } from '@/lib/leads/lifecycle-policy'
 import type { LeadRow, PipelineStage } from '@/components/leads/pipeline-utils'
 import { derivePipelineStage } from '@/components/leads/pipeline-utils'
-import type { Lead } from '@/lib/domain/types'
-import { leadBelongsToWorkspace, type WorkspaceIdentity } from '@/lib/workspace/active-identity'
+import type { Lead, RevenueIdentityChannel } from '@/lib/domain/types'
+import { normalizeChannel } from '@/lib/profiles/channel'
+import { leadBelongsToWorkspace, leadBelongsToAnyWorkspace, type WorkspaceIdentity } from '@/lib/workspace/active-identity'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 
@@ -32,6 +33,19 @@ export function scopeLeadsToWorkspace<
 >(leads: readonly T[], workspace: WorkspaceIdentity | null, orgView: boolean): T[] {
   if (orgView || !workspace) return [...leads]
   return leads.filter((lead) => leadBelongsToWorkspace(lead, workspace))
+}
+
+/**
+ * A rep's default book: every identity they can execute (PRIMARY plus active
+ * coverage). Scoping to the single active workspace made a lead created under
+ * one sender invisible under another, which is how a duplicate detector could
+ * report a lead the rep had no way to find (BUG-34 / BUG-36).
+ */
+export function scopeLeadsToIdentities<
+  T extends { revenueIdentityId?: string | null; senderProfileId?: string | null },
+>(leads: readonly T[], identities: ReadonlyArray<{ id: string; profileId?: string | null }>): T[] {
+  if (identities.length === 0) return [...leads]
+  return leads.filter((lead) => leadBelongsToAnyWorkspace(lead, identities))
 }
 
 export interface BoardData {
@@ -254,16 +268,18 @@ export async function enrichLeads(
 
   const senderProfileIds = [...new Set(visibleLeads.map((l) => l.senderProfileId).filter(Boolean) as string[])]
   const profileById = new Map<string, string>()
+  const platformById = new Map<string, RevenueIdentityChannel>()
   if (senderProfileIds.length > 0 && authCtx) {
     try {
       const client = await createServerSupabase()
-      const profiles = await chunkedIn<{ id: string; display_name: string | null; full_name: string | null }>(senderProfileIds, (chunk) => client
+      const profiles = await chunkedIn<{ id: string; display_name: string | null; full_name: string | null; platform: string | null }>(senderProfileIds, (chunk) => client
         .from('profiles')
-        .select('id, display_name, full_name')
+        .select('id, display_name, full_name, platform')
         .eq('organization_id', authCtx.orgId)
         .in('id', chunk))
       for (const p of profiles) {
         profileById.set(p.id as string, (p.display_name ?? p.full_name ?? 'Profile') as string)
+        platformById.set(p.id as string, normalizeChannel(p.platform))
       }
     } catch { }
   }
@@ -287,6 +303,7 @@ export async function enrichLeads(
       ownerName: orgView && lead.ownerRepId ? ownerByRepId[lead.ownerRepId] : undefined,
       lastActivityAt: lastActivityByLead.get(lead.id) ?? null,
       senderProfileName: lead.senderProfileId ? profileById.get(lead.senderProfileId) ?? undefined : undefined,
+      senderProfileChannel: lead.senderProfileId ? (platformById.get(lead.senderProfileId) ?? null) : null,
       lastOutboundAt: outboundAt,
       lastInboundAt: inboundAt,
       followupCount: followupCountByLead.get(lead.id) ?? 0,

@@ -185,6 +185,10 @@ export interface CreateLeadResult {
   existingOwnerName?: string
   lead?: Lead
   duplicateKind?: 'hard' | 'potential'
+  /** The existing lead is archived — reported, never silently re-created. */
+  existingLeadArchived?: boolean
+  /** Profile that generated the existing lead, so the rep can see where it lives. */
+  existingLeadSenderProfileId?: string | null
 }
 
 export interface SaveDraftInput {
@@ -356,6 +360,11 @@ export interface LeadsPageInput {
   owner?: string
   /** Revenue identity id or sender profile id. */
   profile?: string
+  /**
+   * The viewer's executable scope. When present, the SQL count and the rows
+   * come from the SAME predicate — a rep's total must never be the org total.
+   */
+  identities?: Array<{ id: string; profileId?: string | null }>
   source?: string
   status?: string
   /** 'created' (default) | 'company' | 'name'. Derived sorts are applied by the caller. */

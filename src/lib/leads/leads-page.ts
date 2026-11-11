@@ -9,11 +9,12 @@
  */
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
+import { getAuthorizedIdentities } from '@/lib/auth/workspace'
 import { isProductAdmin } from '@/lib/auth/admin-page'
 import { createScoutStore } from '@/lib/store'
 import { resolveActiveWorkspace } from '@/lib/workspace/resolve-active-identity'
 import type { WorkspaceIdentity } from '@/lib/workspace/active-identity'
-import { enrichLeads, scopeLeadsToWorkspace, BOARD_CARD_LIMIT, CARD_ORDER, type BoardPreview } from '@/lib/leads/board-rows'
+import { enrichLeads, scopeLeadsToIdentities, BOARD_CARD_LIMIT, CARD_ORDER, type BoardPreview } from '@/lib/leads/board-rows'
 import {
   assertRepCannotUseTeamScope,
   filterLeadsByTeamOwners,
@@ -130,9 +131,16 @@ export async function loadScopedFilteredLeads(query: LeadsQuery): Promise<Scoped
           authCtx?.repId ?? '',
         )
       : await store.listOwnedLeads()
+  // A rep's default book is every identity they can execute, not just the
+  // active workspace (BUG-34).
+  const executableIdentities = orgView || teamView
+    ? []
+    : (await getAuthorizedIdentities())
+        .filter((identity) => identity.status === 'active')
+        .map((identity) => ({ id: identity.revenueIdentityId, profileId: identity.profileId }))
   const scoped = orgView || teamView
     ? all
-    : scopeLeadsToWorkspace(all, workspace, false)
+    : scopeLeadsToIdentities(all, executableIdentities)
   const columnFiltered = applyCanonicalColumnFilters(scoped, query)
   const enriched = await enrichLeads(columnFiltered, {
     authCtx,
@@ -199,8 +207,16 @@ export async function loadLeadsPage(query: LeadsQuery): Promise<LeadsPageData> {
     .filter((rep) => (managedOwners ? managedOwners.has(rep.id) : true))
     .map((rep) => ({ id: rep.id, name: rep.name }))
 
-  // Sending identities for the profile filter. Organization-scoped, same source
-  // the Inbox filter uses, so both surfaces offer the same set.
+  // Sending identities for the profile filter. Admins get the organization;
+  // reps get exactly the identities they can execute, so the filter offers the
+  // same set on both surfaces and never an identity they cannot work.
+  const authorizedIdentities = orgView || teamView
+    ? []
+    : (await getAuthorizedIdentities()).filter((identity) => identity.status === 'active')
+  const executableIdentities = authorizedIdentities.map((identity) => ({
+    id: identity.revenueIdentityId,
+    profileId: identity.profileId,
+  }))
   const profiles: Array<{ id: string; identity_name: string }> = []
   if (orgView && authCtx) {
     try {
@@ -215,6 +231,10 @@ export async function loadLeadsPage(query: LeadsQuery): Promise<LeadsPageData> {
       }
     } catch {
       // The filter degrades to All / No profile rather than failing the page.
+    }
+  } else if (!teamView) {
+    for (const identity of authorizedIdentities) {
+      profiles.push({ id: identity.revenueIdentityId, identity_name: identity.identityName })
     }
   }
 
@@ -244,6 +264,7 @@ export async function loadLeadsPage(query: LeadsQuery): Promise<LeadsPageData> {
       q: query.q,
       owner: query.owner,
       profile: query.profile,
+      identities: orgView || teamView ? undefined : executableIdentities,
       source: query.source,
       status: query.status,
       sort: query.sort,
@@ -257,7 +278,7 @@ export async function loadLeadsPage(query: LeadsQuery): Promise<LeadsPageData> {
     }
     const scoped = orgView || teamView
       ? pageLeads
-      : scopeLeadsToWorkspace(pageLeads, workspace, false)
+      : scopeLeadsToIdentities(pageLeads, executableIdentities)
     const leads = await enrichLeads(scoped, {
       authCtx,
       orgView: orgView || teamView,

@@ -55,7 +55,10 @@ import { recordExplanationViolations } from '@/lib/relay/contract-violations'
 import {
   filterAssignedProfilesByChannel,
   listAssignedProfiles,
+  type AssignedProfile,
 } from '@/lib/profiles/assigned-profiles'
+import { normalizeChannel } from '@/lib/profiles/channel'
+import type { WorkspaceIdentity } from '@/lib/workspace/active-identity'
 
 /**
  * Messaging policies that actually involve writing/sending a pitch message.
@@ -239,15 +242,15 @@ async function handlePost(request: Request) {
   }
 
   const explicitProfileId = body.profileId ?? null
-  let requestedWorkspaceId: string | null = null
+  let requestedWorkspace: WorkspaceIdentity | null = null
   if (typeof body.revenueIdentityId === 'string') {
     try {
-      const workspace = await resolveAccessibleIdentity(body.revenueIdentityId)
-      requestedWorkspaceId = workspace?.id ?? null
+      requestedWorkspace = await resolveAccessibleIdentity(body.revenueIdentityId)
     } catch {
-      requestedWorkspaceId = null
+      requestedWorkspace = null
     }
   }
+  const requestedWorkspaceId = requestedWorkspace?.id ?? null
 
   const minimumExtracted: ExtractedLead = {
     name: null,
@@ -538,16 +541,18 @@ async function handlePost(request: Request) {
     // A connection note is still withheld unless the action is a pitch.
     emit({ type: 'status', message: 'Matching sender profiles' })
     let profiles: Profile[] = []
+    let assignedById = new Map<string, AssignedProfile>()
     let fewShotPool: Array<{ id: string; messageId: string; leadId: string; playId: string | null; signalType: number | null; sentText: string; company: string; signalEvidence: string | null; tags: string[]; createdAt: string }> = []
     try {
       if (store) {
-        // LinkedIn prospecting shows only LinkedIn-capable profiles assigned to
-        // this rep. `profileById` below must be built from the same set, or the
-        // identity-linked leg computed by `loadSenderProfiles` is discarded.
+        // LinkedIn analysis offers LinkedIn senders. Showing Upwork profiles
+        // here made the analyzer appear to choose an Upwork identity for a
+        // LinkedIn prospect (BUG-32); the Upwork analyzer has its own surface.
         const [assigned, fs] = await Promise.all([
           listAssignedProfiles(),
           store.listFewShotWins(50),
         ])
+        assignedById = new Map(assigned.map((a) => [a.profile.id, a]))
         profiles = filterAssignedProfilesByChannel(assigned, 'linkedin').map((a) => a.profile)
         fewShotPool = fs
       }
@@ -563,9 +568,26 @@ async function handlePost(request: Request) {
     ]
 
     // Same ranking the lead page uses: every profile, including the one
-    // the rep is prospecting as. A LinkedIn-only filter hid Upwork profiles
-    // such as the current sender and left the stronger match looking stuck.
+    // the rep is prospecting as.
     const profileById = new Map(profiles.map((p) => [p.id, p]))
+
+    // The explicitly selected profile is authoritative: it decides the channel
+    // this analysis runs on AND the revenue identity the lead is attributed
+    // to. The active workspace is only a fallback, never an override (BUG-32).
+    // A selection outside the LinkedIn candidate set is not a LinkedIn sender.
+    const explicitProfile = explicitProfileId && profileById.has(explicitProfileId)
+      ? profileById.get(explicitProfileId) ?? null
+      : null
+    const explicitAssigned = explicitProfile ? assignedById.get(explicitProfile.id) ?? null : null
+    const selectedIdentity = explicitAssigned
+      ? (explicitAssigned.identities.find((row) => row.channel === normalizeChannel(explicitProfile?.platform ?? ''))
+        ?? explicitAssigned.identities[0]
+        ?? null)
+      : null
+    const effectiveIdentityId = selectedIdentity?.id ?? requestedWorkspaceId
+    const senderChannel = selectedIdentity?.channel
+      ?? (explicitProfile ? normalizeChannel(explicitProfile.platform) : null)
+      ?? 'linkedin'
 
     let senderRouting: RoutingResult | null = null
     try {
@@ -576,7 +598,7 @@ async function handlePost(request: Request) {
           { company: extracted.company, contactName: extracted.name, contactTitle: extracted.title, rawInput: rawText, senderProfileId: explicitProfileId },
           packet,
           senders,
-          null,
+          senderChannel,
         )
       }
     } catch (err) {
@@ -586,7 +608,6 @@ async function handlePost(request: Request) {
     // The profile chosen for this check stays the sender. Otherwise use the
     // highest-ranked profile this rep can actually send as.
     const accessibleRanked = (senderRouting?.rankings ?? []).filter((r) => r.accessibleToRep && profileById.has(r.senderId))
-    const explicitProfile = explicitProfileId ? profiles.find((p) => p.id === explicitProfileId) ?? null : null
     const bestSender: Profile | null = explicitProfile
       ?? (accessibleRanked[0] ? profileById.get(accessibleRanked[0].senderId) ?? null : null)
       ?? profiles[0]
@@ -647,7 +668,7 @@ async function handlePost(request: Request) {
             currentSenderId: bestSender?.id ?? null,
             bestSenderAccessible: senderRouting.rankings[0]?.accessibleToRep ?? false,
           },
-          channel: 'linkedin',
+          channel: senderChannel ?? 'linkedin',
         }).routing
       : null
 
@@ -664,7 +685,7 @@ async function handlePost(request: Request) {
           canonicalScore: canonical.canonicalScore,
           canonicalIntelligence: canonical as unknown as Record<string, unknown>,
           scoreBreakdown: canonical.scoreBreakdown as unknown as Record<string, unknown>,
-          revenueIdentityId: requestedWorkspaceId,
+          revenueIdentityId: effectiveIdentityId,
           senderProfileId: bestSender?.id ?? null,
           isTest: body.isTest === true,
         })

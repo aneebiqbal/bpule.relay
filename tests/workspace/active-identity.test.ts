@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignLead, chooseSender, leadBelongsToWorkspace, workspaceIdentityForSender, type LeadVisibility } from '@/lib/workspace/active-identity'
+import { assignLead, chooseSender, leadBelongsToWorkspace, type LeadVisibility } from '@/lib/workspace/active-identity'
 
 const workspace = { id: 'identity-1', profileId: 'profile-1' }
 
@@ -18,20 +18,6 @@ describe('leadBelongsToWorkspace', () => {
 
   it('hides a lead with no identity and no sender when a workspace is selected', () => {
     expect(leadBelongsToWorkspace({ revenueIdentityId: null, senderProfileId: null }, workspace)).toBe(false)
-  })
-})
-
-describe('workspaceIdentityForSender', () => {
-  it('stamps the workspace while prospecting through its profile', () => {
-    expect(workspaceIdentityForSender(workspace, 'profile-1')).toBe('identity-1')
-  })
-
-  it('stamps the workspace when the identity has no linked profile yet', () => {
-    expect(workspaceIdentityForSender({ id: 'identity-1', profileId: null }, 'profile-9')).toBe('identity-1')
-  })
-
-  it('keeps the creating workspace when the sender is a different profile', () => {
-    expect(workspaceIdentityForSender(workspace, 'profile-2')).toBe('identity-1')
   })
 })
 
