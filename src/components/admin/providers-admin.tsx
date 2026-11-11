@@ -546,7 +546,7 @@ export function ProvidersAdmin() {
             return (
               <div key={label} className="mt-4">
                 <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{label}</p>
-                <div className="mt-2 overflow-x-auto">
+                <div className="mt-2 overflow-x-auto" tabIndex={0} role="region" aria-label={`${label} breakdown table`}>
                   <table className="w-full min-w-[560px] text-left text-[12px]">
                     <caption className="sr-only">{label} breakdown</caption>
                     <thead>
@@ -573,7 +573,7 @@ export function ProvidersAdmin() {
             )
           })}
 
-          <div className="mt-5 overflow-x-auto">
+          <div className="mt-5 overflow-x-auto" tabIndex={0} role="region" aria-label="Saved search quality table">
             <table className="w-full min-w-[640px] text-left text-[12px]">
               <caption className="sr-only">Saved search quality for the last 7 days</caption>
               <thead>
@@ -614,7 +614,7 @@ export function ProvidersAdmin() {
           </div>
 
           {/* §24 — provider ROI. */}
-          <div className="mt-5 overflow-x-auto">
+          <div className="mt-5 overflow-x-auto" tabIndex={0} role="region" aria-label="Provider ROI table">
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Provider ROI</p>
             <table className="mt-2 w-full min-w-[640px] text-left text-[12px]">
               <caption className="sr-only">Provider return on investment for the last 7 days</caption>

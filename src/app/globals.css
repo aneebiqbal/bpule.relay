@@ -30,6 +30,8 @@
   --color-solid: var(--solid);
   --color-on-solid: var(--on-solid);
   --color-on-accent: var(--on-accent);
+  /* Orange is a light signal: dark text passes AA where white does not. */
+  --color-on-orange: var(--on-orange);
   /* Text on status fills. These must flip with the fill: a light-mode dark
      green becomes a dark-mode light green, so light-on-dark stops working. */
   --color-on-success: var(--on-success);
