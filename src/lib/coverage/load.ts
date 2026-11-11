@@ -49,7 +49,7 @@ export interface CoverageFacts {
   maxProfilesPerRep: number
   reps: CoverageRepRow[]
   availability: RepAvailabilityInput[]
-  profiles: Array<{ profileId: string; name: string; channels: RevenueIdentityChannel[]; identityIds: string[] }>
+  profiles: Array<{ profileId: string; personId: string | null; name: string; channels: RevenueIdentityChannel[]; identityIds: string[] }>
   assignments: CoverageAssignmentInput[]
   coverage: CoverageConfigInput[]
   activeCoverage: ActiveCoverageInput[]
@@ -593,6 +593,13 @@ export async function loadRepCoverage(
   const ownedProfiles = plan.profiles.filter(
     (profile) => profile.primaryRepId === repId || operatorProfileIds.has(profile.profileId),
   )
+  // Cards are grouped by person, so the operator marker must be keyed the same
+  // way or a channel seat would never match its grouped card.
+  const operatorPersonKeys = new Set(
+    facts.profiles
+      .filter((profile) => operatorProfileIds.has(profile.profileId))
+      .map((profile) => profile.personId ?? profile.profileId),
+  )
   // REPLACE removes the primary from execution; ownership is retained and
   // surfaced separately so it never looks like a transfer.
   const own = groupProfilesByPerson(ownedProfiles.filter((profile) => profile.activeCoverageMode !== 'REPLACE'))
@@ -642,7 +649,7 @@ export async function loadRepCoverage(
     availability,
     own: own.sort((a, b) => a.name.localeCompare(b.name)),
     covering: covering.sort((a, b) => a.name.localeCompare(b.name)),
-    operatorProfileIds: [...operatorProfileIds],
+    operatorProfileIds: [...operatorPersonKeys],
     replaced: replaced.sort((a, b) => a.name.localeCompare(b.name)),
     requiresApproval: plan.requiresApproval.length,
     readiness,

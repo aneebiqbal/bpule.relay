@@ -466,7 +466,13 @@ function MobilePersonCard({ profile, reps }: { profile: TeamProfileDirectoryRow;
 function RepInverse({ profiles }: { profiles: TeamProfileDirectoryRow[] }) {
   const byRep = new Map<string, { target: number; completed: number; rows: TeamProfileDirectoryRow[] }>()
   for (const profile of profiles) {
-    const reps = profile.assignedReps.length > 0 ? profile.assignedReps : ['Unassigned']
+    // A shared plan is attributed to its PRIMARY once. Listing every eligible
+    // rep would show the same requirement against each of them (a silent 2x).
+    const reps = profile.primaryRepName
+      ? [profile.primaryRepName]
+      : profile.assignedReps.length > 0
+        ? [profile.assignedReps[0]]
+        : ['Unassigned']
     for (const rep of reps) {
       const entry = byRep.get(rep) ?? { target: 0, completed: 0, rows: [] }
       entry.target += profile.targetCount

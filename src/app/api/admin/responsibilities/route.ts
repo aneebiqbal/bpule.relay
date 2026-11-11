@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         toRepId: repId,
         actorRepId: auth.authCtx.repId,
       })
-      return NextResponse.json({ ok: true, transferred: true, ...result })
+        return NextResponse.json({ ok: true, transferred: true, ...result })
     }
 
     if (body.role === 'backup') {
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
         repId,
         actorRepId: auth.authCtx.repId,
       })
-      return NextResponse.json({ ok: true, transferred: false, operator: true, ...result })
+        return NextResponse.json({ ok: true, transferred: false, operator: true, ...result })
     }
 
     const result = await assignPrimaryResponsibility(auth.client, {

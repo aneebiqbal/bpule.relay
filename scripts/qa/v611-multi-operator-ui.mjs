@@ -52,10 +52,14 @@ async function login(email) {
 }
 
 /** The channel child row that follows a person's header row. */
-function channelRow(page, personName, channel) {
+function channelRow(page, personName) {
   const header = page.locator('tr', { hasText: personName }).first()
-  const sibling = header.locator('xpath=following-sibling::tr[1]')
-  return channel ? sibling.filter({ hasText: channel }) : sibling
+  return header.locator('xpath=following-sibling::tr[1]')
+}
+
+/** One channel's <li> inside the person's child row. */
+function channelLane(page, personName, channel) {
+  return channelRow(page, personName).locator('li', { hasText: channel }).first()
 }
 
 async function axeCheck(page, label) {
@@ -121,8 +125,8 @@ try {
   await admin.waitForTimeout(2500)
 
   // ---- Manage people: add Ahmad as an active operator ----
-  const fizzaRow = channelRow(admin, 'Fizza Iqbal', 'Upwork')
-  const manageButtons = fizzaRow.getByRole('button', { name: 'Manage people' })
+  const fizzaLane = channelLane(admin, 'Fizza Iqbal', 'Upwork')
+  const manageButtons = fizzaLane.getByRole('button', { name: 'Manage people' })
   if ((await manageButtons.count()) === 0) fail('admin profiles: no Manage people button on the Fizza Upwork row')
   else {
     await manageButtons.first().click()
@@ -144,13 +148,29 @@ try {
       if (checked) fail('manage people: Ahmad was already an operator (fixture not clean)')
       else {
         await ahmadCheckbox.check()
+        const dialogAfterCheck = await dialog.innerText()
+        if (!dialogAfterCheck.includes('EXECUTES')) {
+          fail('manage people: Ahmad checkbox did not register (no EXECUTES marker)')
+        }
         await dialog.getByRole('button', { name: 'Save people' }).click()
-        await admin.waitForTimeout(2500)
         state.added = true
-        const after = await bodyText(admin)
+        // The QA database is heavily loaded; the save can take a minute.
+        for (let attempt = 0; attempt < 120; attempt += 1) {
+          if ((await admin.locator('div[role="dialog"]').count()) === 0) break
+          await admin.waitForTimeout(1000)
+        }
+        if ((await admin.locator('div[role="dialog"]').count()) > 0) {
+          fail('manage people: dialog never closed after save')
+        }
+        await admin.reload({ waitUntil: 'domcontentloaded', timeout: 90_000 })
+        let after = ''
+        for (let attempt = 0; attempt < 25; attempt += 1) {
+          after = await bodyText(admin)
+          if (after.includes('Operators Ahmad')) break
+          await admin.waitForTimeout(1000)
+        }
         if (after.includes('Operators Ahmad')) ok('admin profiles: Ahmad listed as an operator after save')
-        else if (after.includes('Ahmad')) ok('admin profiles: Ahmad present after save')
-        else fail('admin profiles: Ahmad missing after save')
+        else fail('admin profiles: Ahmad not listed as an operator after save')
       }
     }
   }
@@ -169,7 +189,7 @@ try {
   sessions.push(ahmadSession)
   const ahmad = ahmadSession.page
   let repBody = ''
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < 25; attempt += 1) {
     repBody = await bodyText(ahmad)
     if (repBody.includes('Fizza')) break
     await ahmad.waitForTimeout(1000)
@@ -192,17 +212,20 @@ try {
       try {
         await cleanup.goto(`${base}/team/profiles`, { waitUntil: 'domcontentloaded', timeout: 90_000 })
         await cleanup.waitForTimeout(2500)
-        const row = channelRow(cleanup, 'Fizza Iqbal', 'Upwork')
-        const buttons = row.getByRole('button', { name: 'Manage people' })
+        const lane = channelLane(cleanup, 'Fizza Iqbal', 'Upwork')
+        const buttons = lane.getByRole('button', { name: 'Manage people' })
         if ((await buttons.count()) > 0) {
           await buttons.first().click()
-          await cleanup.waitForSelector('div[role="dialog"]', { timeout: 15_000 })
-          const dialog = cleanup.locator('div[role="dialog"]')
+          await cleanup.waitForSelector('div[role="dialog"]', { timeout: 30_000 })
+          const dialog = cleanup.locator('div[role="dialog"]').first()
           const ahmadCheckbox = dialog.locator('label', { hasText: 'Ahmad' }).first().locator('input[type="checkbox"]')
           if ((await ahmadCheckbox.count()) > 0 && (await ahmadCheckbox.isChecked())) {
             await ahmadCheckbox.uncheck()
             await dialog.getByRole('button', { name: 'Save people' }).click()
-            await cleanup.waitForTimeout(2500)
+            for (let attempt = 0; attempt < 120; attempt += 1) {
+              if ((await cleanup.locator('div[role="dialog"]').count()) === 0) break
+              await cleanup.waitForTimeout(1000)
+            }
           }
         }
       } catch (error) {
