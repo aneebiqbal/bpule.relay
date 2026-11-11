@@ -26,8 +26,8 @@ if (!BASE) {
 }
 
 const USERS = [
-  { role: 'admin', email: 'hassan@scout.dev', password: 'scout-dev-password' },
-  { role: 'rep', email: 'madiha@scout.dev', password: 'scout-dev-password' },
+  { role: 'admin', email: process.env.A11Y_ADMIN_EMAIL ?? 'hassan@scout.dev', password: process.env.A11Y_ADMIN_PASSWORD ?? 'scout-dev-password' },
+  { role: 'rep', email: process.env.A11Y_REP_EMAIL ?? 'madiha@scout.dev', password: process.env.A11Y_REP_PASSWORD ?? 'scout-dev-password' },
 ]
 
 const VIEWPORTS = [

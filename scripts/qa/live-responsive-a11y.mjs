@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { chromium } from 'playwright'
 
-const base = 'https://localhost:3000'
+const base = process.argv[2] ?? process.env.RELAY_BASE_URL ?? 'https://localhost:3000'
 const axeSource = fs.readFileSync(path.join(process.cwd(), 'node_modules/axe-core/axe.min.js'), 'utf8')
 const VIEWPORTS = [
   { name: '1440', width: 1440, height: 900 },

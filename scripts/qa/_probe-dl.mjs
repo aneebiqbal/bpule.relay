@@ -1,0 +1,18 @@
+import { chromium } from 'playwright'
+const base = 'https://relay.bpulse.dev'
+const browser = await chromium.launch()
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+const page = await ctx.newPage()
+await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('#login-email')
+await page.waitForFunction(() => { const el = document.querySelector('#login-email'); return Boolean(el && '_valueTracker' in el) }, { timeout: 30000 })
+await page.locator('#login-email').pressSequentially('hassan@scout.dev', { delay: 3 })
+await page.locator('#login-password').pressSequentially('scout-dev-password', { delay: 3 })
+await page.getByRole('button', { name: /sign in with password/i }).click()
+await page.waitForURL(/dashboard|onboarding/)
+await page.goto(`${base}/dashboard`, { waitUntil: 'networkidle' })
+await page.waitForTimeout(2000)
+const html = await page.locator('.p-3:nth-child(2) > dl').first().evaluate((el) => el.outerHTML.slice(0, 700)).catch((e) => 'ERR ' + e.message)
+console.log('DL HTML:', html)
+console.log('PARENT:', await page.locator('.p-3:nth-child(2)').first().evaluate((el) => el.className).catch(() => '?'))
+await browser.close()

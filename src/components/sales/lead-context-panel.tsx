@@ -60,7 +60,7 @@ export function LeadContextPanel({
             {senderProfileName ?? <Unknown />}
           </ContextRow>
           <ContextRow label="Open tasks">
-            <Link href={`/leads/${lead.id}?tab=tasks`} className="text-[12px] text-orange hover:underline">
+            <Link href={`/leads/${lead.id}?tab=tasks`} className="text-[12px] text-orange-ink hover:underline">
               View tasks
             </Link>
           </ContextRow>

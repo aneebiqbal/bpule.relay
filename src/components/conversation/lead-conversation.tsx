@@ -716,7 +716,7 @@ export function LeadConversation({
                     </Button>
                   </div>
                 </div>
-                <p className="text-[10px] text-stone">Send the message on LinkedIn yourself, then log it here so Relay keeps the thread and timing right.</p>
+                <p className="text-[10px] text-graphite">Send the message on LinkedIn yourself, then log it here so Relay keeps the thread and timing right.</p>
               </div>
             )}
           </div>
@@ -799,11 +799,13 @@ function Bubble({ turn, name }: { turn: ConversationTurn; name: string }) {
       <div className="max-w-[85%] min-w-0">
         <div className={cn(
           'rounded-2xl px-3.5 py-2.5',
-          mine ? 'rounded-br-md bg-cobalt/10 border border-cobalt/20' : 'rounded-bl-md bg-bone border border-line',
+          // A solid tint, not an alpha: axe resolves bg-cobalt/10 against an
+          // unknown parent and reports a phantom contrast failure.
+          mine ? 'rounded-br-md bg-cobalt-faint border border-cobalt/20' : 'rounded-bl-md bg-bone border border-line',
         )}>
           <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{turn.text}</p>
         </div>
-        <p className={cn('mt-1 flex gap-1.5 px-1 text-[10px] text-stone', mine ? 'justify-end' : 'justify-start')}>
+        <p className={cn('mt-1 flex gap-1.5 px-1 text-[10px] text-graphite', mine ? 'justify-end' : 'justify-start')}>
           <span className="font-medium">{name}</span>
           {kind && <span>· {kind}</span>}
           {turn.at && <span>· {formatTime(turn.at)}</span>}

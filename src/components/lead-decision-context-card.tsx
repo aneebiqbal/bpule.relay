@@ -167,7 +167,7 @@ export function LeadDecisionContextCard({ context }: Props) {
               'bg-stone-100 text-stone-500'
             )}>{context.actionConfidence}</span>
           </div>
-          <p className="mt-1 text-[11px] text-cobalt/80">{context.actionReason}</p>
+          <p className="mt-1 text-[11px] text-cobalt-ink">{context.actionReason}</p>
           <p className="mt-1 text-[10px] text-stone">
             Cold score: {context.opportunityScore ?? '—'}/100 ({context.coldAction ?? '—'}).{' '}
             Effective action: <span className="font-medium">{context.effectiveAction}</span>.

@@ -342,7 +342,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
                   {leadScore.qualification && (
                     <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium',
                       leadScore.qualification === 'STRONG' || leadScore.qualification === 'WORTH_PURSUING' ? 'bg-status-success/10 text-status-success' :
-                      leadScore.qualification === 'MAYBE' ? 'bg-orange/10 text-orange' : 'bg-stone-100 text-stone-500'
+                      leadScore.qualification === 'MAYBE' ? 'bg-orange/10 text-orange-ink' : 'bg-stone-100 text-stone-500'
                     )}>{leadScore.label}</span>
                   )}
                 </div>
@@ -557,7 +557,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
                   <button onClick={() => generateDraft(mode)} className="ml-auto font-medium underline">Retry</button>
                 </div>
               )}
-              {dailyLimit > 0 && <p className="text-[10px] text-stone">{todaySends}/{dailyLimit} sends used today</p>}
+              {dailyLimit > 0 && <p className="text-[10px] text-graphite">{todaySends}/{dailyLimit} sends used today</p>}
             </div>
           )}
 
@@ -665,7 +665,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
               (QA RQA-015). */}
           {outcomeEntry && (
             <div className="border-b border-line/30 bg-status-success/5 px-5 py-3">
-              <div className="mb-1 flex items-center gap-2 text-[10px] text-stone">
+              <div className="mb-1 flex items-center gap-2 text-[10px] text-graphite">
                 <span className="rounded bg-status-success/10 px-1 py-0.5 text-[9px] font-medium uppercase text-status-success">Outcome</span>
                 <span className="capitalize">{outcomeEntry.type}</span>
                 {outcomeEntry.sentAt && <span>· {timeAgo(outcomeEntry.sentAt, now)}</span>}
@@ -679,9 +679,9 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
             <div className="divide-y divide-line/30">
               {timelineEntries.map((msg) => (
                 <div key={msg.id} className="px-5 py-3">
-                  <div className="flex items-center gap-2 text-[10px] text-stone mb-1">
+                  <div className="flex items-center gap-2 text-[10px] text-graphite mb-1">
                     <span className={cn('rounded px-1 py-0.5 text-[9px] font-medium uppercase',
-                      msg.direction === 'inbound' ? 'bg-orange/10 text-orange' : 'bg-cobalt/10 text-cobalt'
+                      msg.direction === 'inbound' ? 'bg-orange/10 text-orange-ink' : 'bg-cobalt/10 text-cobalt'
                     )}>
                       {msg.direction === 'inbound' ? '← Received' : '→ Sent'}
                     </span>
@@ -725,7 +725,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
                 <summary className="cursor-pointer select-none text-[11px] font-medium text-cobalt hover:underline">
                   View original pasted evidence
                 </summary>
-                <p className="mt-1 text-[10px] text-stone">Exactly what was pasted when this lead was analyzed.</p>
+                <p className="mt-1 text-[10px] text-graphite">Exactly what was pasted when this lead was analyzed.</p>
                 <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-bone-raised/60 p-2 font-mono text-[11px] text-ink">{lead.rawInput}</pre>
               </details>
             )}
@@ -777,7 +777,7 @@ function QuickReplyInput({ onSave }: { onSave: (text: string) => Promise<void> }
  */
 function StatusPill({ label }: { label: string }) {
   const tone = /needs reply|follow-up|overdue/i.test(label)
-    ? 'bg-orange/10 text-orange'
+    ? 'bg-orange/10 text-orange-ink'
     : /waiting|pending|accepted/i.test(label)
       ? 'bg-cobalt/10 text-cobalt'
       : /connected|closed/i.test(label)
