@@ -139,6 +139,9 @@ export async function POST(request: Request) {
       signalEvidence: extracted.signalEvidence,
       verbatimQuote: extracted.verbatimQuote,
       tags: extracted.tags,
+      // An import legitimately starts unassigned (§33); it is surfaced as
+      // Needs profile, never silently owned by the importing rep.
+      allowUnassigned: true,
     })
 
     if (createResult.blocked) {

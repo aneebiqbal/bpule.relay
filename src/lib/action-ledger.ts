@@ -41,6 +41,8 @@ type ActionEventType =
   | 'EMAIL_ENRICHED'
   | 'EMAIL_VERIFIED'
   | 'EMAIL_SENT'
+  | 'LEAD_PROFILE_ASSIGNED'
+  | 'LEAD_PROFILE_CHANGED'
   // Inbound email uses the canonical REPLY_RECEIVED + channel=email (one authority, §21).
   // EMAIL_REPLY_RECEIVED is intentionally not an event type.
 

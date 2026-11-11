@@ -161,6 +161,13 @@ import {
 type Row = Record<string, unknown>
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+/**
+ * Sources that describe work done through a channel identity. A lead created
+ * through one of these without an identity cannot be executed, so callers must
+ * supply it — imports and inbound mail are the sanctioned unassigned paths.
+ */
+const EXECUTION_SOURCES = new Set(['linkedin', 'upwork', 'referral'])
+
 interface TeamMemberRow {
   repId: string
   repName: string
@@ -832,6 +839,23 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async createLead(input: NewLeadInput): Promise<CreateLeadResult> {
+    // Attribution is mandatory for leads created through an execution channel.
+    // A LinkedIn/Upwork/referral lead with no identity cannot be executed, so it
+    // must never enter the board silently. Imports and inbound mail pass no
+    // execution source and may start unassigned (surfaced as Needs profile).
+    if (
+      input.source !== null && input.source !== undefined
+      && EXECUTION_SOURCES.has(input.source)
+      && !input.revenueIdentityId
+      && !input.allowUnassigned
+    ) {
+      return {
+        blocked: true,
+        attributionRequired: true,
+        reason: `This lead was created as ${input.source} work, so it needs a channel identity. Assign a profile before saving.`,
+      }
+    }
+
     const key = companyKey(input.company)
     const fuzzy = companyFuzzyKey(input.company)
     const normalizedUrl = normalizeLeadUrl(input.url ?? null)

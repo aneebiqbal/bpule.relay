@@ -117,6 +117,8 @@ export interface NewLeadInput {
   assignedProfileId?: string | null
   senderProfileId?: string | null
   revenueIdentityId?: string | null
+  /** Imports and inbound mail may legitimately start unassigned (§33/§36). */
+  allowUnassigned?: boolean
   allowPotentialDuplicate?: boolean
   canonicalScore?: number | null
   scoreVersion?: string | null
@@ -182,6 +184,8 @@ export interface HostCallInput {
 export interface CreateLeadResult {
   blocked: boolean
   reason?: string
+  /** The lead was rejected because an execution channel had no identity. */
+  attributionRequired?: boolean
   existingOwnerName?: string
   lead?: Lead
   duplicateKind?: 'hard' | 'potential'
