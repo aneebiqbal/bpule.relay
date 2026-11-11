@@ -10,8 +10,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, Mail, Search } from 'lucide-react'
+import { CheckCircle2, Mail, Rss, Search } from 'lucide-react'
 import { V4Chip, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
+import { ProviderSourcesDialog } from '@/components/admin/provider-sources'
 import type { FreshProspectRow } from '@/lib/enrichment/fresh-prospects'
 
 const TONE: Record<string, 'success' | 'info' | 'warning' | 'neutral'> = {
@@ -50,6 +51,7 @@ export function FreshProspectsView({
   const [query, setQuery] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [sourcesOpen, setSourcesOpen] = useState(false)
 
   const load = useCallback(async (profile: string) => {
     const params = profile ? `?profile=${encodeURIComponent(profile)}` : ''
@@ -132,6 +134,14 @@ export function FreshProspectsView({
           hint={`${rows.length} awaiting review · ${verifiedCount} with a verified email`}
           action={
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSourcesOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-bone-raised px-2.5 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
+              >
+                <Rss className="size-3.5" aria-hidden />
+                Sources
+              </button>
               <span className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-stone" aria-hidden />
                 <input
@@ -264,6 +274,8 @@ export function FreshProspectsView({
           </ul>
         )}
       </V4Panel>
+
+      <ProviderSourcesDialog open={sourcesOpen} onClose={() => setSourcesOpen(false)} />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { ChannelBadge } from '@/components/ui/channel-badge'
@@ -314,6 +314,16 @@ function AssignDialog({
 
   const channels = available.filter((identity) => identity.personKey === personKey)
   const selected = available.find((identity) => identity.id === identityId) ?? null
+
+  // Default to a non-destructive seat. "Primary (owns)" TRANSFERS ownership and
+  // retires the current primary, so it must never be the silent default when the
+  // identity already has an owner — that is how a second rep appears to "take
+  // the profile away" from the first.
+  const selectedId = selected?.id ?? ''
+  const selectedPrimaryRepId = selected?.primaryRepId ?? null
+  useEffect(() => {
+    setRole(selectedPrimaryRepId ? 'operator' : 'primary')
+  }, [selectedId, selectedPrimaryRepId])
   const pack = defaultTargetsForChannel(normalizeChannel(selected?.channel ?? 'linkedin'))
   const total = pack.reduce((sum, row) => sum + (counts[row.activityType] ?? row.targetCount), 0)
 
@@ -374,6 +384,12 @@ function AssignDialog({
             <ReviewRow label="Role" value={role === 'primary' ? 'Primary owner' : role === 'operator' ? 'Active operator' : 'Backup'} />
             {role === 'primary' ? (
               <div>
+                {selectedPrimaryRepId && selectedPrimaryRepId !== repId && (
+                  <p className="mb-2 rounded-lg border border-status-warning/30 bg-status-warning/10 px-2.5 py-1.5 text-[12px] text-status-warning">
+                    This transfers ownership away from {selected?.primaryRepName ?? 'the current primary'}.
+                    They keep their history but stop receiving new work.
+                  </p>
+                )}
                 <dt className="text-[11px] uppercase tracking-[0.12em] text-stone">Daily plan</dt>
                 <dd className="mt-1 space-y-0.5">
                   {pack.map((row) => (

@@ -253,7 +253,7 @@ export interface TimelineQuery {
   limit?: number
 }
 
-const LEAD_LOOKUP_COLUMNS = 'id, company, company_key, contact_name, revenue_identity_id, source'
+const LEAD_LOOKUP_COLUMNS = 'id, company, company_key, contact_name, revenue_identity_id, sender_profile_id, source'
 
 export async function loadTimeline(client: DbClient, query: TimelineQuery): Promise<TimelineRow[]> {
   const limit = Math.min(Math.max(query.limit ?? 100, 1), 300)
@@ -310,7 +310,7 @@ export async function loadTimeline(client: DbClient, query: TimelineQuery): Prom
   for (const n of notes) repIds.add(n.author_rep_id)
 
   const [leadRows, repRows] = await Promise.all([
-    chunkedIn<{ id: string; company: string | null; company_key: string | null; contact_name: string | null; revenue_identity_id: string | null; source: string | null }>(
+    chunkedIn<{ id: string; company: string | null; company_key: string | null; contact_name: string | null; revenue_identity_id: string | null; sender_profile_id: string | null; source: string | null }>(
       [...leadIds],
       (chunk) => client.from('leads').select(LEAD_LOOKUP_COLUMNS).eq('organization_id', query.orgId).in('id', chunk),
     ),
