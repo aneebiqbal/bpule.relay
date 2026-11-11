@@ -91,6 +91,14 @@ async function cleanupFixture() {
     .eq('organization_id', ORG)
     .eq('profile_id', PROFILE)
     .eq('status', 'ACTIVE')
+  // `ca_one_active_profile_idx` allows a single ACTIVE row per profile, so an
+  // interrupted run must not leave one behind to block the next activation.
+  await admin
+    .from('coverage_assignments')
+    .delete()
+    .eq('organization_id', ORG)
+    .eq('profile_id', PROFILE)
+    .eq('status', 'ACTIVE')
   const { data } = await admin
     .from('coverage_assignments')
     .select('id')
