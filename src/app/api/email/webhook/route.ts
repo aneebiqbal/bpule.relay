@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { safeErrorResponse } from '@/lib/errors'
 import { notifyForEvent } from '@/lib/notifications/deliver'
+import { emitAction } from '@/lib/action-ledger'
 
 type Row = Record<string, unknown>
 
@@ -159,6 +160,31 @@ async function updateConversationOnReply(supabase: ReturnType<typeof createServi
     p_metadata: {},
     p_occurred_at: nowIso,
   })
+
+  // §21/§22: one reply authority — REPLY_RECEIVED + channel=email, fully attributed.
+  // Receiving a reply is not an execution action, so it carries no target credit.
+  if (insertedMsg?.id) {
+    await emitAction({
+      client: supabase,
+      orgId: organizationId,
+      actionType: 'REPLY_RECEIVED',
+      actorType: 'integration',
+      actorId: null,
+      leadId,
+      messageId: insertedMsg.id as string,
+      channel: 'email',
+      executionStatus: 'delivered',
+      metadata: {
+        direction: 'inbound',
+        source: 'email_webhook',
+        revenueIdentityId,
+        providerMessageId: emailMessage.provider_message_id,
+        emailMessageId: emailMessage.id,
+        ownerRepId: repId,
+      },
+      idempotencyKey: `reply_received:email:${emailMessage.id as string}`,
+    })
+  }
 }
 
 export async function POST(request: Request) {

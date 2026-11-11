@@ -487,6 +487,7 @@ export function mapActionEventToCanonical(actionType: string): CanonicalAction |
   const map: Record<string, CanonicalAction> = {
     CONNECTION_SENT: 'CONNECTION_SENT',
     DM_SENT: 'FIRST_DM_SENT',
+    EMAIL_SENT: 'FIRST_DM_SENT',
     FOLLOWUP_SENT: 'FOLLOWUP_SENT',
     REPLY_SENT: 'REPLY_SENT',
     UPWORK_APPLIED: 'UPWORK_APPLIED',

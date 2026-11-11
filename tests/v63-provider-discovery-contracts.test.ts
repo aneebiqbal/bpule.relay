@@ -4,7 +4,7 @@
  * The feature must reuse the canonical authorities, spend credits only after
  * qualification, and never let a provider person create two candidates.
  */
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { QUALIFICATION_BANDS } from '@/lib/scoring/qualification'
 import { isQualified, scoreProviderPerson } from '@/lib/enrichment/candidate-match'
 import { getProviderAdapter } from '@/lib/enrichment/provider-registry'
@@ -53,7 +53,14 @@ describe('PROVIDER_BOUNDARY', () => {
   })
 
   it('an unconfigured provider fails with INVALID_KEY, never a silent success', () => {
-    expect(() => getProviderAdapter('prospeo', { organizationId: ORG })).toThrow(ProviderError)
+    // The certification environment has real keys; blank the env to prove the
+    // registry fails closed when a provider is not configured.
+    vi.stubEnv('PROSPEO_API_KEY', '')
+    try {
+      expect(() => getProviderAdapter('prospeo', { organizationId: ORG })).toThrow(ProviderError)
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('provider keys are never placed in a browser-readable payload', () => {

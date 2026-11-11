@@ -10,7 +10,7 @@
  *   POST /v2/database-search/prospects/start     people search (fallback)
  */
 import type { ProviderAdapter, ProviderEnrichment, ProviderPerson, ProviderSearchPage, ProviderSearchQuery } from './types'
-import { ProviderError, providerFetch, type TelemetrySink } from './provider-http'
+import { ProviderError, providerFetch, type ProviderOperation, type TelemetrySink } from './provider-http'
 
 const BASE_URL = 'https://api.snov.io'
 
@@ -36,6 +36,13 @@ interface SnovVerifierResult {
 interface SnovEmailRow {
   email?: string
   status?: string
+  smtp_status?: string
+}
+
+/** Current Snov finder shape: data is [{ people, result: [{ email, smtp_status }] }]. */
+interface SnovFinderEntry {
+  people?: string
+  result?: SnovEmailRow[]
 }
 
 /** Access tokens live 3600s; cache per process so a run does not re-auth per call. */
@@ -58,7 +65,8 @@ async function accessToken(context: SnovContext): Promise<string> {
     },
     organizationId: context.organizationId,
     provider: 'snov',
-    operation: 'SEARCH',
+    // Token acquisition is not a business operation and never consumes credits.
+    operation: 'AUTH',
     searchRunId: context.searchRunId,
     telemetry: context.telemetry,
   })
@@ -91,6 +99,7 @@ async function waitForResult<T>(
   context: SnovContext,
   path: string,
   token: string,
+  operation: ProviderOperation,
   isDone: (body: T) => boolean,
   readCredits?: (body: T) => number,
 ): Promise<T> {
@@ -101,7 +110,7 @@ async function waitForResult<T>(
       init: { method: 'GET', headers: headers(token) },
       organizationId: context.organizationId,
       provider: 'snov',
-      operation: 'FIND',
+      operation,
       searchRunId: context.searchRunId,
       telemetry: context.telemetry,
       readCredits,
@@ -156,7 +165,11 @@ export class SnovAdapter implements ProviderAdapter {
       this.context,
       `/v2/database-search/prospects/result/${hash}`,
       token,
+      'SEARCH',
       (result) => result.status === 'completed' || Boolean(result.data?.prospects),
+      // Snov charges per page with results on paid plans; the free plan's first
+      // page is free. The adapter reports the page cost for telemetry.
+      (result) => ((result.data?.prospects?.length ?? 0) > 0 ? 1 : 0),
     )
 
     const prospects = body.data?.prospects ?? []
@@ -179,7 +192,7 @@ export class SnovAdapter implements ProviderAdapter {
       totalPages: body.data?.total_pages ?? null,
       hasMore: (body.data?.total_pages ?? 0) > query.page,
       free: false,
-      creditsUsed: 0,
+      creditsUsed: prospects.length > 0 ? 1 : 0,
     }
   }
 
@@ -198,7 +211,7 @@ export class SnovAdapter implements ProviderAdapter {
       },
       organizationId: this.context.organizationId,
       provider: this.name,
-      operation: 'FIND',
+      operation: 'FIND_EMAIL',
       searchRunId: this.context.searchRunId,
       telemetry: this.context.telemetry,
       // The charge is settled by the result below, which knows whether an email
@@ -207,10 +220,11 @@ export class SnovAdapter implements ProviderAdapter {
     })
 
     const hash = taskHash(started)
-    const body = await waitForResult<{ data?: { emails?: SnovEmailRow[] } | SnovEmailRow[]; status?: string }>(
+    const body = await waitForResult<{ data?: SnovFinderEntry[] | { emails?: SnovEmailRow[] } | SnovEmailRow[]; status?: string }>(
       this.context,
       `/v2/emails-by-domain-by-name/result?task_hash=${hash}`,
       token,
+      'FIND_EMAIL',
       (result) => result.status === 'completed' || Boolean(extractEmails(result).length),
       // Snov charges one credit per email it returns with a valid/unknown status.
       (result) => (extractEmails(result).length > 0 ? 1 : 0),
@@ -221,10 +235,10 @@ export class SnovAdapter implements ProviderAdapter {
     if (!found?.email) {
       return { email: null, verification: 'UNKNOWN', creditsUsed: 0, free: false }
     }
-    const status = typeof found.status === 'string' ? found.status.toLowerCase() : ''
+    const status = (found.smtp_status ?? found.status ?? '').toLowerCase()
     return {
       email: found.email,
-      verification: status === 'valid' ? 'VERIFIED' : status === 'invalid' ? 'INVALID' : 'UNKNOWN',
+      verification: status === 'valid' ? 'VERIFIED' : status === 'invalid' || status === 'not_valid' ? 'INVALID' : 'UNKNOWN',
       creditsUsed: 1,
       free: false,
     }
@@ -242,9 +256,11 @@ export class SnovAdapter implements ProviderAdapter {
       },
       organizationId: this.context.organizationId,
       provider: this.name,
-      operation: 'VERIFY',
+      operation: 'VERIFY_EMAIL',
       searchRunId: this.context.searchRunId,
       telemetry: this.context.telemetry,
+      // Verification is free; the result poll is labelled explicitly.
+      readCredits: () => 0,
     })
 
     const hash = taskHash(started)
@@ -252,7 +268,9 @@ export class SnovAdapter implements ProviderAdapter {
       this.context,
       `/v2/email-verification/result?task_hash=${hash}`,
       token,
+      'VERIFY_EMAIL',
       (result) => result.status === 'completed' || Boolean(result.data?.length),
+      () => 0,
     )
 
     const row = (body.data ?? []).find((entry) => entry.email?.toLowerCase() === email.toLowerCase())
@@ -279,9 +297,17 @@ interface SnovProspect {
   company?: { name?: string | null; domain?: string | null }
 }
 
-function extractEmails(body: { data?: { emails?: SnovEmailRow[] } | SnovEmailRow[] }): SnovEmailRow[] {
+function extractEmails(body: { data?: SnovFinderEntry[] | { emails?: SnovEmailRow[] } | SnovEmailRow[] }): SnovEmailRow[] {
   const data = body.data
-  if (Array.isArray(data)) return data
-  if (data && Array.isArray(data.emails)) return data.emails
+  if (Array.isArray(data)) {
+    const entries = data as SnovFinderEntry[]
+    if (entries.length > 0 && Array.isArray(entries[0]?.result)) {
+      return entries.flatMap((entry) => entry.result ?? [])
+    }
+    return data as SnovEmailRow[]
+  }
+  if (data && typeof data === 'object' && Array.isArray((data as { emails?: SnovEmailRow[] }).emails)) {
+    return (data as { emails: SnovEmailRow[] }).emails
+  }
   return []
 }

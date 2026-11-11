@@ -12,7 +12,7 @@ import { getProviderAdapter, providerConfigured } from './provider-registry'
 import { providerBudgetRemaining, selectivelyEnrichCandidate, spendProviderCredits } from './enrichment-service'
 import { isQualified, loadCandidateSenders, rankCandidateProfiles, scoreProviderPerson } from './candidate-match'
 import type { ProviderSearchPage, ProviderSearchQuery } from './providers/types'
-import type { TelemetrySink } from './providers/provider-http'
+import type { ProviderOperation, TelemetrySink } from './providers/provider-http'
 import { emitAction } from '@/lib/action-ledger'
 
 export interface RunSavedSearchInput {
@@ -50,7 +50,7 @@ export async function recordProviderTelemetry(record: {
   client: DbClient
   organizationId: string
   provider: string
-  operation: 'SEARCH' | 'ENRICH' | 'REVEAL' | 'VERIFY' | 'FIND'
+  operation: ProviderOperation
   status: string
   latencyMs: number
   credits: number

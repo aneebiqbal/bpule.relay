@@ -501,20 +501,16 @@ export async function sendPreparedEmail(input: {
   // §26: an old verified address is reverified before it is sent to. Free Snov
   // verification, only at send time — never a bulk sweep.
   if (contact) {
-    // A verifier outage must never block a send (§15) — only a negative verdict.
-    let reverify: 'FRESH' | 'REVERIFIED' | 'INVALID' | 'UNVERIFIED' | null = null
-    try {
-      reverify = await reverifyStaleContact(input.client, input.orgId, {
-        id: contact.id,
-        value: contact.value,
-        verificationStatus: contact.verificationStatus,
-        verifiedAt: contact.verifiedAt,
-      })
-    } catch (err) {
-      console.warn('[email] stale reverify skipped:', err instanceof Error ? err.message : err)
-    }
-    if (reverify === 'INVALID' || reverify === 'UNVERIFIED') {
-      throw new Error('This contact no longer verifies and cannot be emailed.')
+    // §26 fails closed: a stale address is sendable only when a verifier is
+    // available and confirms it. A verifier outage blocks the send.
+    const reverify = await reverifyStaleContact(input.client, input.orgId, {
+      id: contact.id,
+      value: contact.value,
+      verificationStatus: contact.verificationStatus,
+      verifiedAt: contact.verifiedAt,
+    })
+    if (reverify !== 'FRESH' && reverify !== 'REVERIFIED') {
+      throw new Error('This contact requires reverification before it can be emailed.')
     }
   }
 

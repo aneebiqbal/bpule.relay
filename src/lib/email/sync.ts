@@ -14,6 +14,7 @@ import type { DbClient } from '@/lib/db/types'
 import type { EmailProvider } from './providers/email-provider'
 import { loadMailboxCredentials } from './mailbox'
 import { matchReplyToLead, normalizeReplyAddress } from './reply-match'
+import { emitAction } from '@/lib/action-ledger'
 
 const PAGE_SIZE = 50
 
@@ -148,26 +149,53 @@ async function recordInbound(
   candidateCount: number,
 ): Promise<void> {
   const nowIso = new Date().toISOString()
-  const { error } = await client.from('email_messages').insert({
-    organization_id: mailbox.organizationId,
-    lead_id: match?.leadId ?? null,
-    revenue_identity_id: mailbox.revenueIdentityId,
-    mailbox_id: mailbox.id,
-    contact_point_id: match?.contactPointId ?? null,
-    direction: 'INBOUND',
-    category: 'REPLY',
-    idempotency_key: `inbound:${mailbox.provider}:${message.providerMessageId}`,
-    subject: message.subject,
-    body: message.snippet,
-    provider: mailbox.provider,
-    provider_message_id: message.providerMessageId,
-    provider_thread_id: message.providerThreadId,
-    delivery_status: 'REPLIED',
-    received_at: message.receivedAt ?? nowIso,
-    last_event_at: nowIso,
-    updated_at: nowIso,
-  })
+  const { data: inserted, error } = await client
+    .from('email_messages')
+    .insert({
+      organization_id: mailbox.organizationId,
+      lead_id: match?.leadId ?? null,
+      revenue_identity_id: mailbox.revenueIdentityId,
+      mailbox_id: mailbox.id,
+      contact_point_id: match?.contactPointId ?? null,
+      direction: 'INBOUND',
+      category: 'REPLY',
+      idempotency_key: `inbound:${mailbox.provider}:${message.providerMessageId}`,
+      subject: message.subject,
+      body: message.snippet,
+      provider: mailbox.provider,
+      provider_message_id: message.providerMessageId,
+      provider_thread_id: message.providerThreadId,
+      delivery_status: 'REPLIED',
+      received_at: message.receivedAt ?? nowIso,
+      last_event_at: nowIso,
+      updated_at: nowIso,
+    })
+    .select('id')
+    .single()
   if (error) throw error
+
+  // §21/§22: one reply authority — REPLY_RECEIVED + channel=email. The poller
+  // path has no messages row, so the event links by metadata, not message_id.
+  if (match?.leadId && inserted?.id) {
+    await emitAction({
+      client,
+      orgId: mailbox.organizationId,
+      actionType: 'REPLY_RECEIVED',
+      actorType: 'integration',
+      actorId: null,
+      leadId: match.leadId,
+      channel: 'email',
+      executionStatus: 'delivered',
+      metadata: {
+        direction: 'inbound',
+        source: 'email_sync',
+        revenueIdentityId: mailbox.revenueIdentityId,
+        providerMessageId: message.providerMessageId,
+        emailMessageId: inserted.id,
+      },
+      idempotencyKey: `reply_received:email:${inserted.id}`,
+    })
+  }
 
   await client.from('email_delivery_events').insert({
     organization_id: mailbox.organizationId,

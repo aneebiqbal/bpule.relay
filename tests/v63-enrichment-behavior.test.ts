@@ -354,6 +354,47 @@ describe('V63_STALE_EMAIL_REVERIFY', () => {
 
     await client.from('contact_points').delete().eq('id', contact!.id)
   }, 60_000)
+
+  it('fails closed when the verifier is unavailable (§6)', async () => {
+    const client = neonServiceDbClient()
+    const old = new Date(Date.now() - 120 * 86_400_000).toISOString()
+    const { data: contact, error } = await client
+      .from('contact_points')
+      .insert({
+        organization_id: ORG,
+        lead_id: null,
+        person_id: `test-v63-noverify-${RUN}`,
+        type: 'email',
+        value: 'stale@pragmatiq.com',
+        source: 'CONNECTED_PROVIDER',
+        source_type: 'prospeo',
+        verification_status: 'VERIFIED',
+        verification_method: 'prospeo',
+        is_primary: true,
+        is_business_contact: true,
+        discovered_at: old,
+        verified_at: old,
+      })
+      .select('id')
+      .single()
+    expect(error).toBeNull()
+
+    mocks.snovConfigured.mockReturnValue(false)
+    const outcome = await reverifyStaleContact(client, ORG, {
+      id: contact!.id,
+      value: 'stale@pragmatiq.com',
+      verificationStatus: 'VERIFIED',
+      verifiedAt: old,
+    })
+    expect(outcome).toBe('VERIFICATION_REQUIRED')
+    expect(mocks.adapter.verifyEmail).not.toHaveBeenCalled()
+
+    // The stale address is left untouched — it is not silently re-approved.
+    const { data: updated } = await client.from('contact_points').select('verification_status').eq('id', contact!.id).single()
+    expect(updated?.verification_status).toBe('VERIFIED')
+
+    await client.from('contact_points').delete().eq('id', contact!.id)
+  }, 60_000)
 })
 
 describe('V63_SNV_FALLBACK_IS_REACHABLE', () => {

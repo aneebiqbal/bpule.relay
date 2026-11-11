@@ -417,33 +417,39 @@ export interface StaleContact {
 /**
  * §26 — an old verified address is reverified BEFORE it is sent to.
  *
- * Reverification is free (Snov verification), happens only when a send is about
- * to occur (never a bulk sweep), and a missing verifier never blocks a send.
+ * Reverification is free (Snov verification) and happens only when a send is
+ * about to occur (never a bulk sweep). It FAILS CLOSED: a stale address is not
+ * sendable unless a verifier is available and confirms it.
  */
 export async function reverifyStaleContact(
   client: DbClient,
   orgId: string,
   contact: StaleContact,
-): Promise<'FRESH' | 'REVERIFIED' | 'INVALID' | 'UNVERIFIED'> {
+): Promise<'FRESH' | 'REVERIFIED' | 'INVALID' | 'UNVERIFIED' | 'VERIFICATION_REQUIRED'> {
   if (contact.verificationStatus !== 'VERIFIED' || !contact.verifiedAt) return 'FRESH'
   const verifiedAt = new Date(contact.verifiedAt).getTime()
   if (!Number.isFinite(verifiedAt) || Date.now() - verifiedAt < STALE_DAYS_DEFAULT * 86_400_000) return 'FRESH'
-  if (!providerConfigured('snov')) return 'FRESH'
+  if (!providerConfigured('snov')) return 'VERIFICATION_REQUIRED'
 
-  const snov = getProviderAdapter('snov', { organizationId: orgId })
-  const result = await snov.verifyEmail(contact.value)
-  const status = toContactVerification(result.verification)
-  await client
-    .from('contact_points')
-    .update({
-      verification_status: status,
-      verification_method: 'snov',
-      verified_at: status === 'VERIFIED' ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', contact.id)
+  try {
+    const snov = getProviderAdapter('snov', { organizationId: orgId })
+    const result = await snov.verifyEmail(contact.value)
+    const status = toContactVerification(result.verification)
+    await client
+      .from('contact_points')
+      .update({
+        verification_status: status,
+        verification_method: 'snov',
+        verified_at: status === 'VERIFIED' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', contact.id)
 
-  if (status === 'VERIFIED') return 'REVERIFIED'
-  if (status === 'INVALID' || status === 'BOUNCED') return 'INVALID'
-  return 'UNVERIFIED'
+    if (status === 'VERIFIED') return 'REVERIFIED'
+    if (status === 'INVALID' || status === 'BOUNCED') return 'INVALID'
+    return 'UNVERIFIED'
+  } catch {
+    // Verifier outage, invalid schema, or a persistence failure: fail closed.
+    return 'VERIFICATION_REQUIRED'
+  }
 }

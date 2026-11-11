@@ -101,6 +101,45 @@ export default async function AdminHealthPage() {
             </Panel>
           )}
 
+          {/* §25 — compact provider summary; detail lives in /admin/providers. */}
+          <Panel
+            title="Provider discovery"
+            subtitle="Prospeo / Snov status, today's spend and fresh prospects."
+            action={
+              <Pill tone="neutral">
+                {report.providerHealth.filter((row) => row.status === 'HEALTHY').length} healthy
+              </Pill>
+            }
+          >
+            <ul className="divide-y divide-line/70">
+              {report.providerHealth.map((row) => (
+                <li key={row.provider} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-ink">
+                      {row.provider.charAt(0).toUpperCase() + row.provider.slice(1)}
+                    </p>
+                    <p className="text-[12px] text-stone">
+                      {row.status === 'UNCONFIGURED'
+                        ? 'Not configured'
+                        : row.status === 'DISABLED'
+                          ? 'Disabled'
+                          : `Last success ${relativeHealth(row.lastSuccessAt)}`}
+                      {row.lastError ? ` · ${row.lastError}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Pill tone={row.status === 'HEALTHY' ? 'success' : row.status === 'DEGRADED' ? 'warning' : 'neutral'}>
+                      {row.status}
+                    </Pill>
+                    <span className="text-[12px] tabular-nums text-graphite">
+                      {row.creditsUsedToday} / {row.dailyBudget > 0 ? row.dailyBudget : '∞'}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+
           <Panel
             title="Model traffic (last 24h)"
             subtitle="Persisted AI traces. Zero traffic is healthy, not broken."
@@ -210,4 +249,16 @@ export default async function AdminHealthPage() {
       )}
     </div>
   )
+}
+
+function relativeHealth(iso: string | null): string {
+  if (!iso) return 'never'
+  const then = new Date(iso).getTime()
+  if (!Number.isFinite(then)) return 'unknown'
+  const minutes = Math.max(0, Math.round((Date.now() - then) / 60_000))
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.round(hours / 24)}d ago`
 }

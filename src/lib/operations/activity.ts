@@ -27,6 +27,7 @@ export const ACTION_EVENT_META: Record<string, EventMeta> = {
   OPPORTUNITY_CREATED: { label: 'Opportunity created', category: 'pipeline' },
   CONNECTION_SENT: { label: 'Connection sent', category: 'outreach' },
   DM_SENT: { label: 'Message sent', category: 'outreach' },
+  EMAIL_SENT: { label: 'Email sent', category: 'outreach' },
   FOLLOWUP_SENT: { label: 'Follow-up sent', category: 'outreach' },
   REPLY_SENT: { label: 'Reply sent', category: 'conversation' },
   REPLY_RECEIVED: { label: 'Inbound received', category: 'conversation' },
@@ -62,7 +63,7 @@ export const OPERATIONAL_ACTION_TYPES = Object.keys(ACTION_EVENT_META)
 
 /** Filter groups that expand to several action types (target drill-downs). */
 export const ACTION_EVENT_GROUPS: Record<string, string[]> = {
-  MESSAGES_SENT: ['DM_SENT', 'FOLLOWUP_SENT', 'REPLY_SENT'],
+  MESSAGES_SENT: ['DM_SENT', 'FOLLOWUP_SENT', 'REPLY_SENT', 'EMAIL_SENT'],
   LEAD_LOST: ['LEAD_LOST', 'CLIENT_LOST'],
 }
 

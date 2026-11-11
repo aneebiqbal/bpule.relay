@@ -8,7 +8,9 @@
  */
 
 export const CONNECTION_EVENTS = ['CONNECTION_SENT'] as const
-export const SENT_MESSAGE_EVENTS = ['DM_SENT', 'FOLLOWUP_SENT', 'REPLY_SENT'] as const
+// EMAIL_SENT is a real executed send (§15): a first email counts exactly once,
+// the same as a DM. Drafts and enrichment events are never in this list.
+export const SENT_MESSAGE_EVENTS = ['DM_SENT', 'FOLLOWUP_SENT', 'REPLY_SENT', 'EMAIL_SENT'] as const
 
 export function isExecutedSend(actionType: string, executionStatus: string | null | undefined): boolean {
   if (executionStatus === 'failed') return false

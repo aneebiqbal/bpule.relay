@@ -29,10 +29,20 @@ export class ProviderError extends Error {
   }
 }
 
+export type ProviderOperation =
+  | 'SEARCH'
+  | 'ENRICH'
+  | 'REVEAL'
+  | 'FIND'
+  | 'VERIFY'
+  | 'FIND_EMAIL'
+  | 'VERIFY_EMAIL'
+  | 'AUTH'
+
 export interface ProviderTelemetryRecord {
   organizationId: string
   provider: ProviderName
-  operation: 'SEARCH' | 'ENRICH' | 'REVEAL' | 'VERIFY' | 'FIND'
+  operation: ProviderOperation
   status: 'OK' | ProviderErrorCategory
   latencyMs: number
   credits: number
@@ -80,7 +90,7 @@ export interface ProviderFetchOptions<T = unknown> {
   init: RequestInit
   organizationId: string
   provider: ProviderName
-  operation: ProviderTelemetryRecord['operation']
+  operation: ProviderOperation
   searchRunId?: string | null
   timeoutMs?: number
   telemetry?: TelemetrySink

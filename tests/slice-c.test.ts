@@ -274,7 +274,7 @@ describe('REPORTS', () => {
   })
 
   it('ACTIVITY_REPORT: grouped filters drill into exactly the counted events', () => {
-    expect(ACTION_EVENT_GROUPS.MESSAGES_SENT).toEqual(['DM_SENT', 'FOLLOWUP_SENT', 'REPLY_SENT'])
+    expect(ACTION_EVENT_GROUPS.MESSAGES_SENT).toEqual(['DM_SENT', 'FOLLOWUP_SENT', 'REPLY_SENT', 'EMAIL_SENT'])
   })
 
   it('REVENUE_REPORT: win rate from closed outcomes; revenue is never estimated', async () => {

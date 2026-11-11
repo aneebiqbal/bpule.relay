@@ -5,10 +5,25 @@
  * Pure DB aggregation — no AI calls, no writes.
  */
 import type { DbClient } from '@/lib/db/types'
+import { providerConfigured } from '@/lib/enrichment/provider-registry'
+
+export interface ProviderHealthRow {
+  provider: string
+  configured: boolean
+  status: 'HEALTHY' | 'DEGRADED' | 'DISABLED' | 'UNCONFIGURED'
+  lastRunAt: string | null
+  lastSuccessAt: string | null
+  lastError: string | null
+  consecutiveFailures: number
+  creditsUsedToday: number
+  dailyBudget: number
+  freshProspects: number
+}
 
 export interface HealthReport {
   timestamp: string
   aiHealth: { total: number; succeeded: number; failed: number; fallback: number }
+  providerHealth: ProviderHealthRow[]
   actionHealth: { total: number; byType: Record<string, number> }
   releaseHealth: {
     inboxSendsToday: number
@@ -121,6 +136,69 @@ export async function computeHealth(client: DbClient, orgId: string): Promise<He
     assignmentsCreatedToday: todayAssignments.data?.length ?? 0,
   }
 
+  // §25 — compact provider summary, surfaced in the existing health dashboard.
+  const providerDayStart = new Date()
+  providerDayStart.setUTCHours(0, 0, 0, 0)
+  const [providerConfigs, providerTelemetry, freshProspects] = await Promise.all([
+    client
+      .from('provider_config')
+      .select('provider, enabled, daily_credit_budget, credits_used_today, last_run_at, last_success_at, last_error, consecutive_failures')
+      .eq('organization_id', orgId)
+      .limit(20),
+    client
+      .from('provider_telemetry')
+      .select('provider, status')
+      .eq('organization_id', orgId)
+      .gte('created_at', providerDayStart.toISOString())
+      .limit(2000),
+    client
+      .from('captured_prospects')
+      .select('provider')
+      .eq('organization_id', orgId)
+      .gte('discovered_at', providerDayStart.toISOString())
+      .limit(2000),
+  ])
+
+  const telemetryByProvider = new Map<string, { operations: number; failures: number }>()
+  for (const row of providerTelemetry.data ?? []) {
+    const entry = telemetryByProvider.get(row.provider as string) ?? { operations: 0, failures: 0 }
+    entry.operations += 1
+    if (row.status !== 'OK') entry.failures += 1
+    telemetryByProvider.set(row.provider as string, entry)
+  }
+  const freshByProvider = new Map<string, number>()
+  for (const row of freshProspects.data ?? []) {
+    const provider = (row.provider as string) || 'unknown'
+    freshByProvider.set(provider, (freshByProvider.get(provider) ?? 0) + 1)
+  }
+
+  const providerHealth: ProviderHealthRow[] = (['prospeo', 'snov', 'apollo'] as const).map((provider) => {
+    const config = (providerConfigs.data ?? []).find((row) => row.provider === provider) as Record<string, unknown> | undefined
+    const telemetry = telemetryByProvider.get(provider) ?? { operations: 0, failures: 0 }
+    const configured = providerConfigured(provider)
+    const enabled = (config?.enabled as boolean | undefined) ?? true
+    const consecutive = (config?.consecutive_failures as number | undefined) ?? 0
+    const status: ProviderHealthRow['status'] = !configured
+      ? 'UNCONFIGURED'
+      : !enabled
+        ? 'DISABLED'
+        : consecutive > 0 || telemetry.failures > 0
+          ? 'DEGRADED'
+          : 'HEALTHY'
+    return {
+      provider,
+      configured,
+      status,
+      lastRunAt: (config?.last_run_at as string | null | undefined) ?? null,
+      lastSuccessAt: (config?.last_success_at as string | null | undefined) ?? null,
+      lastError: (config?.last_error as string | null | undefined) ?? null,
+      consecutiveFailures: consecutive,
+      creditsUsedToday: (config?.credits_used_today as number | undefined) ?? 0,
+      dailyBudget: (config?.daily_credit_budget as number | undefined) ?? 0,
+      freshProspects: freshByProvider.get(provider) ?? 0,
+    }
+  })
+
   const missingMigrations: string[] = []
   for (const table of ['action_events', 'ai_traces', 'leads', 'reps', 'signal_events']) {
     const { error } = await client.from(table).select('id').limit(1)
@@ -130,6 +208,7 @@ export async function computeHealth(client: DbClient, orgId: string): Promise<He
   return {
     timestamp: new Date().toISOString(),
     aiHealth,
+    providerHealth,
     actionHealth,
     releaseHealth,
     leadHealth,

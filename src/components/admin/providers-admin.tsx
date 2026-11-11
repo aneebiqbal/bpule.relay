@@ -53,6 +53,9 @@ interface Analytics {
     meeting: number
     won: number
   }
+  byChannel: Record<string, Analytics['funnel']>
+  byRep: Record<string, Analytics['funnel']>
+  byProfile: Record<string, Analytics['funnel']>
   searches: Array<{
     searchId: string
     searchName: string
@@ -64,7 +67,30 @@ interface Analytics {
     creditsUsed: number
     costPerVerifiedEmail: number | null
   }>
+  providerRoi: Array<{
+    provider: string
+    credits: number
+    discovered: number
+    qualified: number
+    verifiedEmails: number
+    leadCreated: number
+    replies: number
+    meetings: number
+  }>
 }
+
+const FUNNEL_LABELS: Array<{ key: keyof Analytics['funnel']; label: string }> = [
+  { key: 'discovered', label: 'Discovered' },
+  { key: 'qualified', label: 'Qualified' },
+  { key: 'emailVerified', label: 'Verified' },
+  { key: 'leadCreated', label: 'Leads' },
+  { key: 'connectionSent', label: 'Connections' },
+  { key: 'linkedinReply', label: 'LI replies' },
+  { key: 'emailSent', label: 'Emails sent' },
+  { key: 'emailReply', label: 'Email replies' },
+  { key: 'meeting', label: 'Meetings' },
+  { key: 'won', label: 'Won' },
+]
 
 const EMPTY_FORM = {
   id: '',
@@ -501,24 +527,51 @@ export function ProvidersAdmin() {
             hint="Canonical events only — discovered, qualified, verified, promoted, executed."
           />
           <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {([
-              ['Discovered', analytics.funnel.discovered],
-              ['Qualified', analytics.funnel.qualified],
-              ['Verified emails', analytics.funnel.emailVerified],
-              ['Leads created', analytics.funnel.leadCreated],
-              ['Connections sent', analytics.funnel.connectionSent],
-              ['LinkedIn replies', analytics.funnel.linkedinReply],
-              ['Emails sent', analytics.funnel.emailSent],
-              ['Email replies', analytics.funnel.emailReply],
-              ['Meetings', analytics.funnel.meeting],
-              ['Won', analytics.funnel.won],
-            ] as Array<[string, number]>).map(([label, value]) => (
-              <div key={label} className="rounded-lg bg-bone-raised px-3 py-2.5 ring-1 ring-line/70">
-                <dt className="text-[11px] text-graphite">{label}</dt>
-                <dd className="mt-1 text-[20px] font-medium tabular-nums text-ink">{value}</dd>
+            {FUNNEL_LABELS.map((item) => (
+              <div key={item.key} className="rounded-lg bg-bone-raised px-3 py-2.5 ring-1 ring-line/70">
+                <dt className="text-[11px] text-graphite">{item.label}</dt>
+                <dd className="mt-1 text-[20px] font-medium tabular-nums text-ink">{analytics.funnel[item.key]}</dd>
               </div>
             ))}
           </dl>
+
+          {/* §23 — canonical breakdown dimensions. */}
+          {([
+            ['By channel', analytics.byChannel, 'Channel'],
+            ['By rep / operator', analytics.byRep, 'Rep'],
+            ['By person / profile', analytics.byProfile, 'Profile'],
+          ] as Array<[string, Record<string, Analytics['funnel']>, string]>).map(([label, rows, header]) => {
+            const entries = Object.entries(rows)
+            if (entries.length === 0) return null
+            return (
+              <div key={label} className="mt-4">
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">{label}</p>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-left text-[12px]">
+                    <caption className="sr-only">{label} breakdown</caption>
+                    <thead>
+                      <tr className="border-b border-line/70 text-[11px] text-stone">
+                        <th scope="col" className="py-1.5 pr-3 font-medium">{header}</th>
+                        {FUNNEL_LABELS.map((item) => (
+                          <th key={item.key} scope="col" className="py-1.5 pr-3 text-right font-medium">{item.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map(([key, value]) => (
+                        <tr key={key} className="border-b border-line/40 last:border-0">
+                          <td className="py-1.5 pr-3 text-ink">{key}</td>
+                          {FUNNEL_LABELS.map((item) => (
+                            <td key={item.key} className="py-1.5 pr-3 text-right tabular-nums text-graphite">{value[item.key]}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })}
 
           <div className="mt-5 overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-[12px]">
@@ -553,6 +606,44 @@ export function ProvidersAdmin() {
                       <td className="py-2 text-right tabular-nums text-ink">
                         {row.costPerVerifiedEmail == null ? '—' : row.costPerVerifiedEmail.toFixed(2)}
                       </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* §24 — provider ROI. */}
+          <div className="mt-5 overflow-x-auto">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Provider ROI</p>
+            <table className="mt-2 w-full min-w-[640px] text-left text-[12px]">
+              <caption className="sr-only">Provider return on investment for the last 7 days</caption>
+              <thead>
+                <tr className="border-b border-line/70 text-[11px] text-stone">
+                  <th scope="col" className="py-2 pr-3 font-medium">Provider</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Credits</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Discovered</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Qualified</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Verified</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Leads</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Replies</th>
+                  <th scope="col" className="py-2 text-right font-medium">Meetings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.providerRoi.length === 0 ? (
+                  <tr><td colSpan={8} className="py-3 text-graphite">No provider activity in this window.</td></tr>
+                ) : (
+                  analytics.providerRoi.map((row) => (
+                    <tr key={row.provider} className="border-b border-line/40 last:border-0">
+                      <td className="py-2 pr-3 text-ink">{row.provider}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-ink">{row.credits}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-ink">{row.discovered}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-ink">{row.qualified}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-ink">{row.verifiedEmails}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-ink">{row.leadCreated}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-ink">{row.replies}</td>
+                      <td className="py-2 text-right tabular-nums text-ink">{row.meetings}</td>
                     </tr>
                   ))
                 )}

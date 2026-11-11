@@ -79,11 +79,12 @@ export function identityResolver(
     (e.sender_profile_id ? byProfile.get(e.sender_profile_id) : null) ?? (e.lead_id ? leadIdentity(e.lead_id) ?? null : null)
 }
 
-const OUTREACH_TYPES = new Set(['CONNECTION_SENT', 'DM_SENT', 'FOLLOWUP_SENT'])
+const OUTREACH_TYPES = new Set(['CONNECTION_SENT', 'DM_SENT', 'FOLLOWUP_SENT', 'EMAIL_SENT'])
 const WORKED_TYPES = new Set([
   'CONNECTION_SENT',
   'DM_SENT',
   'FOLLOWUP_SENT',
+  'EMAIL_SENT',
   'REPLY_SENT',
   'REPLY_RECEIVED',
   'MEETING_BOOKED',
@@ -132,6 +133,7 @@ export function aggregateMetrics(events: readonly PerfEvent[], tasksCompleted = 
         break
       case 'DM_SENT':
       case 'FOLLOWUP_SENT':
+      case 'EMAIL_SENT':
         m.messages += 1
         break
       case 'REPLY_SENT':

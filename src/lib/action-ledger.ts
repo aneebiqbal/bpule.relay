@@ -41,7 +41,8 @@ type ActionEventType =
   | 'EMAIL_ENRICHED'
   | 'EMAIL_VERIFIED'
   | 'EMAIL_SENT'
-  | 'EMAIL_REPLY_RECEIVED'
+  // Inbound email uses the canonical REPLY_RECEIVED + channel=email (one authority, §21).
+  // EMAIL_REPLY_RECEIVED is intentionally not an event type.
 
 interface EmitActionParams {
   orgId: string

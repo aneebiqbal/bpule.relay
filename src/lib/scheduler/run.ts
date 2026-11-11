@@ -48,6 +48,8 @@ export interface SchedulerSummary {
   executed: number
   failed: number
   deadLettered: number
+  /** Stale RUNNING jobs reclaimed by the generic reaper. */
+  reaped: number
 }
 
 interface JobRow {
@@ -82,6 +84,47 @@ function isMissingRelation(error: { code?: string; message?: string } | null): b
 
 function backoffMinutes(attempt: number): number {
   return Math.min(60, 2 ** Math.max(0, attempt - 1))
+}
+
+/** A RUNNING job whose lock is older than this is considered orphaned. */
+const STALE_RUNNING_MS = 15 * 60_000
+
+/**
+ * Reap orphaned RUNNING jobs. A crashed worker must not strand a job forever:
+ * a stale lock is reset to PENDING for a normal retry, or DEAD when the attempt
+ * ceiling is already reached. Generic across every job kind.
+ */
+export async function reapStaleRunningJobs(
+  client: DbClient,
+  now: Date,
+  limit = 200,
+): Promise<{ reaped: number; deadLettered: number }> {
+  const staleBefore = new Date(now.getTime() - STALE_RUNNING_MS).toISOString()
+  const { data: staleJobs, error } = await client
+    .from('operational_jobs')
+    .select('id, attempt, max_attempts')
+    .eq('state', 'running')
+    .lte('locked_at', staleBefore)
+    .limit(limit)
+  if (error) throw error
+
+  let reaped = 0
+  let deadLettered = 0
+  for (const row of (staleJobs ?? []) as Array<{ id: string; attempt: number | null; max_attempts: number | null }>) {
+    const dead = (row.attempt ?? 0) >= (row.max_attempts ?? 5)
+    await client
+      .from('operational_jobs')
+      .update({
+        state: dead ? 'dead' : 'pending',
+        next_attempt_at: now.toISOString(),
+        last_error: dead ? 'stale running job exceeded max attempts' : 'reaped stale running job',
+        updated_at: now.toISOString(),
+      })
+      .eq('id', row.id)
+    if (dead) deadLettered += 1
+    else reaped += 1
+  }
+  return { reaped, deadLettered }
 }
 
 // One notification writer for the whole app (src/lib/notifications/deliver.ts).
@@ -836,6 +879,7 @@ export async function runOperationalScheduler(options: {
     executed: 0,
     failed: 0,
     deadLettered: 0,
+    reaped: 0,
   }
 
   let orgQuery = client.from('organizations').select('id')
@@ -888,6 +932,11 @@ export async function runOperationalScheduler(options: {
       else summary.alreadyExisting += 1
     }
   }
+
+  // §31 — generic stale-running reaper (scheduler-level, not enrichment-only).
+  const reaped = await reapStaleRunningJobs(client, now)
+  summary.reaped += reaped.reaped
+  summary.deadLettered += reaped.deadLettered
 
   const { data: due, error: dueError } = await client
     .from('operational_jobs')

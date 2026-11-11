@@ -30,6 +30,8 @@ const ACTION_MAP: Record<string, CanonicalAction> = {
   'LEAD_SAVED': 'LEAD_SAVED',
   'CONNECTION_SENT': 'CONNECTION_SENT',
   'DM_SENT': 'FIRST_DM_SENT',
+  // A first email is a real outbound message, the same canonical lane as a DM.
+  'EMAIL_SENT': 'FIRST_DM_SENT',
   'FOLLOWUP_SENT': 'FOLLOWUP_SENT',
   'REPLY_SENT': 'REPLY_SENT',
   'UPWORK_APPLIED': 'UPWORK_APPLIED',

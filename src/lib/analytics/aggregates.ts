@@ -59,6 +59,7 @@ export const TARGET_EVENT_TYPES = [
   'DM_SENT',
   'FOLLOWUP_SENT',
   'REPLY_SENT',
+  'EMAIL_SENT',
   'UPWORK_APPLIED',
   'UPWORK_APPLICATION_SUBMITTED',
   MEETING_EVENT,
@@ -69,7 +70,7 @@ const quoteList = (values: readonly string[]): string => values.map((v) => `'${v
 
 /** The metric columns shared by every performance grouping. */
 const METRICS_SELECT = `COUNT(*) FILTER (WHERE action_type = 'CONNECTION_SENT') AS connections,
-  COUNT(*) FILTER (WHERE action_type IN ('DM_SENT', 'FOLLOWUP_SENT', 'REPLY_SENT')) AS messages,
+  COUNT(*) FILTER (WHERE action_type IN ('DM_SENT', 'FOLLOWUP_SENT', 'REPLY_SENT', 'EMAIL_SENT')) AS messages,
   COUNT(*) FILTER (WHERE action_type = 'REPLY_SENT') AS replies_sent,
   COUNT(*) FILTER (WHERE action_type = 'REPLY_RECEIVED') AS replies,
   COUNT(*) FILTER (WHERE action_type = '${MEETING_EVENT}') AS meetings,
