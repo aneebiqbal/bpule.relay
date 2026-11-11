@@ -20,11 +20,32 @@ const live = isLive ? describe : describe.skip
 
 let client: ReturnType<typeof neonServiceDbClient>
 let searchId = ''
-let searchConfig: Record<string, unknown>
+let quotaAvailable = false
 
 beforeAll(async () => {
   if (!isLive) return
   client = neonServiceDbClient()
+
+  // Probe the provider's daily search quota without spending a credit when the
+  // plan is exhausted (a 429 costs nothing).
+  try {
+    const { getProviderAdapter } = await import('@/lib/enrichment/provider-registry')
+    const adapter = getProviderAdapter('prospeo', { organizationId: ORG })
+    await adapter.search({
+      titles: ['Founder'], seniority: [], countries: ['United Kingdom'],
+      companySize: [], industries: [], excludeTitles: [], page: 1, perPage: 5,
+    })
+    quotaAvailable = true
+  } catch (error) {
+    const category = (error as { category?: string })?.category
+    if (category === 'RATE_LIMITED' || category === 'INSUFFICIENT_CREDITS') {
+      // eslint-disable-next-line no-console
+      console.warn('[v632-live] Prospeo daily search quota exhausted — live discovery skipped until reset.')
+      quotaAvailable = false
+    } else {
+      throw error
+    }
+  }
   const { data, error } = await client
     .from('provider_saved_searches')
     .insert({
@@ -98,6 +119,7 @@ async function latestRun() {
 
 live('V632 REAL DISCOVERY PATH', () => {
   it('runs operational_jobs → DISCOVER_PROSPECTS → candidates, with telemetry and credits', async () => {
+    if (!quotaAvailable) return
     const dedupeKey = `${new Date().toISOString().slice(0, 10)}:DISCOVER_PROSPECTS:${searchId}`
     const summary = await enqueueDiscoveryJob(dedupeKey)
     expect(summary.ok).toBe(true)
@@ -142,6 +164,7 @@ live('V632 REAL DISCOVERY PATH', () => {
   }, 180_000)
 
   it('replays the same page with 0 duplicate candidates and 0 duplicate discovery events', async () => {
+    if (!quotaAvailable) return
     const { count: beforeCandidates } = await client
       .from('captured_prospects')
       .select('id', { count: 'exact', head: true })
@@ -176,6 +199,7 @@ live('V632 REAL DISCOVERY PATH', () => {
   }, 180_000)
 
   it('advances the cursor and does not repeat page 1 ingestion', async () => {
+    if (!quotaAvailable) return
     const { data: search } = await client.from('provider_saved_searches').select('cursor_page').eq('id', searchId).single()
     const cursorBefore = Number(search?.cursor_page ?? 1)
     const dedupeKey = `${new Date().toISOString().slice(0, 10)}:DISCOVER_PROSPECTS:${searchId}:cursor`
@@ -190,6 +214,7 @@ live('V632 REAL DISCOVERY PATH', () => {
   }, 180_000)
 
   it('a tiny budget stops paid operations before overspend and closes cleanly', async () => {
+    if (!quotaAvailable) return
     // Budget 1: the search page spends 1 credit, then enrichment must stop.
     await client.from('provider_saved_searches').update({ daily_credit_budget: 1 }).eq('id', searchId)
     await client.from('provider_config').upsert({
@@ -213,6 +238,7 @@ live('V632 REAL DISCOVERY PATH', () => {
   }, 180_000)
 
   it('a successful run resets provider health (consecutive failures, last success)', async () => {
+    if (!quotaAvailable) return
     const { data: config } = await client
       .from('provider_config')
       .select('last_success_at, consecutive_failures, last_error')
