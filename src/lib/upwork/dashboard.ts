@@ -9,6 +9,39 @@ import { currentInstant } from '@/lib/org-clock'
 import { followUpDueAt, isArchiveCandidate } from '@/lib/upwork/lifecycle'
 import { isNeedsAction, upworkJobView, type UpworkView } from '@/lib/upwork/views'
 import type { UpworkApplication, UpworkJob } from '@/lib/domain/types'
+import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
+
+/**
+ * The reps whose Upwork work this rep may act on: the operators sharing any
+ * profile this rep can execute. A profile's jobs are channel work, not the
+ * primary's private queue — an operator must be able to see and work them.
+ */
+async function operatorScopeRepIds(
+  store: ScoutStore,
+  authCtx: AuthContext,
+): Promise<string[]> {
+  const client = store.getSupabaseClient()
+  const policy = await loadOperatingPolicy(authCtx.orgId, client)
+  const businessDate = orgDate(currentInstant(), policy.timezone)
+  const executable = await listExecutableIdentitiesForRep(client, authCtx.orgId, authCtx.repId, businessDate)
+  const profileIds = [
+    ...new Set(executable.map((row) => row.profileId).filter((id): id is string => Boolean(id))),
+  ]
+  const repIds = new Set<string>([authCtx.repId])
+  if (profileIds.length > 0) {
+    const { data: coverageRows } = await client
+      .from('profile_coverage')
+      .select('rep_id')
+      .eq('organization_id', authCtx.orgId)
+      .eq('active', true)
+      .in('profile_id', profileIds)
+      .limit(500)
+    for (const row of (coverageRows ?? []) as Array<{ rep_id: string }>) repIds.add(row.rep_id)
+  }
+  return [...repIds]
+}
 
 export interface UpworkDashboardSummary {
   applicationsSent: number
@@ -42,10 +75,12 @@ export async function loadUpworkDashboard(
   authCtx: AuthContext,
 ): Promise<UpworkDashboard> {
   const isAdmin = Boolean(authCtx.isAdmin || authCtx.isOwner)
+  const isManager = Boolean(authCtx.isManager)
   const now = currentInstant().toISOString()
 
+  const repScope = isAdmin || isManager ? undefined : await operatorScopeRepIds(store, authCtx)
   const [jobs, applications] = await Promise.all([
-    store.listUpworkJobs({ includeArchived: true }),
+    store.listUpworkJobs({ includeArchived: true, repIds: repScope }),
     store.listUpworkApplications({ repIds: isAdmin ? [] : [authCtx.repId], includeArchived: false }),
   ])
 

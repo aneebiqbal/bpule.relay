@@ -400,6 +400,8 @@ export async function removeOperatorResponsibility(
       .from('profile_coverage')
       .update({ active: false, updated_at: new Date().toISOString() })
       .eq('id', existingRow.id as string)
+  }
+  if (profileId) {
     await client
       .from('responsibility_acknowledgements')
       .delete()

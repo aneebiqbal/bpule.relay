@@ -17,9 +17,13 @@ const AHMAD = 'aaaaaaaa-0000-0000-0000-000000000004' // operator
 const MADIHA = 'aaaaaaaa-0000-0000-0000-000000000003' // backup only
 const TODAY = new Date().toISOString().slice(0, 10)
 
+/** Live acceptance needs the real database; CI has no credentials. */
+const liveDb = Boolean(process.env.SERVICE_DATABASE_URL ?? process.env.DATABASE_URL)
+const describeLive = liveDb ? describe : describe.skip
+
 afterAll(async () => { await closeNeonPool() })
 
-describe('MULTI_OPERATOR_DATA_INTEGRITY', () => {
+describeLive('MULTI_OPERATOR_DATA_INTEGRITY', () => {
   it('no profile carries more than one active PRIMARY seat', async () => {
     const client = neonServiceDbClient()
     const { data, error } = await client.raw<{ profile_id: string; n: number }>(
@@ -123,7 +127,7 @@ describe('MULTI_OPERATOR_DATA_INTEGRITY', () => {
   }, 60_000)
 })
 
-describe('MULTI_OPERATOR_SHARED_PLAN', () => {
+describeLive('MULTI_OPERATOR_SHARED_PLAN', () => {
   it('the plan is one requirement per channel lane, not one per operator', async () => {
     const client = neonServiceDbClient()
     const { data: plans, error } = await client.raw<{ activity_type: string; target_count: number }>(
