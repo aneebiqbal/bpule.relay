@@ -7,6 +7,7 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { createScoutStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
+import { getAuthorizedIdentities } from '@/lib/auth/workspace'
 import { isProductAdmin } from '@/lib/auth/admin-page'
 import { computeLifecycleState } from '@/lib/leads/lifecycle-policy'
 import type { LeadRow, PipelineStage } from '@/components/leads/pipeline-utils'
@@ -329,8 +330,19 @@ export async function loadBoardData(): Promise<BoardData> {
     workspace = null
   }
 
-  const allLeads = orgView ? await store.fetchLeadsAll() : await store.listOwnedLeads()
-  const visibleLeads = scopeLeadsToWorkspace(allLeads, workspace, orgView)
+  // A rep's board is every identity they can execute (PRIMARY plus active
+  // SHARED/REPLACE/OPERATOR seats), not just the active workspace. Scoping to
+  // one workspace hid an operator's shared work from their own dashboard.
+  const executableIdentities = orgView
+    ? []
+    : (await getAuthorizedIdentities())
+      .filter((identity) => identity.status === 'active')
+      .map((identity) => ({ id: identity.revenueIdentityId, profileId: identity.profileId }))
+
+  const allLeads = await store.fetchLeadsAll()
+  const visibleLeads = orgView
+    ? allLeads
+    : scopeLeadsToIdentities(allLeads, executableIdentities)
   const repsRes = orgView ? await store.listAllReps() : []
   const reps = (Array.isArray(repsRes) ? repsRes : []).map((rep) => ({ id: rep.id, name: rep.name }))
 

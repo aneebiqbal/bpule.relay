@@ -299,6 +299,15 @@ describe('REP_IDENTITY_SCOPE_CANONICAL', () => {
   })
 })
 
+describe('DASHBOARD_BOARD_MATCHES_LEADS_SCOPE', () => {
+  it('a rep board scopes to every executable identity, not the active workspace', () => {
+    const source = read('src', 'lib', 'leads', 'board-rows.ts')
+    expect(source).toMatch(/scopeLeadsToIdentities\(allLeads, executableIdentities\)/)
+    expect(source).toMatch(/getAuthorizedIdentities\(\)/)
+    expect(source).not.toMatch(/const visibleLeads = scopeLeadsToWorkspace\(allLeads, workspace, orgView\)/)
+  })
+})
+
 describe('EXPLICIT_INVALID_IDENTITY_NEVER_FALLS_BACK', () => {
   it('every prospect/lead write route denies an identity that does not resolve', () => {
     for (const route of [
