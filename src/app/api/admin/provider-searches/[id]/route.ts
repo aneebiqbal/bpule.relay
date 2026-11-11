@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 async function requireAdmin() {
   const authCtx = await getAuthContext()
   if (!authCtx) return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
-  if (!can(authCtx, 'MANAGE_TEAM_TARGETS') && !authCtx.isAdmin && !authCtx.isOwner) {
+  if (!can(authCtx, 'MANAGE_ORG_SETTINGS') && !authCtx.isAdmin && !authCtx.isOwner) {
     return { error: NextResponse.json({ error: 'Not authorized.' }, { status: 403 }) }
   }
   return { authCtx }

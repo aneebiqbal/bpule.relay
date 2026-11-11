@@ -36,6 +36,8 @@ function relative(iso: string): string {
 export function FreshProspectsView({
   rows: initialRows,
   orgView,
+  // Kept for parity with the other Prospect views; the Fresh view is org-wide.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   workspace,
 }: {
   rows: FreshProspectRow[]
@@ -61,8 +63,10 @@ export function FreshProspectsView({
     }
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    if (initialRows.length === 0) void load(profileFilter)
+    // Reload when the profile filter changes; the server does the filtering (§18).
+    if (initialRows.length === 0 || profileFilter) void load(profileFilter)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileFilter])
 
@@ -76,13 +80,14 @@ export function FreshProspectsView({
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    if (!needle) return rows
-    return rows.filter((row) =>
-      [row.displayName, row.title, row.company, row.location, row.bestProfileName]
+    return rows.filter((row) => {
+      if (profileFilter && row.bestProfileId !== profileFilter) return false
+      if (!needle) return true
+      return [row.displayName, row.title, row.company, row.location, row.bestProfileName]
         .filter((value): value is string => Boolean(value))
-        .some((value) => value.toLowerCase().includes(needle)),
-    )
-  }, [rows, query])
+        .some((value) => value.toLowerCase().includes(needle))
+    })
+  }, [rows, query, profileFilter])
 
   async function promote(candidateId: string) {
     setBusyId(candidateId)
@@ -114,7 +119,9 @@ export function FreshProspectsView({
     }
   }
 
-  const verifiedCount = rows.filter((row) => row.emailStatus === 'VERIFIED' || row.emailStatus === 'LIKELY_VALID').length
+  const verifiedCount = rows.filter(
+    (row) => !row.emailSuppressed && (row.emailStatus === 'VERIFIED' || row.emailStatus === 'LIKELY_VALID'),
+  ).length
 
   return (
     <div className="space-y-4">
@@ -176,9 +183,15 @@ export function FreshProspectsView({
                     {row.location && <p className="text-[11px] text-stone">{row.location}</p>}
                   </div>
                   {row.emailStatus && (
-                    <V4Chip tone={TONE[row.emailStatus] ?? 'neutral'}>
+                    <V4Chip tone={row.emailSuppressed ? 'neutral' : (TONE[row.emailStatus] ?? 'neutral')}>
                       <Mail className="size-3" aria-hidden />
-                      {row.emailStatus === 'VERIFIED' ? 'Verified email' : row.emailStatus === 'LIKELY_VALID' ? 'Likely valid' : 'No verified email'}
+                      {row.emailSuppressed
+                        ? 'Suppressed'
+                        : row.emailStatus === 'VERIFIED'
+                          ? 'Verified email'
+                          : row.emailStatus === 'LIKELY_VALID'
+                            ? 'Likely valid'
+                            : 'No verified email'}
                     </V4Chip>
                   )}
                 </div>
@@ -204,10 +217,16 @@ export function FreshProspectsView({
                       {row.discoveredAt ? relative(row.discoveredAt) : '—'}
                     </dd>
                   </div>
-                  {row.emailStatus === 'VERIFIED' && (
+                  {row.emailSuppressed && (
+                    <div className="flex items-center gap-1.5 text-[12px] text-status-danger">
+                      <Mail className="size-3.5" aria-hidden />
+                      Suppressed — email blocked
+                    </div>
+                  )}
+                  {!row.emailSuppressed && row.emailStatus === 'VERIFIED' && (
                     <div className="flex items-center gap-1.5 text-[12px] text-status-success">
                       <CheckCircle2 className="size-3.5" aria-hidden />
-                      Sendable email available
+                      {row.emailStale ? 'Verified email — reverify before sending' : 'Sendable email available'}
                     </div>
                   )}
                 </dl>

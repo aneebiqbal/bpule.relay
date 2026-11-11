@@ -75,7 +75,7 @@ function transient(category: ProviderErrorCategory, status: number | null): bool
   return status != null && status >= 500
 }
 
-export interface ProviderFetchOptions {
+export interface ProviderFetchOptions<T = unknown> {
   url: string
   init: RequestInit
   organizationId: string
@@ -86,6 +86,11 @@ export interface ProviderFetchOptions {
   telemetry?: TelemetrySink
   /** Attempts. Defaults to 3. */
   maxAttempts?: number
+  /**
+   * Adapter-supplied credit counter. Providers rarely return credits in the
+   * body; the adapter knows what an operation costs (§14).
+   */
+  readCredits?: (body: T) => number
 }
 
 /**
@@ -93,7 +98,7 @@ export interface ProviderFetchOptions {
  * Never throws a raw fetch error — always a classified `ProviderError`.
  */
 export async function providerFetch<T = unknown>(
-  options: ProviderFetchOptions,
+  options: ProviderFetchOptions<T>,
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? 20_000
   const maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS
@@ -122,7 +127,8 @@ export async function providerFetch<T = unknown>(
         throw last
       }
 
-      await record(options, 'OK', latencyMs, readCredits(body))
+      const credits = options.readCredits ? options.readCredits(body) : readCredits(body)
+      await record(options, 'OK', latencyMs, credits)
       return body
     } catch (error) {
       const latencyMs = Date.now() - startedAt
@@ -142,8 +148,8 @@ export async function providerFetch<T = unknown>(
   throw last ?? new ProviderError('ERROR', `${options.provider} ${options.operation} failed`)
 }
 
-async function record(
-  options: ProviderFetchOptions,
+async function record<T>(
+  options: ProviderFetchOptions<T>,
   status: ProviderTelemetryRecord['status'],
   latencyMs: number,
   credits: number,

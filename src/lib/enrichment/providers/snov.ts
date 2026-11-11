@@ -92,6 +92,7 @@ async function waitForResult<T>(
   path: string,
   token: string,
   isDone: (body: T) => boolean,
+  readCredits?: (body: T) => number,
 ): Promise<T> {
   // Snov tasks are near-immediate for these endpoints; poll a bounded 3 times.
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -103,6 +104,7 @@ async function waitForResult<T>(
       operation: 'FIND',
       searchRunId: context.searchRunId,
       telemetry: context.telemetry,
+      readCredits,
     })
     if (isDone(body)) return body
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -199,6 +201,9 @@ export class SnovAdapter implements ProviderAdapter {
       operation: 'FIND',
       searchRunId: this.context.searchRunId,
       telemetry: this.context.telemetry,
+      // The charge is settled by the result below, which knows whether an email
+      // was actually returned.
+      readCredits: () => 0,
     })
 
     const hash = taskHash(started)
@@ -207,6 +212,8 @@ export class SnovAdapter implements ProviderAdapter {
       `/v2/emails-by-domain-by-name/result?task_hash=${hash}`,
       token,
       (result) => result.status === 'completed' || Boolean(extractEmails(result).length),
+      // Snov charges one credit per email it returns with a valid/unknown status.
+      (result) => (extractEmails(result).length > 0 ? 1 : 0),
     )
 
     const emails = extractEmails(body)

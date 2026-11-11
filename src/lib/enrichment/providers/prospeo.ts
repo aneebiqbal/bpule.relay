@@ -109,6 +109,7 @@ export class ProspeoAdapter implements ProviderAdapter {
       operation: 'SEARCH',
       searchRunId: this.context.searchRunId,
       telemetry: this.context.telemetry,
+      readCredits: (body) => (body.free ? 0 : (body.results?.length ?? 0) > 0 ? 1 : 0),
     })
 
     const pagination = body.pagination
@@ -131,12 +132,24 @@ export class ProspeoAdapter implements ProviderAdapter {
   }
 
   async enrich(person: ProviderPerson, signal?: AbortSignal): Promise<ProviderEnrichment> {
+    // Prospeo matches on any of: person_id, linkedin_url, email, or a
+    // name+company combination. Submit everything we have for accuracy; the
+    // manual path only has the LinkedIn URL (verified docs, 2026-11-11).
+    const data: Record<string, unknown> = {}
+    if (person.providerPersonId) data.person_id = person.providerPersonId
+    if (person.linkedinUrl) data.linkedin_url = person.linkedinUrl
+    if (person.displayName) data.full_name = person.displayName
+    if (person.firstName) data.first_name = person.firstName
+    if (person.lastName) data.last_name = person.lastName
+    if (person.company) data.company_name = person.company
+    if (person.companyDomain) data.company_website = person.companyDomain
+
     const body = await providerFetch<ProspeoEnrichBody>({
       url: `${BASE_URL}/enrich-person`,
       init: {
         method: 'POST',
         headers: { 'X-KEY': this.context.apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { person_id: person.providerPersonId }, only_verified_email: true }),
+        body: JSON.stringify({ data, only_verified_email: true }),
         signal,
       },
       organizationId: this.context.organizationId,
@@ -144,6 +157,10 @@ export class ProspeoAdapter implements ProviderAdapter {
       operation: 'REVEAL',
       searchRunId: this.context.searchRunId,
       telemetry: this.context.telemetry,
+      readCredits: (body) => {
+        const email = body.person?.email
+        return body.free_enrichment ? 0 : email?.revealed && email?.email ? 1 : 0
+      },
     })
 
     const email = body.person?.email

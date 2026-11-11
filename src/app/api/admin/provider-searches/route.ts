@@ -9,7 +9,7 @@ const PROVIDERS = ['prospeo', 'snov', 'apollo']
 async function requireAdmin() {
   const authCtx = await getAuthContext()
   if (!authCtx) return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
-  if (!can(authCtx, 'MANAGE_TEAM_TARGETS') && !authCtx.isAdmin && !authCtx.isOwner) {
+  if (!can(authCtx, 'MANAGE_ORG_SETTINGS') && !authCtx.isAdmin && !authCtx.isOwner) {
     return { error: NextResponse.json({ error: 'Not authorized.' }, { status: 403 }) }
   }
   return { authCtx }
@@ -40,6 +40,9 @@ export async function POST(request: Request) {
   if (!name) return NextResponse.json({ error: 'name is required.' }, { status: 400 })
   if (!PROVIDERS.includes(provider)) {
     return NextResponse.json({ error: `provider must be one of ${PROVIDERS.join(', ')}` }, { status: 400 })
+  }
+  if (provider === 'apollo') {
+    return NextResponse.json({ error: 'Apollo is disabled by design; configure Prospeo or Snov instead.' }, { status: 400 })
   }
 
   const client = await createServerSupabase()

@@ -1485,6 +1485,7 @@ export class SupabaseStore implements ScoutStore {
       sendDisposition?: import('@/lib/domain/types').SendDisposition | null
       rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
       idempotencyKey?: string | null
+      channel?: 'linkedin' | 'email'
     },
   ): Promise<DosageResult> {
     const type = messageType
@@ -1861,17 +1862,23 @@ export class SupabaseStore implements ScoutStore {
         : type === 'dm' ? 'DM_SENT'
         : type === 'followup' ? 'FOLLOWUP_SENT'
         : type === 'reply' ? 'REPLY_SENT'
+        : type === 'email' ? 'EMAIL_SENT'
         : null
       if (actionType && inserted?.id) {
+        // A first email is a real send (+1). An email follow-up keeps the
+        // canonical FOLLOWUP_SENT type but is qualified as the email channel so
+        // it never lands in the LinkedIn follow-up lane (§19).
+        const emailChannel = type === 'email' || (type === 'followup' && feedback?.channel === 'email')
         await emitAction({
           orgId: this.orgId,
-          actionType: actionType as 'CONNECTION_SENT' | 'DM_SENT' | 'FOLLOWUP_SENT' | 'REPLY_SENT',
+          actionType: actionType as 'CONNECTION_SENT' | 'DM_SENT' | 'FOLLOWUP_SENT' | 'REPLY_SENT' | 'EMAIL_SENT',
           actorType: 'rep',
           actorId: this.rep.id,
           leadId,
           senderProfileId: leadRow.sender_profile_id ?? null,
           messageId: inserted.id as string,
           executionStatus: 'sent',
+          channel: emailChannel ? 'email' : undefined,
           metadata: { messageType: type },
           idempotencyKey: `${actionType}:${inserted.id}`,
         })

@@ -18,6 +18,8 @@ import { resolveAccessibleIdentity } from '@/lib/workspace/resolve-active-identi
 import type { V3LeadDecisionPacket } from '@/lib/intelligence-v3/types'
 import type { CanonicalProspectIntelligence } from '@/lib/intelligence-v2/types'
 import { recordAnalysisScoreDrift } from '@/lib/relay/contract-violations'
+import { enrichLeadFromLinkedIn } from '@/lib/enrichment/enrichment-service'
+import { getProviderAdapter, providerConfigured } from '@/lib/enrichment/provider-registry'
 
 /**
  * Save Prospect as Lead
@@ -315,6 +317,28 @@ export async function POST(request: Request) {
     }
 
     const lead = result.lead!
+
+    // §4/§42: the manual path enriches after the canonical lead is created.
+    // Only a qualified lead with a LinkedIn URL reaches a paid call; a provider
+    // outage must never fail the save.
+    if (linkedinUrl && canonicalScore != null && providerConfigured('prospeo')) {
+      const band = qualifyCanonicalScore(canonicalScore)
+      if (band.qualification !== 'SKIP') {
+        try {
+          await enrichLeadFromLinkedIn({
+            client: createServiceSupabase(),
+            organizationId: lead.organizationId,
+            leadId: lead.id,
+            linkedinUrl,
+            displayName: extracted.name,
+            company,
+            primary: getProviderAdapter('prospeo', { organizationId: lead.organizationId }),
+          })
+        } catch (err) {
+          console.warn('[prospect/save] enrichment failed:', err instanceof Error ? err.message : err)
+        }
+      }
+    }
 
     // Dataset: create a permanent, versioned intelligence sample for this analysis.
     void createDatasetSampleForLead(lead, canonical, canonicalScore, connectionNote, body).catch((err) => {

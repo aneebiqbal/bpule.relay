@@ -8,8 +8,8 @@
 import type { DbClient } from '@/lib/db/types'
 import type { ProviderAdapter, ProviderName } from './providers/types'
 import { ProviderError } from './providers/provider-http'
-import { ProspeoAdapter, type ProspeoContext } from './providers/prospeo'
-import { SnovAdapter, type SnovContext } from './providers/snov'
+import { ProspeoAdapter } from './providers/prospeo'
+import { SnovAdapter } from './providers/snov'
 import type { TelemetrySink } from './providers/provider-http'
 
 export interface ProviderContext {

@@ -137,12 +137,6 @@ export function rankCandidateProfiles(
     rawTerms: [person.company, person.title].filter(Boolean),
     platform: 'linkedin',
   }
-  const leadLike = {
-    company: person.company,
-    contactTitle: person.title,
-    senderProfileId: null,
-  }
-
   const ranked = rankSendersForLead(context, senders, null)
   const rankings: ProfileMatchSuggestion[] = ranked.rankings.map((entry) => ({
     profileId: entry.senderId,

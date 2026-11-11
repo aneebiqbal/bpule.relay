@@ -3,6 +3,10 @@ import { getAuthContext } from '@/lib/auth/organization'
 import { createScoutStore } from '@/lib/store'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { emitAction } from '@/lib/action-ledger'
+import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { orgDate } from '@/lib/org-clock'
+import { createServiceSupabase } from '@/lib/supabase/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,6 +43,29 @@ export async function POST(
   const company = (candidate.extracted_company as string) || (candidate.extracted_name as string)
   if (!company) {
     return NextResponse.json({ error: 'The candidate has no company to create a lead for.' }, { status: 400 })
+  }
+
+  // §27: enrichment/discovery never creates an ownership mechanism. The
+  // promoting rep must be able to EXECUTE the suggested sender under the V6
+  // responsibility authority — never silently substituted.
+  const revenueIdentityId = (candidate.revenue_identity_id as string) ?? null
+  const senderProfileId = (candidate.sender_profile_id as string) ?? null
+  if (revenueIdentityId || senderProfileId) {
+    // The policy is org configuration; read it with the service boundary so a
+    // rep without a direct policy read still gets the correct business date.
+    const policy = await loadOperatingPolicy(authCtx.orgId, createServiceSupabase())
+    const businessDate = orgDate(new Date(), policy.timezone)
+    const executable = await listExecutableIdentitiesForRep(client, authCtx.orgId, authCtx.repId, businessDate)
+    const executableIds = new Set(executable.map((row) => row.id))
+    const executableProfiles = new Set(executable.map((row) => row.profileId).filter(Boolean))
+    const identityOk = !revenueIdentityId || executableIds.has(revenueIdentityId)
+    const profileOk = !senderProfileId || executableProfiles.has(senderProfileId)
+    if (!identityOk || !profileOk) {
+      return NextResponse.json(
+        { error: 'You cannot send from the suggested identity. Choose an identity you can execute.', code: 'IDENTITY_NOT_EXECUTABLE' },
+        { status: 403 },
+      )
+    }
   }
 
   const result = await store.createLead({
@@ -82,7 +109,8 @@ export async function POST(
     actorId: authCtx.repId,
     channel: 'linkedin',
     leadId,
-    executionStatus: 'sent',
+    // Creating a lead is GENERATED work — it is not a sent action (§30).
+    executionStatus: 'generated',
     metadata: { provider: candidate.provider, candidateId: id },
     idempotencyKey: `prospect:promoted:${candidate.provider_person_id}:${leadId}`,
   })

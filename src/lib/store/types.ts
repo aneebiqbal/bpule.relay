@@ -456,6 +456,8 @@ export interface ScoutStore {
     sendDisposition?: import('@/lib/domain/types').SendDisposition | null
     rejectReasons?: import('@/lib/domain/types').SendFeedbackReason[]
     idempotencyKey?: string | null
+    /** Distinguishes an email follow-up from a LinkedIn follow-up (§19). */
+    channel?: 'linkedin' | 'email'
   }): Promise<DosageResult>
   /** Explicit rep confirmation that a LinkedIn connection request was accepted — never inferred. */
   markConnectionAccepted(leadId: string): Promise<void>

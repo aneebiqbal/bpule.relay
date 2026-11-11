@@ -43,6 +43,21 @@ Finder request: `{ rows: [{ first_name, last_name, domain }] }` (≤10 rows).
 Verifier result: `{ email, result: { smtp_status: "valid" | "not_valid" | "unknown", ... } }`.
 Rate limit: 60 requests/minute. Verification: up to 500–4000/hour by plan.
 
+## Manual path (Prospect → Lead)
+
+`enrich-person` accepts `linkedin_url` alone as a matching datapoint (verified
+against the live docs). After the canonical lead is created, the save route
+enriches by URL when the lead is qualified and Prospeo is configured. Only a
+VERIFIED (or explicitly risky-but-real) address is persisted, and a provider
+outage never fails the save.
+
+## Admin surface
+
+`/admin/providers` houses provider status/budget and saved-search configuration;
+`/api/admin/provider-analytics` reports the funnel and per-search quality from
+canonical events. Provider secrets are never returned — `configured` is a
+boolean.
+
 ## Apollo — DISABLED / non-dependency
 
 Not implemented. No credentials, no adapter. `apollo` rows in `provider_config`

@@ -47,6 +47,11 @@ export default async function AdminSystemPage() {
       name: 'AI Usage',
       body: 'Spend, failures and latency from persisted model traces.',
     },
+    {
+      href: '/admin/providers',
+      name: 'Provider Discovery',
+      body: 'Prospeo / Snov status, daily credit budgets and the saved searches that feed Fresh Prospects.',
+    },
   ]
 
   return (
