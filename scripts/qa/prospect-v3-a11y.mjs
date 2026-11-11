@@ -219,6 +219,20 @@ for (const user of USERS) {
         entry.axe = { error: `axe unavailable: ${(err).message?.slice(0, 200)}` }
       }
 
+      // §28 — keyboard: Tab must move focus, Escape must be safe.
+      try {
+        const before = await page.evaluate(() => document.activeElement?.tagName ?? null)
+        await page.keyboard.press('Tab')
+        await page.waitForTimeout(120)
+        const after = await page.evaluate(() => document.activeElement?.tagName ?? null)
+        await page.keyboard.press('Escape')
+        await page.waitForTimeout(120)
+        const afterEscape = await page.evaluate(() => document.activeElement?.tagName ?? null)
+        entry.keyboard = { before, after, afterEscape, tabMovedFocus: before !== after }
+      } catch (err) {
+        entry.keyboard = { error: (err).message?.slice(0, 160) }
+      }
+
       const shot = join(OUT, `${user.role}-${vp.name}-${route.name}.png`)
       await page.screenshot({ path: shot, fullPage: false })
       entry.screenshot = shot
@@ -226,7 +240,7 @@ for (const user of USERS) {
       report.runs.push(entry)
       const serious = (entry.axe?.byImpact?.critical?.length ?? 0) + (entry.axe?.byImpact?.serious?.length ?? 0)
       console.log(
-        `${user.role} ${vp.name} ${route.name}: axeSerious=${serious} overflow=${entry.overflow.scrollWidth > entry.overflow.clientWidth} cta=${entry.ctaVisible} errors=${entry.consoleErrors.length}`,
+        `${user.role} ${vp.name} ${route.name}: axeSerious=${serious} overflow=${entry.overflow.scrollWidth > entry.overflow.clientWidth} tab=${entry.keyboard?.tabMovedFocus} cta=${entry.ctaVisible} errors=${entry.consoleErrors.length}`,
       )
     }
   }
