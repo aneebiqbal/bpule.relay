@@ -233,13 +233,6 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
     }
   }
 
-  const assignedRows = buildTeamProfiles(live, personKeyByProfile)
-    .map((row) => ({ ...row, profileName: canonicalNameById.get(row.profileId) ?? row.profileName }))
-  const assignedKeys = new Set(assignedRows.map((row) => row.profileId))
-  const assignedIdentityIds = new Set(
-    live.people.flatMap((person) => person.identities.map((identity) => identity.id)),
-  )
-
   const identityRes = await supabase
     .from('revenue_identities')
     .select('id, identity_name, channel, profile_id')
@@ -248,6 +241,53 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
     .limit(2000)
 
   const identities = (identityRes.data ?? []) as DirectoryIdentity[]
+
+  // The plan is channel-owned and SHARED: the profile's completion is the sum of
+  // every operator's contribution, never just the primary's. `live` attributes
+  // the plan to the primary, so the completion is re-summed from accountability.
+  const { data: accountabilityRows, error: accountabilityError } = await supabase
+    .from('daily_accountability')
+    .select('revenue_identity_id, completed_count')
+    .eq('organization_id', orgId)
+    .eq('target_date', live.date)
+    .limit(2000)
+  if (accountabilityError) throw accountabilityError
+  const completedByIdentity = new Map<string, number>()
+  for (const row of (accountabilityRows ?? []) as Array<{ revenue_identity_id: string; completed_count: number }>) {
+    completedByIdentity.set(
+      row.revenue_identity_id,
+      (completedByIdentity.get(row.revenue_identity_id) ?? 0) + row.completed_count,
+    )
+  }
+
+  const completedByPersonKey = new Map<string, number>()
+  for (const identity of identities) {
+    if (!identity.profile_id) continue
+    const key = personKeyByProfile.get(identity.profile_id)
+    if (!key) continue
+    completedByPersonKey.set(
+      key,
+      (completedByPersonKey.get(key) ?? 0) + (completedByIdentity.get(identity.id) ?? 0),
+    )
+  }
+
+  const assignedRows = buildTeamProfiles(live, personKeyByProfile)
+    .map((row) => {
+      const completed = completedByPersonKey.get(row.profileId)
+      const profileName = canonicalNameById.get(row.profileId) ?? row.profileName
+      return completed === undefined
+        ? { ...row, profileName }
+        : {
+            ...row,
+            profileName,
+            completedCount: completed,
+            remaining: Math.max(0, row.targetCount - completed),
+          }
+    })
+  const assignedKeys = new Set(assignedRows.map((row) => row.profileId))
+  const assignedIdentityIds = new Set(
+    live.people.flatMap((person) => person.identities.map((identity) => identity.id)),
+  )
   const unassignedIdentities = identities.filter(
     (identity) => !assignedIdentityIds.has(identity.id),
   )
@@ -272,6 +312,10 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
       entry.target += goal.target
       goalsByIdentity.set(goal.identityId, entry)
     }
+  }
+  // Per-channel completion is the profile-wide sum (see completedByIdentity).
+  for (const [identityId, entry] of goalsByIdentity) {
+    entry.completed = completedByIdentity.get(identityId) ?? 0
   }
   const channelDetailsFor = (personKey: string) =>
     buildChannelDetails(personKey, identitiesByPerson, canonicalByProfile, goalsByIdentity)

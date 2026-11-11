@@ -248,7 +248,8 @@ describe('MULTI_OPERATOR_ACCEPTANCE', () => {
 
       // Rep coverage: Ahmad's own list carries Fizza as an operator seat.
       const ahmadCoverage = await loadRepCoverage(ORG, AHMAD, { date: TODAY, client })
-      expect(ahmadCoverage.operatorProfileIds).toContain(PROFILE)
+      // The marker is keyed by person, matching the grouped Rep Home card.
+      expect(ahmadCoverage.operatorProfileIds).toContain('fec8abf0-7fb5-4999-87ea-fee805cc8c12')
       // Profiles are grouped by person, so match on the channel identity.
       expect(ahmadCoverage.own.some((row) => row.identityIds.includes(IDENTITY))).toBe(true)
 

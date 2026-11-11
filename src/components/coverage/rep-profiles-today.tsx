@@ -303,7 +303,7 @@ function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: str
         <div className="flex items-center gap-1.5">
           <V4Chip tone={tone}>{label}</V4Chip>
           {isNew && (
-            <span className="rounded-full bg-orange/15 px-2 py-0.5 text-[11px] font-medium text-[#b8531f]">
+            <span className="rounded-full bg-status-info/10 px-2 py-0.5 text-[11px] font-medium text-[#2f48b8] ring-1 ring-status-info/20">
               NEW
             </span>
           )}
@@ -371,9 +371,9 @@ function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: str
               </dd>
             </div>
           ))}
-          {breakdown.more > 0 && <p className="text-[11px] text-stone">+{breakdown.more} more</p>}
         </dl>
       )}
+      {breakdown.more > 0 && <div className="mt-1 text-[11px] text-stone">+{breakdown.more} more</div>}
 
       <p
         className={cn(
