@@ -51,14 +51,17 @@ async function loadLeadData(id: string) {
   // The lead's SENDER profile must be in the list even when the viewer is not
   // its owner (e.g. an admin working on the team's behalf): otherwise the
   // workspace reads "Profile not assigned" on a lead that plainly has one.
-  const [profiles, queue, owner, senderProfile] = await Promise.all([
+  // `listProfilesByIds` is org-scoped; `getProfile` is rep-scoped and returns
+  // null for a colleague's profile, which is exactly the case we must cover.
+  const [profiles, queue, owner, senderProfiles] = await Promise.all([
     store.listProfiles(),
     store.getQueue(),
     lead.ownerRepId ? store.getRepInfo(lead.ownerRepId).catch(() => null) : Promise.resolve(null),
     lead.senderProfileId
-      ? store.getProfile(lead.senderProfileId).catch(() => null)
-      : Promise.resolve(null),
+      ? store.listProfilesByIds([lead.senderProfileId]).catch(() => [])
+      : Promise.resolve([]),
   ])
+  const senderProfile = senderProfiles[0] ?? null
   const mergedProfiles = senderProfile && !profiles.some((profile) => profile.id === senderProfile.id)
     ? [...profiles, senderProfile]
     : profiles
