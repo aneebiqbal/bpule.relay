@@ -217,6 +217,16 @@ export async function POST(request: Request) {
   } catch {
     workspace = null
   }
+  const validatedIdentity = await validateRevenueIdentityId(body.revenueIdentityId)
+  // An explicitly submitted identity must resolve. Falling back to the active
+  // workspace here would create the lead under somebody else's channel.
+  if (validatedIdentity.denied) {
+    return NextResponse.json(
+      { error: 'That identity is not available to you.', code: 'IDENTITY_NOT_ACCESSIBLE' },
+      { status: 403 },
+    )
+  }
+
   const result = await store.createLead({
     company,
     contactName: extracted.name,
@@ -249,9 +259,7 @@ export async function POST(request: Request) {
     senderProfileId: await store.resolveSenderProfileId(
       typeof body.senderProfileId === 'string' ? body.senderProfileId : null,
     ) ?? workspace?.profileId ?? null,
-    revenueIdentityId: (await validateRevenueIdentityId(body.revenueIdentityId))
-      ?? workspace?.id
-      ?? null,
+    revenueIdentityId: validatedIdentity.id ?? workspace?.id ?? null,
     // Intelligence V2 fields
     canonicalScore: canonical?.canonicalScore ?? null,
     scoreVersion: canonical?.scoreVersion ?? null,
@@ -329,14 +337,14 @@ export async function POST(request: Request) {
  */
 async function validateRevenueIdentityId(
   rawId: unknown,
-): Promise<string | null> {
-  if (typeof rawId !== 'string' || !rawId) return null
+): Promise<{ id: string | null; denied: boolean }> {
+  if (typeof rawId !== 'string' || !rawId.trim()) return { id: null, denied: false }
 
   // Use the centralized auth helper which validates org + assignment
   try {
     const { isRevenueIdentityAssignedToRep } = await import('@/lib/auth/workspace')
     const user = await import('@/lib/auth/current').then((m) => m.getCurrentUser())
-    if (!user) return null
+    if (!user) return { id: null, denied: true }
 
     // Admins/owners can use any identity in their org — resolve via auth context, not reps.role
     const { getAuthContext } = await import('@/lib/auth/organization')
@@ -349,13 +357,13 @@ async function validateRevenueIdentityId(
         .eq('id', rawId)
         .eq('organization_id', user.organization.id)
         .maybeSingle()
-      return identity?.id ?? null
+      return identity?.id ? { id: identity.id, denied: false } : { id: null, denied: true }
     }
 
     // Reps can only use identities assigned to them
     const isAssigned = await isRevenueIdentityAssignedToRep(user.rep.id, rawId)
-    return isAssigned ? rawId : null
+    return isAssigned ? { id: rawId, denied: false } : { id: null, denied: true }
   } catch {
-    return null
+    return { id: null, denied: true }
   }
 }

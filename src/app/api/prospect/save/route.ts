@@ -58,12 +58,19 @@ export async function POST(request: Request) {
     const linkedinUrl = typeof body.url === 'string' && body.url.trim() ? body.url.trim() : null
     const requestedSenderProfileId = typeof body.senderProfileId === 'string' ? body.senderProfileId : null
     let revenueIdentityId: string | null = null
-    if (typeof body.revenueIdentityId === 'string') {
+    if (typeof body.revenueIdentityId === 'string' && body.revenueIdentityId.trim()) {
       try {
         const workspace = await resolveAccessibleIdentity(body.revenueIdentityId)
         revenueIdentityId = workspace?.id ?? null
       } catch {
         revenueIdentityId = null
+      }
+      // Never silently fall back to another identity when the rep named one.
+      if (!revenueIdentityId) {
+        return NextResponse.json(
+          { error: 'That identity is not available to you.', code: 'IDENTITY_NOT_ACCESSIBLE' },
+          { status: 403 },
+        )
       }
     }
     const connectionNote = typeof body.connectionNote === 'string' ? body.connectionNote.trim() : null

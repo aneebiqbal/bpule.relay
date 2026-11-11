@@ -243,11 +243,23 @@ async function handlePost(request: Request) {
 
   const explicitProfileId = body.profileId ?? null
   let requestedWorkspace: WorkspaceIdentity | null = null
-  if (typeof body.revenueIdentityId === 'string') {
+  if (typeof body.revenueIdentityId === 'string' && body.revenueIdentityId.trim()) {
     try {
       requestedWorkspace = await resolveAccessibleIdentity(body.revenueIdentityId)
     } catch {
       requestedWorkspace = null
+    }
+    // An identity the rep explicitly chose must resolve inside their own
+    // scope. Falling back to the active workspace would silently analyse the
+    // prospect as somebody else (EXPLICIT_INVALID_IDENTITY_NEVER_FALLS_BACK).
+    if (!requestedWorkspace) {
+      return new Response(
+        JSON.stringify({
+          error: 'That identity is not available to you.',
+          code: 'IDENTITY_NOT_ACCESSIBLE',
+        }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      )
     }
   }
   const requestedWorkspaceId = requestedWorkspace?.id ?? null

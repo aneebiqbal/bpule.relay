@@ -299,6 +299,25 @@ describe('REP_IDENTITY_SCOPE_CANONICAL', () => {
   })
 })
 
+describe('EXPLICIT_INVALID_IDENTITY_NEVER_FALLS_BACK', () => {
+  it('every prospect/lead write route denies an identity that does not resolve', () => {
+    for (const route of [
+      'src/app/api/prospect/analyze/route.ts',
+      'src/app/api/prospect/save/route.ts',
+      'src/app/api/leads/route.ts',
+    ]) {
+      const source = read(...route.split('/'))
+      expect(source, route).toMatch(/IDENTITY_NOT_ACCESSIBLE/)
+      expect(source, route).toMatch(/status: 403/)
+    }
+  })
+
+  it('fallback is still allowed when the caller named no identity', () => {
+    const source = read('src', 'app', 'api', 'prospect', 'analyze', 'route.ts')
+    expect(source).toMatch(/if \(typeof body\.revenueIdentityId === 'string' && body\.revenueIdentityId\.trim\(\)\)/)
+  })
+})
+
 describe('PROFILE_KNOWLEDGE_READINESS', () => {
   it('the analyzer reports knowledge readiness per candidate', () => {
     expect(read('src/lib/relay/sender-suggestion.ts')).toMatch(/knowledgeReady/)
