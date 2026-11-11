@@ -107,7 +107,7 @@ export function V4PanelHeader({
         </h2>
         {hint && <div className="mt-0.5 text-[12px] text-stone">{hint}</div>}
       </div>
-      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+      {action && <div className="flex min-w-0 items-center gap-2">{action}</div>}
     </div>
   )
 }

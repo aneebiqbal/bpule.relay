@@ -150,14 +150,14 @@ export function FreshProspectsView({
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search"
                   aria-label="Search fresh prospects"
-                  className="h-9 w-40 rounded-lg border border-line bg-bone-raised pl-8 pr-3 text-[12px] text-ink"
+                  className="h-9 w-28 min-w-0 sm:w-40 rounded-lg border border-line bg-bone-raised pl-8 pr-3 text-[12px] text-ink"
                 />
               </span>
               <select
                 value={profileFilter}
                 onChange={(event) => setProfileFilter(event.target.value)}
                 aria-label="Filter by suggested profile"
-                className="h-9 rounded-lg border border-line bg-bone-raised px-2 text-[12px] text-ink"
+                className="h-9 max-w-[9.5rem] rounded-lg border border-line bg-bone-raised px-2 text-[12px] text-ink"
               >
                 <option value="">All profiles</option>
                 {profileOptions.map(([id, name]) => (
