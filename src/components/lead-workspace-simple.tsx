@@ -17,6 +17,7 @@ import Link from 'next/link'
 import type { LeadDetail } from '@/lib/store/types'
 import { computeRelationshipState } from '@/lib/relay/relationship-state'
 import { deriveNextLeadAction } from '@/lib/relay/lead-state-machine'
+import { deriveLeadOperatingState } from '@/lib/leads/lead-operating-state'
 import type { Message } from '@/lib/domain/types'
 import { getLeadDisplayScore, normalizeScoreDimensions, scoreExplanation } from '@/lib/scoring/display-score'
 import { calendarDaysBetween, followupDueInDays } from '@/lib/leads/followup'
@@ -288,6 +289,13 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
   const qualification = typeof canonicalObj?.qualification === 'string' ? canonicalObj.qualification : null
   // Same policy as the pipeline and dashboard.
   const leadScore = getLeadDisplayScore(lead)
+  // One authority for "what is this lead and what happens next" (§13/§14) —
+  // the header shows the three states separately so a lead can be Contacted,
+  // Waiting on client and Needs profile at the same time.
+  const operatingState = deriveLeadOperatingState({
+    lead,
+    attribution: { profileName: senderProfileName },
+  })
   const displayScore = leadScore.max === 10 ? leadScore.value : null
   const reasons = Array.isArray(scoreBreakdown?.reasons) ? scoreBreakdown.reasons.map(String) : []
   const watchOut = Array.isArray(scoreBreakdown?.watchOut) ? scoreBreakdown.watchOut.map(String) : []
@@ -352,6 +360,7 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
           </div>
           <div className="shrink-0 text-right">
             <StatusPill label={displayLabel} />
+            <p className="mt-1 text-[11px] text-graphite">{operatingState.summary}</p>
             {lead.url && <a href={lead.url} target="_blank" rel="noopener" className="mt-1 inline-block text-[10px] text-cobalt-ink hover:underline">LinkedIn ↗</a>}
             {(leadScore.qualification === 'STRONG' || leadScore.qualification === 'WORTH_PURSUING') && (
               <button
