@@ -227,19 +227,19 @@ export function FreshProspectsView({
                       {row.discoveredAt ? relative(row.discoveredAt) : '—'}
                     </dd>
                   </div>
-                  {row.emailSuppressed && (
-                    <div className="flex items-center gap-1.5 text-[12px] text-status-danger">
-                      <Mail className="size-3.5" aria-hidden />
-                      Suppressed — email blocked
-                    </div>
-                  )}
-                  {!row.emailSuppressed && row.emailStatus === 'VERIFIED' && (
-                    <div className="flex items-center gap-1.5 text-[12px] text-status-success">
-                      <CheckCircle2 className="size-3.5" aria-hidden />
-                      {row.emailStale ? 'Verified email — reverify before sending' : 'Sendable email available'}
-                    </div>
-                  )}
                 </dl>
+                {row.emailSuppressed && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[12px] text-status-danger">
+                    <Mail className="size-3.5" aria-hidden />
+                    Suppressed — email blocked
+                  </div>
+                )}
+                {!row.emailSuppressed && row.emailStatus === 'VERIFIED' && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[12px] text-status-success">
+                    <CheckCircle2 className="size-3.5" aria-hidden />
+                    {row.emailStale ? 'Verified email — reverify before sending' : 'Sendable email available'}
+                  </div>
+                )}
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button

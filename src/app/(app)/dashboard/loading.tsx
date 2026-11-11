@@ -3,7 +3,7 @@ import { V3Skeleton } from '@/components/v3/primitives'
 /** Shape-matched Rep / Admin Home skeleton — no full-page spinner. */
 export default function DashboardLoading() {
   return (
-    <div className="space-y-8 pb-10" aria-busy="true" aria-label="Loading home">
+    <div className="space-y-8 pb-10" role="status" aria-busy="true" aria-label="Loading home">
       <header className="space-y-2">
         <div className="h-7 w-56 max-w-full rounded bg-bone" />
         <div className="h-3.5 w-32 max-w-full rounded bg-bone" />
