@@ -53,6 +53,8 @@ export interface CanonicalBackup {
   source: BackupSource
 }
 
+export type ResponsibilitySeat = 'PRIMARY' | 'OPERATOR' | 'BACKUP'
+
 export type CoverageState = 'EXPLICIT' | 'DERIVED' | 'AMBIGUOUS' | 'UNASSIGNED'
 
 export interface CanonicalProfileAssignment {
@@ -67,6 +69,8 @@ export interface CanonicalProfileAssignment {
   /** Why the primary is who it is — surfaced to Admin. */
   primaryReason: string
   backups: CanonicalBackup[]
+  /** Active, executable contributors. They share the channel's one plan. */
+  operators: CanonicalBackup[]
   coverageState: CoverageState
   needsReview: boolean
   reviewReasons: string[]
@@ -147,7 +151,7 @@ interface Facts {
   }>
   identities: Array<{ id: string; profileId: string | null; channel: RevenueIdentityChannel }>
   assignments: Array<{ repId: string; identityId: string; createdAt: string | null }>
-  coverage: Array<{ profileId: string; repId: string; role: 'PRIMARY' | 'BACKUP'; priority: number }>
+  coverage: Array<{ profileId: string; repId: string; role: ResponsibilitySeat; priority: number }>
   legacy: Array<{ profileId: string; repId: string; createdAt: string | null }>
   reps: Map<string, string>
 }
@@ -189,7 +193,7 @@ async function loadFacts(client: DbClient, orgId: string): Promise<Facts> {
   const coverage = (coverageRes.data ?? []).map((row) => ({
     profileId: row.profile_id as string,
     repId: row.rep_id as string,
-    role: row.role as 'PRIMARY' | 'BACKUP',
+    role: row.role as ResponsibilitySeat,
     priority: (row.priority as number) ?? 1,
   }))
 
@@ -267,6 +271,9 @@ export async function loadCanonicalProfileAssignments(
     const coverageBackups = facts.coverage
       .filter((row) => row.profileId === profile.id && row.role === 'BACKUP')
       .sort((a, b) => a.priority - b.priority)
+    const coverageOperators = facts.coverage
+      .filter((row) => row.profileId === profile.id && row.role === 'OPERATOR')
+      .sort((a, b) => a.priority - b.priority)
 
     const legacyRows = facts.legacy
       .filter((row) => row.profileId === profile.id)
@@ -290,10 +297,18 @@ export async function loadCanonicalProfileAssignments(
       source: 'coverage',
     }))
 
+    const operators: CanonicalBackup[] = coverageOperators.map((row) => ({
+      repId: row.repId,
+      repName: facts.reps.get(row.repId) ?? 'Unknown',
+      priority: row.priority,
+      source: 'coverage',
+    }))
+
     const primaryRepId = primary.repId
+    const operatorRepIds = new Set(coverageOperators.map((row) => row.repId))
     const derivedBackups: CanonicalBackup[] = primaryRepId
       ? assignedReps
-          .filter((rep) => rep.repId !== primaryRepId)
+          .filter((rep) => rep.repId !== primaryRepId && !operatorRepIds.has(rep.repId))
           .map((rep, index) => ({
             repId: rep.repId,
             repName: rep.repName,
@@ -321,6 +336,7 @@ export async function loadCanonicalProfileAssignments(
       primarySource: primary.source,
       primaryReason: primary.reason,
       backups,
+      operators,
       coverageState: assignedReps.length === 0
         ? 'UNASSIGNED'
         : primary.source === 'ambiguous'
@@ -359,9 +375,18 @@ export function getBackupEligibleProfilesForRep(
   return set.profiles.filter((profile) => profile.backups.some((backup) => backup.repId === repId))
 }
 
+/** Profiles where this rep is an active operator — executable, never ownership. */
+export function getOperatorProfilesForRep(
+  set: CanonicalAssignmentSet,
+  repId: string,
+): CanonicalProfileAssignment[] {
+  return set.profiles.filter((profile) => profile.operators.some((operator) => operator.repId === repId))
+}
+
 /**
- * Profiles a rep may work today: their primary plus active temporary coverage.
- * Backup eligibility alone never grants a daily working profile.
+ * Profiles a rep may work today: their primary, their operator seats, plus
+ * active temporary coverage. Backup eligibility alone never grants a daily
+ * working profile.
  */
 export function getExecutableProfilesForRep(
   set: CanonicalAssignmentSet,
@@ -369,7 +394,10 @@ export function getExecutableProfilesForRep(
   activeCoverageProfileIds: ReadonlySet<string> = new Set(),
 ): CanonicalProfileAssignment[] {
   return set.profiles.filter(
-    (profile) => profile.primaryRepId === repId || activeCoverageProfileIds.has(profile.profileId),
+    (profile) =>
+      profile.primaryRepId === repId ||
+      profile.operators.some((operator) => operator.repId === repId) ||
+      activeCoverageProfileIds.has(profile.profileId),
   )
 }
 

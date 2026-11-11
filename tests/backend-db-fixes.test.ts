@@ -23,7 +23,7 @@ describe('profile coverage configuration writes', () => {
     // rejected by profile_coverage_priority_check.
     expect(source).not.toMatch(/role:\s*'PRIMARY'[^}]*priority:\s*0/)
     expect(source).toMatch(/priority:\s*1/)
-    expect(source).toMatch(/index \+ 2/)
+    expect(source).toMatch(/index \+ 1/)
   })
 })
 

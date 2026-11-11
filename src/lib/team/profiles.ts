@@ -114,9 +114,13 @@ function buildChannelDetails(
     const goal = goalsByIdentity.get(identity.id)
     return {
       identityId: identity.id,
+      profileId: identity.profile_id,
       channel: identity.channel,
       identityName: identity.identity_name,
       primaryRepName: canonical?.primaryRepName ?? null,
+      operatorRepIds: canonical?.operators.map((operator) => operator.repId) ?? [],
+      backupRepIds: canonical?.backups.map((backup) => backup.repId) ?? [],
+      operators: canonical?.operators.map((operator) => operator.repName) ?? [],
       backups: canonical?.backups.map((backup) => backup.repName) ?? [],
       completed: goal?.completed ?? 0,
       target: goal?.target ?? 0,
@@ -126,10 +130,15 @@ function buildChannelDetails(
 
 export interface TeamProfileChannelDetail {
   identityId: string
+  profileId: string | null
   channel: string
   identityName: string
   primaryRepName: string | null
+  operators: string[]
   backups: string[]
+  /** Rep ids behind the seats, for the Manage people dialog. */
+  operatorRepIds: string[]
+  backupRepIds: string[]
   completed: number
   target: number
 }
@@ -138,7 +147,12 @@ export interface TeamProfileDirectoryRow extends TeamProfileRow {
   assignmentCount: number
   primaryRepId: string | null
   primaryRepName: string | null
+  operators: string[]
   backups: string[]
+  /** Reps marked unavailable today — assigned, but not current operators. */
+  unavailableRepIds: string[]
+  /** Reps whose responsibility is not yet acknowledged. */
+  pendingAcknowledgementRepIds: string[]
   coverageState: CoverageState
   needsReview: boolean
   reviewReasons: string[]
@@ -162,17 +176,40 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   businessDate: string
   timezone: string
 }> {
+  const live = await loadTeamLive(orgId)
   const supabase = await createServerSupabase()
-  const [canonical, live, allProfilesRes] = await Promise.all([
+  const [canonical, allProfilesRes, availabilityRes, acknowledgementRes] = await Promise.all([
     loadCanonicalProfileAssignments(orgId, { client: supabase }),
-    loadTeamLive(orgId),
     supabase
       .from('profiles')
       .select('id, display_name, full_name, label, person_id')
       .eq('organization_id', orgId)
       .limit(2000),
+    supabase
+      .from('rep_availability')
+      .select('rep_id, state')
+      .eq('organization_id', orgId)
+      .eq('business_date', live.date)
+      .limit(2000),
+    supabase
+      .from('responsibility_acknowledgements')
+      .select('rep_id')
+      .eq('organization_id', orgId)
+      .is('acknowledged_at', null)
+      .in('subject', ['PRIMARY', 'OPERATOR'])
+      .limit(2000),
   ])
   const canonicalByProfile = new Map(canonical.profiles.map((profile) => [profile.profileId, profile]))
+
+  // Assigned but not currently working: on leave, offline or explicitly unavailable.
+  const unavailableRepIds = new Set(
+    ((availabilityRes.data ?? []) as Array<{ rep_id: string; state: string }>)
+      .filter((row) => row.state !== 'AVAILABLE' && row.state !== 'WORKING')
+      .map((row) => row.rep_id),
+  )
+  const pendingAcknowledgementRepIds = new Set(
+    ((acknowledgementRes.data ?? []) as Array<{ rep_id: string }>).map((row) => row.rep_id),
+  )
 
   // Person grouping: a duplicate/orphan profile renders under its canonical
   // person, so the directory is one row per human, never one per channel.
@@ -242,7 +279,10 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   const emptyOwnership = {
     primaryRepId: null,
     primaryRepName: null,
+    operators: [] as string[],
     backups: [] as string[],
+    unavailableRepIds: [] as string[],
+    pendingAcknowledgementRepIds: [] as string[],
     coverageState: 'UNASSIGNED' as CoverageState,
     needsReview: true,
     reviewReasons: ['No rep is assigned'],
@@ -272,7 +312,10 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
         assignmentCount: 0,
         primaryRepId: canonical?.primaryRepId ?? emptyOwnership.primaryRepId,
         primaryRepName: canonical?.primaryRepName ?? emptyOwnership.primaryRepName,
+        operators: canonical?.operators.map((operator) => operator.repName) ?? emptyOwnership.operators,
         backups: canonical?.backups.map((backup) => backup.repName) ?? emptyOwnership.backups,
+        unavailableRepIds: [...unavailableRepIds],
+        pendingAcknowledgementRepIds: [...pendingAcknowledgementRepIds],
         coverageState: canonical?.coverageState ?? emptyOwnership.coverageState,
         needsReview: canonical?.needsReview ?? true,
         reviewReasons: canonical?.reviewReasons ?? emptyOwnership.reviewReasons,
@@ -292,7 +335,10 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
       assignmentCount: row.assignedReps.length,
       primaryRepId: canonical?.primaryRepId ?? null,
       primaryRepName: canonical?.primaryRepName ?? null,
+      operators: canonical?.operators.map((operator) => operator.repName) ?? [],
       backups: canonical?.backups.map((backup) => backup.repName) ?? [],
+      unavailableRepIds: [...unavailableRepIds],
+      pendingAcknowledgementRepIds: [...pendingAcknowledgementRepIds],
       coverageState: canonical?.coverageState ?? (row.assignedReps.length === 0 ? 'UNASSIGNED' : 'AMBIGUOUS'),
       needsReview: canonical?.needsReview ?? false,
       reviewReasons: canonical?.reviewReasons ?? [],
@@ -324,7 +370,10 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
       assignmentCount: 0,
       primaryRepId: null,
       primaryRepName: null,
+      operators: [],
       backups: [],
+      unavailableRepIds: [...unavailableRepIds],
+      pendingAcknowledgementRepIds: [...pendingAcknowledgementRepIds],
       coverageState: 'UNASSIGNED',
       needsReview: true,
       reviewReasons: ['Profile has no channel identity'],

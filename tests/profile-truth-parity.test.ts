@@ -44,6 +44,7 @@ function canonicalProfile(over: Partial<CanonicalProfileAssignment> = {}): Canon
     primarySource: 'coverage',
     primaryReason: 'Explicit primary coverage',
     backups: [],
+    operators: [],
     coverageState: 'EXPLICIT',
     needsReview: false,
     reviewReasons: [],
@@ -146,7 +147,7 @@ describe('PROFILE_ASSIGNMENT_GLOBAL_PARITY', () => {
     expect(getBackupEligibleProfilesForRep(set, 'rep-1').map((profile) => profile.profileId)).toEqual(['p-2'])
   })
 
-  it('getExecutableProfilesForRep is primary plus active coverage only', () => {
+  it('getExecutableProfilesForRep is primary, operator and active coverage', () => {
     const set: CanonicalAssignmentSet = {
       businessDate: '2026-11-06',
       profiles: [

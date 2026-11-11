@@ -34,6 +34,7 @@ function profile(over: Partial<CanonicalProfileAssignment> = {}): CanonicalProfi
     primarySource: 'coverage',
     primaryReason: 'Explicit primary coverage',
     backups: [],
+    operators: [],
     coverageState: 'EXPLICIT',
     needsReview: false,
     reviewReasons: [],
@@ -96,9 +97,10 @@ describe('REP_PROFILE_RESPONSIBILITY_UNIQUE', () => {
 })
 
 describe('PROFILE_EXECUTION_GLOBAL_PARITY', () => {
-  it('Rep Home own is the canonical primary, not the raw assignment table', () => {
+  it('Rep Home own is the canonical coverage plan plus operator seats, not the raw assignment table', () => {
     const load = read('src/lib/coverage/load.ts')
-    expect(load).toMatch(/plan\.profiles\.filter\(\(profile\) => profile\.primaryRepId === repId\)/)
+    expect(load).toMatch(/operatorProfileIds/)
+    expect(load).toMatch(/plan\.profiles\.filter\(/)
   })
 
   it('the switcher and channel selectors read the one canonical execution authority', () => {
@@ -119,7 +121,7 @@ describe('PROFILE_EXECUTION_GLOBAL_PARITY', () => {
 
   it('the profile detail is the operating center: channels, assignment, readiness, today', () => {
     const detail = read('src/components/team/team-profile-detail.tsx')
-    expect(detail).toMatch(/CoverageConfigPanel/)
+    expect(detail).toMatch(/ManagePeopleDialog/)
     expect(detail).toMatch(/Access/)
     expect(detail).toMatch(/Today/)
     expect(detail).toMatch(/Channels/)

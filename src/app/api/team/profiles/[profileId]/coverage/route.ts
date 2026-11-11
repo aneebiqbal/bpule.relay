@@ -22,10 +22,15 @@ export async function POST(
   const { profileId } = await params
   const body = (await req.json().catch(() => ({}))) as {
     primaryRepId?: unknown
+    operators?: unknown
     backups?: unknown
   }
   const primaryRepId = typeof body.primaryRepId === 'string' ? body.primaryRepId : ''
+  const rawOperators: unknown[] = Array.isArray(body.operators) ? body.operators : []
   const rawBackups: unknown[] = Array.isArray(body.backups) ? body.backups : []
+  const operators: Array<{ repId?: unknown }> = rawOperators.map((row) =>
+    row !== null && typeof row === 'object' ? (row as { repId?: unknown }) : {},
+  )
   const backups: Array<{ repId?: unknown }> = rawBackups.map((row) =>
     row !== null && typeof row === 'object' ? (row as { repId?: unknown }) : {},
   )
@@ -33,8 +38,9 @@ export async function POST(
   if (!primaryRepId) {
     return NextResponse.json({ error: 'primaryRepId is required' }, { status: 400 })
   }
-  if (backups.some((row) => row?.repId === primaryRepId)) {
-    return NextResponse.json({ error: 'The primary rep cannot also be a backup' }, { status: 400 })
+  const everySeat = [...operators, ...backups]
+  if (everySeat.some((row) => row?.repId === primaryRepId)) {
+    return NextResponse.json({ error: 'The primary rep cannot also be an operator or backup' }, { status: 400 })
   }
 
   const supabase = await createServerSupabase()
@@ -46,7 +52,10 @@ export async function POST(
     .maybeSingle()
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
-  const repIds = [primaryRepId, ...backups.map((row) => row?.repId).filter((id): id is string => Boolean(id))]
+  const repIds = [
+    primaryRepId,
+    ...everySeat.map((row) => row?.repId).filter((id): id is string => Boolean(id)),
+  ]
   const { data: repRows } = await supabase
     .from('reps')
     .select('id')
@@ -58,24 +67,27 @@ export async function POST(
   }
   const unknown = [...new Set(repIds)].filter((id) => !known.has(id))
   if (unknown.length > 0) {
-    return NextResponse.json({ error: 'Backup rep not found in organization' }, { status: 400 })
+    return NextResponse.json({ error: 'Operator or backup rep not found in organization' }, { status: 400 })
   }
 
-  const seen = new Set<string>()
-  const ordered = backups
-    .filter((row) => typeof row?.repId === 'string')
-    .map((row, index) => ({ repId: row.repId as string, priority: index + 1 }))
-    .filter((row) => {
-      if (seen.has(row.repId)) return false
-      seen.add(row.repId)
-      return true
-    })
+  const dedupe = (rows: Array<{ repId?: unknown }>) => {
+    const seen = new Set<string>()
+    return rows
+      .filter((row) => typeof row?.repId === 'string')
+      .map((row, index) => ({ repId: row.repId as string, priority: index + 1 }))
+      .filter((row) => {
+        if (seen.has(row.repId)) return false
+        seen.add(row.repId)
+        return true
+      })
+  }
 
   const result = await configureCoverage({
     organizationId: ctx.orgId,
     profileId,
     primaryRepId,
-    backups: ordered,
+    operators: dedupe(operators),
+    backups: dedupe(backups),
     actorRepId: ctx.repId,
   })
   if (!result.ok) return NextResponse.json({ error: result.error ?? 'Configure failed' }, { status: 500 })

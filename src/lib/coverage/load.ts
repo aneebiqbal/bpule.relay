@@ -451,6 +451,7 @@ function groupProfilesByPerson(profiles: CoverageProfileResult[]): CoverageProfi
     }
     existing.channels = [...new Set([...existing.channels, ...profile.channels])]
     existing.identityIds = [...new Set([...existing.identityIds, ...profile.identityIds])]
+    existing.operatorRepIds = [...new Set([...existing.operatorRepIds, ...profile.operatorRepIds])]
     const profileIsCanonical = profile.personId === null || profile.personId === profile.profileId
     const existingIsCanonical = existing.personId === null || existing.personId === existing.profileId
     if (profileIsCanonical && !existingIsCanonical) {
@@ -481,6 +482,8 @@ export interface RepCoverageView {
   availability: AvailabilityState
   own: CoverageProfileResult[]
   covering: CoverageProfileResult[]
+  /** Profiles where this rep is an active OPERATOR — Rep Home shows them as such. */
+  operatorProfileIds: string[]
   /** Ownership retained while a REPLACE coverage excludes the rep from execution. */
   replaced: CoverageProfileResult[]
   requiresApproval: number
@@ -499,9 +502,9 @@ export interface RepCoverageView {
 async function loadRecentReturningCoverage(
   orgId: string,
   repId: string,
-  options: { date?: string },
+  options: { date?: string; client?: DbClient },
 ): Promise<RepReturningCoverage[]> {
-  const supabase = await createServerSupabase()
+  const supabase = options.client ?? (await createServerSupabase())
   const policy = await loadOperatingPolicy(orgId)
   const now = currentInstant()
   const today = orgDate(now, policy.timezone)
@@ -552,7 +555,7 @@ async function loadRecentReturningCoverage(
 export async function loadRepCoverage(
   orgId: string,
   repId: string,
-  options: { date?: string } = {},
+  options: { date?: string; client?: DbClient } = {},
 ): Promise<RepCoverageView> {
   const [facts, returningRows] = await Promise.all([
     loadCoverageFacts(orgId, options),
@@ -577,10 +580,19 @@ export async function loadRepCoverage(
   const availability = facts.availability.find((row) => row.repId === repId)?.state
     ?? fallbackAvailability(facts.isWorkingDay)
 
-  // `own` is canonical primary ownership from the coverage plan — never the raw
-  // assignment table, which may still carry backup eligibility. Profiles are
-  // grouped by person, so a two-channel person renders once on Rep Home.
-  const ownedProfiles = plan.profiles.filter((profile) => profile.primaryRepId === repId)
+  // `own` is canonical ownership from the coverage plan — never the raw
+  // assignment table, which may still carry backup eligibility. An active
+  // OPERATOR seat is also a working profile, so it belongs here too; the UI
+  // labels it separately from ownership. Profiles are grouped by person, so a
+  // two-channel person renders once on Rep Home.
+  const operatorProfileIds = new Set(
+    facts.coverage
+      .filter((row) => row.repId === repId && row.role === 'OPERATOR')
+      .map((row) => row.profileId),
+  )
+  const ownedProfiles = plan.profiles.filter(
+    (profile) => profile.primaryRepId === repId || operatorProfileIds.has(profile.profileId),
+  )
   // REPLACE removes the primary from execution; ownership is retained and
   // surfaced separately so it never looks like a transfer.
   const own = groupProfilesByPerson(ownedProfiles.filter((profile) => profile.activeCoverageMode !== 'REPLACE'))
@@ -609,7 +621,7 @@ export async function loadRepCoverage(
 
   const now = currentInstant().toISOString()
   const modeByAssignment = new Map(facts.activeCoverage.map((row) => [row.id, row.mode]))
-  const supabase = await createServerSupabase()
+  const supabase = options.client ?? (await createServerSupabase())
   const acknowledgements = await listAcknowledgementsForRep(supabase, orgId, repId, now, {
     modeByAssignment,
   })
@@ -630,6 +642,7 @@ export async function loadRepCoverage(
     availability,
     own: own.sort((a, b) => a.name.localeCompare(b.name)),
     covering: covering.sort((a, b) => a.name.localeCompare(b.name)),
+    operatorProfileIds: [...operatorProfileIds],
     replaced: replaced.sort((a, b) => a.name.localeCompare(b.name)),
     requiresApproval: plan.requiresApproval.length,
     readiness,

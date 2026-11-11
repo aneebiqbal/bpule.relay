@@ -60,6 +60,7 @@ function assignmentSet(): CanonicalAssignmentSet {
         primarySource: 'coverage',
         primaryReason: 'Explicit primary coverage',
         backups: [],
+        operators: [],
         coverageState: 'EXPLICIT',
         needsReview: false,
         reviewReasons: [],
@@ -75,6 +76,7 @@ function assignmentSet(): CanonicalAssignmentSet {
         primarySource: 'coverage',
         primaryReason: 'Explicit primary coverage',
         backups: [{ repId: 'rep-dawood', repName: 'Dawood', priority: 2, source: 'coverage' }],
+        operators: [],
         coverageState: 'EXPLICIT',
         needsReview: false,
         reviewReasons: [],
@@ -121,9 +123,9 @@ describe('ACTIVE_COVER_SHOWN_AS_CURRENT_OPERATOR', () => {
     expect(source).toMatch(/covering_rep_id/)
   })
 
-  it('the rep operating plan separates primary from coverage responsibilities', () => {
+  it('the rep operating plan separates primary, operator and coverage responsibilities', () => {
     const source = read('src/lib/operations/rep-operating-plan.ts')
-    expect(source).toMatch(/role: 'primary' \| 'coverage'/)
+    expect(source).toMatch(/role: 'primary' \| 'operator' \| 'coverage'/)
     expect(source).toMatch(/access === 'coverage'/)
   })
 

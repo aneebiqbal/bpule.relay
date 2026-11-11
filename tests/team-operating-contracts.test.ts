@@ -153,7 +153,7 @@ describe('NO_DUPLICATE_PROFILE_MANAGEMENT', () => {
 
   it('the profile operating center owns channels, targets, coverage and tasks', () => {
     const source = read('src/components/team/team-profile-detail.tsx')
-    for (const action of ['CoverageConfigPanel', 'ChannelTargetsEditor', 'AssignTaskButton', 'CoverageActions']) {
+    for (const action of ['ManagePeopleDialog', 'ChannelTargetsEditor', 'AssignTaskButton', 'CoverageActions']) {
       expect(source).toMatch(action)
     }
   })

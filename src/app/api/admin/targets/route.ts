@@ -79,6 +79,11 @@ export async function GET() {
         .filter((row) => row.active && row.role === 'PRIMARY')
         .map((row) => `${row.profile_id}:${row.rep_id}`),
     )
+    const operatorByProfileRep = new Set(
+      ((coverage.data ?? []) as Array<{ profile_id: string; rep_id: string; role: string; active: boolean }>)
+        .filter((row) => row.active && row.role === 'OPERATOR')
+        .map((row) => `${row.profile_id}:${row.rep_id}`),
+    )
     const coveredByProfileRep = new Set(
       ((coverageAssignments.data ?? []) as Array<{ profile_id: string; covering_rep_id: string; effective_from: string; effective_until: string | null }>)
         .filter((row) => isCoverageActiveOn({ effectiveFrom: row.effective_from, effectiveUntil: row.effective_until }, today))
@@ -90,12 +95,33 @@ export async function GET() {
       const profileId = profileIdByIdentity.get(identityId)
       if (!profileId) return false
       const key = `${profileId}:${repId}`
-      return primaryByProfileRep.has(key) || coveredByProfileRep.has(key)
+      return primaryByProfileRep.has(key) || operatorByProfileRep.has(key) || coveredByProfileRep.has(key)
     }
     const executableTargets = targets.filter((target) => isExecutable(target.revenueIdentityId, target.repId))
     const executableAssignments = assignments.filter((assignment) =>
       isExecutable(assignment.revenueIdentityId, assignment.repId),
     )
+
+    // Today's per-operator contribution, so the plan reads as one shared
+    // requirement with named contributors — never as one target per rep.
+    const { data: contributionRows, error: contributionError } = await client
+      .from('daily_accountability')
+      .select('revenue_identity_id, rep_id, completed_count')
+      .eq('organization_id', auth.authCtx.orgId)
+      .eq('target_date', today)
+      .limit(2000)
+    if (contributionError) throw contributionError
+    const repNameById = new Map(
+      (reps ?? []).map((rep) => [rep.id as string, rep.name as string]),
+    )
+    const contributorsByIdentity: Record<string, Array<{ repId: string; repName: string; completedCount: number }>> = {}
+    for (const row of (contributionRows ?? []) as Array<{ revenue_identity_id: string; rep_id: string; completed_count: number }>) {
+      const list = contributorsByIdentity[row.revenue_identity_id] ?? []
+      const existing = list.find((entry) => entry.repId === row.rep_id)
+      if (existing) existing.completedCount += row.completed_count
+      else list.push({ repId: row.rep_id, repName: repNameById.get(row.rep_id) ?? 'Unknown', completedCount: row.completed_count })
+      contributorsByIdentity[row.revenue_identity_id] = list
+    }
 
     return NextResponse.json({
       targets: executableTargets,
@@ -103,6 +129,7 @@ export async function GET() {
       assignments: executableAssignments,
       reps,
       personNameById: Object.fromEntries(personNameById),
+      contributorsByIdentity,
       defaults: {
         email: defaultTargetsForChannel('email'),
         linkedin: defaultTargetsForChannel('linkedin'),

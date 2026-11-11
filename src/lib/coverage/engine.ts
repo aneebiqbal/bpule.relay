@@ -76,7 +76,7 @@ export interface CoverageAssignmentInput {
 export interface CoverageConfigInput {
   profileId: string
   repId: string
-  role: 'PRIMARY' | 'BACKUP'
+  role: 'PRIMARY' | 'BACKUP' | 'OPERATOR'
   priority: number
 }
 
@@ -166,6 +166,8 @@ export interface CoverageProfileResult {
   identityIds: string[]
   primaryRepId: string | null
   primaryRepName: string | null
+  /** Active operator seats on this profile — executable contributors, never owners. */
+  operatorRepIds: string[]
   primaryAvailability: AvailabilityState
   primaryIsAvailable: boolean
   backups: BackupCandidate[]
@@ -363,6 +365,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
       .sort((a, b) => a.priority - b.priority)
     const primary = config.find((row) => row.role === 'PRIMARY') ?? null
     const backupConfig = config.filter((row) => row.role === 'BACKUP')
+    const operatorRepIds = config.filter((row) => row.role === 'OPERATOR').map((row) => row.repId)
 
     const primaryAvailability: AvailabilityState = primary
       ? availabilityByRep.get(primary.repId) ?? fallbackAvailability(input.isWorkingDay)
@@ -552,6 +555,7 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
       identityIds: profile.identityIds,
       primaryRepId: primary?.repId ?? null,
       primaryRepName: primary ? primaryWorkload?.name ?? primary.repId : null,
+      operatorRepIds,
       primaryAvailability,
       primaryIsAvailable,
       backups,

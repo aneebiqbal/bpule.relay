@@ -15,8 +15,8 @@ import { cn } from 'cn'
 import { Dialog, DialogActions } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { V4Chip, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
-import { CoverageConfigPanel } from '@/components/coverage/coverage-config-panel'
 import { CoverageActions, type CoveragePending } from '@/components/coverage/coverage-actions'
+import { ManagePeopleDialog } from '@/components/coverage/manage-people-dialog'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { RequestUpdateButton } from '@/components/operations/request-update-button'
 import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
@@ -316,6 +316,7 @@ function ChannelBlock({
   active: boolean
 }) {
   const continueHref = `/workspace/${channel.identityId}`
+  const [manageOpen, setManageOpen] = useState(false)
   return (
     <V4Panel>
       <V4PanelHeader
@@ -347,6 +348,14 @@ function ChannelBlock({
         <div className="contents">
           <dt className="text-stone">Primary</dt>
           <dd className="text-ink">{channel.primaryRepName ?? <span className="text-status-warning">Unassigned</span>}</dd>
+        </div>
+        <div className="contents">
+          <dt className="text-stone">Active operators</dt>
+          <dd className="text-ink">
+            {channel.operators.length > 0
+              ? channel.operators.map((operator) => operator.repName).join(', ')
+              : <span className="text-stone">None</span>}
+          </dd>
         </div>
         <div className="contents">
           <dt className="text-stone">Backups</dt>
@@ -425,18 +434,37 @@ function ChannelBlock({
 
       {canManage && (
         <div className="mt-4 border-t border-line/70 pt-4">
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
-            Assignment
-          </p>
-          <CoverageConfigPanel
-            profileId={channel.profileId}
-            primaryRepId={channel.primaryRepId}
-            backups={channel.backups}
-            reps={reps}
-            assignedRepIds={channel.backups.map((backup) => backup.repId)}
-            canManage={canManage}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
+                People
+              </p>
+              <p className="mt-0.5 text-[12px] text-stone">
+                One primary owner, any number of active operators, and the backup chain.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setManageOpen(true)}
+              className="rounded-lg border border-line px-3 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
+            >
+              Manage people
+            </button>
+          </div>
         </div>
+      )}
+
+      {canManage && manageOpen && (
+        <ManagePeopleDialog
+          profileId={channel.profileId}
+          identityName={channel.identityName}
+          channel={channelLabel(channel.channel)}
+          primaryRepId={channel.primaryRepId}
+          operators={channel.operators}
+          backups={channel.backups}
+          reps={reps}
+          onClose={() => setManageOpen(false)}
+        />
       )}
 
       {canManage && <CoverageActions profileId={channel.profileId} pending={pending} active={active} />}

@@ -14,8 +14,9 @@ import { useSearchParams } from 'next/navigation'
 import { cn } from 'cn'
 import { V4Chip, V4Empty, V4Panel, V4StatStrip } from '@/components/v4/primitives'
 import { ChannelBadge } from '@/components/ui/channel-badge'
+import { ManagePeopleDialog } from '@/components/coverage/manage-people-dialog'
 import { channelLabel } from '@/lib/profiles/channel'
-import type { TeamProfileDirectoryRow } from '@/lib/team/profiles'
+import type { TeamProfileDirectoryRow, TeamProfileChannelDetail } from '@/lib/team/profiles'
 import { AddProfileWizard } from './add-profile-wizard'
 
 type View = 'all' | 'assigned' | 'unassigned' | 'attention'
@@ -237,7 +238,7 @@ function TeamProfilesTableInner({
             </thead>
             <tbody>
               {filtered.map((profile) => (
-                <PersonRow key={profile.profileId} profile={profile} />
+                <PersonRow key={profile.profileId} profile={profile} reps={reps} />
               ))}
             </tbody>
           </table>
@@ -245,36 +246,7 @@ function TeamProfilesTableInner({
 
         <div className="space-y-2 p-3 md:hidden">
           {filtered.map((profile) => (
-            <div key={profile.profileId} className="rounded-xl bg-bone-raised p-3 ring-1 ring-line">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium text-ink">{profile.profileName}</p>
-                  <p className="flex flex-wrap gap-1 text-[11px] text-stone">
-                    {profile.channels.length > 0
-                      ? profile.channels.map((channel, index) => <ChannelBadge key={`${profile.profileId}-${index}`} channel={channel} />)
-                      : '—'}
-                  </p>
-                </div>
-                <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>
-              </div>
-              {profile.channelDetails.length > 0 && (
-                <ul className="mt-2 space-y-1.5 border-t border-line/70 pt-2">
-                  {profile.channelDetails.map((channel) => (
-                    <li key={channel.identityId} className="flex items-center justify-between gap-2 text-[12px]">
-                      <span className="min-w-0 truncate text-graphite">
-                        <ChannelBadge channel={channel.channel} />
-                        {channel.primaryRepName ? ` · ${channel.primaryRepName}` : ' · No primary'}
-                        {channel.backups.length > 0 ? ` · Backups: ${channel.backups.join(', ')}` : ''}
-                      </span>
-                      <span className="shrink-0 tabular-nums text-ink">{channel.completed} / {channel.target}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="mt-2.5">
-                <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
-              </div>
-            </div>
+            <MobilePersonCard key={profile.profileId} profile={profile} reps={reps} />
           ))}
         </div>
 
@@ -302,7 +274,15 @@ function TeamProfilesTableInner({
 }
 
 /** One person: header row plus their channels as children. */
-function PersonRow({ profile }: { profile: TeamProfileDirectoryRow }) {
+function PersonRow({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: RepOption[] }) {
+  const [manageChannel, setManageChannel] = useState<TeamProfileChannelDetail | null>(null)
+  const repNameById = new Map(reps.map((rep) => [rep.id, rep.name]))
+  const unavailableNames = reps
+    .filter((rep) => profile.unavailableRepIds.includes(rep.id))
+    .map((rep) => rep.name)
+  const pendingAckNames = reps
+    .filter((rep) => profile.pendingAcknowledgementRepIds.includes(rep.id))
+    .map((rep) => rep.name)
   return (
     <>
       <tr className="border-b border-line/60 align-top last:border-0">
@@ -346,16 +326,139 @@ function PersonRow({ profile }: { profile: TeamProfileDirectoryRow }) {
                   <span className="min-w-0 text-graphite">
                     <ChannelBadge channel={channel.channel} />
                     {channel.primaryRepName ? ` · Primary ${channel.primaryRepName}` : ' · No primary'}
+                    {channel.operators.length > 0 ? ` · Operators ${channel.operators.join(', ')}` : ''}
                     {channel.backups.length > 0 ? ` · Backups ${channel.backups.join(', ')}` : ''}
                   </span>
-                  <span className="shrink-0 tabular-nums text-ink">{channel.completed} / {channel.target}</span>
+                  {unavailableNames.length > 0 && (
+                    <span className="text-status-warning"> · Unavailable {unavailableNames.join(', ')}</span>
+                  )}
+                  {pendingAckNames.length > 0 && (
+                    <span className="text-status-info"> · {pendingAckNames.join(', ')} not acknowledged</span>
+                  )}
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="tabular-nums text-ink">{channel.completed} / {channel.target}</span>
+                    <button
+                      type="button"
+                      onClick={() => setManageChannel(channel)}
+                      className="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink"
+                    >
+                      Manage people
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>
           </td>
         </tr>
       )}
+      {manageChannel && (
+        <tr>
+          <td colSpan={5} className="px-4 py-2.5 bg-bone/60">
+            <ManagePeopleDialog
+              profileId={manageChannel.profileId ?? profile.profileId}
+              identityName={manageChannel.identityName}
+              channel={channelLabel(manageChannel.channel)}
+              primaryRepId={profile.primaryRepId}
+              operators={manageChannel.operatorRepIds.map((repId) => ({
+                repId,
+                repName: repNameById.get(repId) ?? 'Unknown',
+              }))}
+              backups={manageChannel.backupRepIds.map((repId) => ({
+                repId,
+                repName: repNameById.get(repId) ?? 'Unknown',
+              }))}
+              reps={reps}
+              onClose={() => setManageChannel(null)}
+            />
+          </td>
+        </tr>
+      )}
     </>
+  )
+}
+
+/** Mobile card for one person, with the same per-channel management action. */
+function MobilePersonCard({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: RepOption[] }) {
+  const [manageChannel, setManageChannel] = useState<TeamProfileChannelDetail | null>(null)
+  const repNameById = new Map(reps.map((rep) => [rep.id, rep.name]))
+  const unavailableNames = reps
+    .filter((rep) => profile.unavailableRepIds.includes(rep.id))
+    .map((rep) => rep.name)
+  const pendingAckNames = reps
+    .filter((rep) => profile.pendingAcknowledgementRepIds.includes(rep.id))
+    .map((rep) => rep.name)
+  return (
+    <div className="rounded-xl bg-bone-raised p-3 ring-1 ring-line">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-medium text-ink">{profile.profileName}</p>
+          <p className="flex flex-wrap gap-1 text-[11px] text-stone">
+            {profile.channels.length > 0
+              ? profile.channels.map((channel, index) => <ChannelBadge key={`${profile.profileId}-${index}`} channel={channel} />)
+              : '—'}
+          </p>
+        </div>
+        <V4Chip tone={STATUS_TONE[profile.status ?? ''] ?? 'neutral'}>{statusLabel(profile.status)}</V4Chip>
+      </div>
+      {profile.channelDetails.length > 0 && (
+        <ul className="mt-2 space-y-1.5 border-t border-line/70 pt-2">
+          {profile.channelDetails.map((channel) => (
+            <li key={channel.identityId} className="text-[12px]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-graphite">
+                  <ChannelBadge channel={channel.channel} />
+                  {channel.primaryRepName ? ` · ${channel.primaryRepName}` : ' · No primary'}
+                </span>
+                <span className="shrink-0 tabular-nums text-ink">{channel.completed} / {channel.target}</span>
+              </div>
+              {(channel.operators.length > 0 || channel.backups.length > 0) && (
+                <p className="mt-0.5 text-[11px] text-stone">
+                  {channel.operators.length > 0 ? `Operators: ${channel.operators.join(', ')}` : ''}
+                  {channel.operators.length > 0 && channel.backups.length > 0 ? ' · ' : ''}
+                  {channel.backups.length > 0 ? `Backups: ${channel.backups.join(', ')}` : ''}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => setManageChannel(channel)}
+                className="mt-1 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink"
+              >
+                Manage people
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-2.5">
+        <ProgressCell completed={profile.completedCount} target={profile.targetCount} />
+      </div>
+      {unavailableNames.length > 0 && (
+        <p className="mt-1 text-[11px] text-status-warning">Unavailable: {unavailableNames.join(', ')}</p>
+      )}
+      {pendingAckNames.length > 0 && (
+        <p className="mt-1 text-[11px] text-status-info">
+          Not acknowledged: {pendingAckNames.join(', ')}
+        </p>
+      )}
+      {manageChannel && (
+        <ManagePeopleDialog
+          profileId={manageChannel.profileId ?? profile.profileId}
+          identityName={manageChannel.identityName}
+          channel={channelLabel(manageChannel.channel)}
+          primaryRepId={profile.primaryRepId}
+          operators={manageChannel.operatorRepIds.map((repId) => ({
+            repId,
+            repName: repNameById.get(repId) ?? 'Unknown',
+          }))}
+          backups={manageChannel.backupRepIds.map((repId) => ({
+            repId,
+            repName: repNameById.get(repId) ?? 'Unknown',
+          }))}
+          reps={reps}
+          onClose={() => setManageChannel(null)}
+        />
+      )}
+    </div>
   )
 }
 

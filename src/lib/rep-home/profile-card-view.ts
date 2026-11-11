@@ -10,7 +10,7 @@ import type { ProfileCompletionStatus, ProfileToday } from '@/lib/rep-home/profi
  * (canonical Inbox truth + assigned tasks).
  */
 
-export type ProfileCardKind = 'own' | 'covering'
+export type ProfileCardKind = 'own' | 'operator' | 'covering'
 
 export interface ProfileCardModel {
   profile: CoverageProfileResult
@@ -56,6 +56,7 @@ export function buildProfileCards(
   own: CoverageProfileResult[],
   covering: CoverageProfileResult[],
   progressById: Map<string, ProfileToday>,
+  operatorProfileIds: ReadonlySet<string> = new Set(),
 ): ProfileCardModel[] {
   const ownIds = new Set(own.map((profile) => profile.profileId))
   const seen = new Set<string>()
@@ -65,7 +66,11 @@ export function buildProfileCards(
     seen.add(profile.profileId)
     cards.push({
       profile,
-      kind: ownIds.has(profile.profileId) ? 'own' : 'covering',
+      kind: operatorProfileIds.has(profile.profileId)
+        ? 'operator'
+        : ownIds.has(profile.profileId)
+          ? 'own'
+          : 'covering',
       progress: progressById.get(profile.profileId) ?? null,
     })
   }
@@ -93,7 +98,8 @@ export function sortProfileCards(cards: ProfileCardModel[]): ProfileCardModel[] 
   return [...cards].sort((a, b) => {
     const bySeverity = severity(a) - severity(b)
     if (bySeverity !== 0) return bySeverity
-    const byKind = (a.kind === 'own' ? 0 : 1) - (b.kind === 'own' ? 0 : 1)
+    const kindRank = (kind: ProfileCardKind): number => (kind === 'own' ? 0 : kind === 'operator' ? 1 : 2)
+    const byKind = kindRank(a.kind) - kindRank(b.kind)
     if (byKind !== 0) return byKind
     return a.profile.name.localeCompare(b.profile.name)
   })
@@ -104,6 +110,7 @@ export interface ActivityBreakdownItem {
   label: string
   targetCount: number
   completedCount: number
+  profileCompletedCount: number
   remaining: number
   complete: boolean
 }
@@ -126,6 +133,7 @@ export function buildActivityBreakdown(
       label: target.label,
       targetCount: target.targetCount,
       completedCount: target.completedCount,
+      profileCompletedCount: target.profileCompletedCount ?? target.completedCount,
       remaining: target.remaining,
       complete: target.remaining <= 0,
     })),
@@ -168,6 +176,9 @@ export function buildAttentionLine(work: {
 
 /** Ownership line — never internal assignment terminology. */
 export function ownershipLine(card: ProfileCardModel, coveringUntil: string | null): string {
+  if (card.kind === 'operator') {
+    return `Active operator · primary ${card.profile.primaryRepName ?? 'unassigned'}`
+  }
   if (card.kind === 'covering') {
     return `Covering for ${card.profile.primaryRepName ?? 'primary'}${coveringUntil ? ` · until ${coveringUntil}` : ''}`
   }
