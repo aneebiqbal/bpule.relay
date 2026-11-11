@@ -108,6 +108,8 @@ function buildChannelDetails(
   identitiesByPerson: Map<string, DirectoryIdentity[]>,
   canonicalByProfile: Map<string, CanonicalProfileAssignment>,
   goalsByIdentity: Map<string, { completed: number; target: number }>,
+  contributorsByIdentity: Map<string, Array<{ repId: string; completedCount: number }>>,
+  repNameById: Map<string, string>,
 ): TeamProfileChannelDetail[] {
   return (identitiesByPerson.get(personKey) ?? []).map((identity) => {
     const canonical = identity.profile_id ? canonicalByProfile.get(identity.profile_id) : undefined
@@ -122,6 +124,10 @@ function buildChannelDetails(
       backupRepIds: canonical?.backups.map((backup) => backup.repId) ?? [],
       operators: canonical?.operators.map((operator) => operator.repName) ?? [],
       backups: canonical?.backups.map((backup) => backup.repName) ?? [],
+      // Who contributed what today — the profile's completion is their sum.
+      contributors: (contributorsByIdentity.get(identity.id) ?? [])
+        .map((row) => ({ repId: row.repId, repName: repNameById.get(row.repId) ?? 'Unknown', completedCount: row.completedCount }))
+        .sort((a, b) => b.completedCount - a.completedCount),
       completed: goal?.completed ?? 0,
       target: goal?.target ?? 0,
     }
@@ -139,6 +145,8 @@ export interface TeamProfileChannelDetail {
   /** Rep ids behind the seats, for the Manage people dialog. */
   operatorRepIds: string[]
   backupRepIds: string[]
+  /** Today's per-operator contribution to this channel's one plan. */
+  contributors: Array<{ repId: string; repName: string; completedCount: number }>
   completed: number
   target: number
 }
@@ -247,18 +255,22 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   // the plan to the primary, so the completion is re-summed from accountability.
   const { data: accountabilityRows, error: accountabilityError } = await supabase
     .from('daily_accountability')
-    .select('revenue_identity_id, completed_count')
+    .select('revenue_identity_id, rep_id, completed_count')
     .eq('organization_id', orgId)
     .eq('target_date', live.date)
     .limit(2000)
   if (accountabilityError) throw accountabilityError
-  const completedByIdentity = new Map<string, number>()
-  for (const row of (accountabilityRows ?? []) as Array<{ revenue_identity_id: string; completed_count: number }>) {
-    completedByIdentity.set(
-      row.revenue_identity_id,
-      (completedByIdentity.get(row.revenue_identity_id) ?? 0) + row.completed_count,
-    )
+  const contributorsByIdentity = new Map<string, Map<string, number>>()
+  for (const row of (accountabilityRows ?? []) as Array<{ revenue_identity_id: string; rep_id: string; completed_count: number }>) {
+    const byRep = contributorsByIdentity.get(row.revenue_identity_id) ?? new Map<string, number>()
+    byRep.set(row.rep_id, (byRep.get(row.rep_id) ?? 0) + row.completed_count)
+    contributorsByIdentity.set(row.revenue_identity_id, byRep)
   }
+  const completedByIdentity = new Map<string, number>()
+  for (const [identityId, byRep] of contributorsByIdentity) {
+    completedByIdentity.set(identityId, [...byRep.values()].reduce((sum, count) => sum + count, 0))
+  }
+  const repNameById = new Map(live.people.map((person) => [person.repId, person.repName]))
 
   const completedByPersonKey = new Map<string, number>()
   for (const identity of identities) {
@@ -317,8 +329,12 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   for (const [identityId, entry] of goalsByIdentity) {
     entry.completed = completedByIdentity.get(identityId) ?? 0
   }
+  const contributorsListByIdentity = new Map<string, Array<{ repId: string; completedCount: number }>>()
+  for (const [identityId, byRep] of contributorsByIdentity) {
+    contributorsListByIdentity.set(identityId, [...byRep.entries()].map(([repId, completedCount]) => ({ repId, completedCount })))
+  }
   const channelDetailsFor = (personKey: string) =>
-    buildChannelDetails(personKey, identitiesByPerson, canonicalByProfile, goalsByIdentity)
+    buildChannelDetails(personKey, identitiesByPerson, canonicalByProfile, goalsByIdentity, contributorsListByIdentity, repNameById)
 
   const emptyOwnership = {
     primaryRepId: null,

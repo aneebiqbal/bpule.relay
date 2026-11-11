@@ -328,6 +328,9 @@ function PersonRow({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: 
                     {channel.primaryRepName ? ` · Primary ${channel.primaryRepName}` : ' · No primary'}
                     {channel.operators.length > 0 ? ` · Operators ${channel.operators.join(', ')}` : ''}
                     {channel.backups.length > 0 ? ` · Backups ${channel.backups.join(', ')}` : ''}
+                    {channel.contributors.length > 0
+                      ? ` · Today ${channel.contributors.map((row) => `${row.repName} ${row.completedCount}`).join(', ')}`
+                      : ''}
                   </span>
                   {unavailableNames.length > 0 && (
                     <span className="text-status-warning"> · Unavailable {unavailableNames.join(', ')}</span>
@@ -411,11 +414,14 @@ function MobilePersonCard({ profile, reps }: { profile: TeamProfileDirectoryRow;
                 </span>
                 <span className="shrink-0 tabular-nums text-ink">{channel.completed} / {channel.target}</span>
               </div>
-              {(channel.operators.length > 0 || channel.backups.length > 0) && (
+              {(channel.operators.length > 0 || channel.backups.length > 0 || channel.contributors.length > 0) && (
                 <p className="mt-0.5 text-[11px] text-stone">
                   {channel.operators.length > 0 ? `Operators: ${channel.operators.join(', ')}` : ''}
                   {channel.operators.length > 0 && channel.backups.length > 0 ? ' · ' : ''}
                   {channel.backups.length > 0 ? `Backups: ${channel.backups.join(', ')}` : ''}
+                  {channel.contributors.length > 0
+                    ? ` · Today ${channel.contributors.map((row) => `${row.repName} ${row.completedCount}`).join(', ')}`
+                    : ''}
                 </p>
               )}
               <button
