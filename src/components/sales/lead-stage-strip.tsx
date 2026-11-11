@@ -27,7 +27,7 @@ export function LeadStageStrip({ lead }: { lead: LeadRow }) {
   const activeIndex = LIFECYCLE_ORDER.indexOf(current)
 
   return (
-    <nav aria-label="Lead lifecycle" className="overflow-x-auto">
+    <nav aria-label="Lead lifecycle" className="overflow-x-auto" tabIndex={0}>
       <ol className="flex min-w-max items-center gap-1">
         {LIFECYCLE_ORDER.map((stage, index) => {
           const isCurrent = stage === current
