@@ -51,6 +51,20 @@ enriches by URL when the lead is qualified and Prospeo is configured. Only a
 VERIFIED (or explicitly risky-but-real) address is persisted, and a provider
 outage never fails the save.
 
+## Telemetry vocabulary (V6.3.1)
+
+`provider_telemetry.operation` uses explicit values: `SEARCH`, `ENRICH`,
+`REVEAL` (Prospeo), `FIND_EMAIL`, `VERIFY_EMAIL` (Snov fallback), and `AUTH`
+(OAuth token acquisition, never a business credit). Historical `FIND`/`VERIFY`
+rows remain valid. Snov's finder response (`data: [{ people, result: [{
+email, smtp_status }] }]`) is parsed directly.
+
+## Email reply authority (V6.3.1)
+
+Inbound email uses the canonical REPLY_RECEIVED with channel='email' on both
+the webhook and poller paths. `EMAIL_REPLY_RECEIVED` was never emitted and is
+removed from the action type constraint — one authority, no competing semantic.
+
 ## Stale addresses (§26)
 
 A verified address older than 75 days is reverified with Snov's free verifier
