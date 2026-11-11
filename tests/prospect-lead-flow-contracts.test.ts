@@ -506,7 +506,7 @@ describe('FORGED_IDENTITY_DENIED', () => {
 describe('BACKUP_IDENTITY_NOT_SELECTABLE', () => {
   it('the executable scope excludes backup-only eligibility', () => {
     const source = read('src', 'lib', 'coverage', 'access.ts')
-    expect(source).toMatch(/if \(!isCovered && !isPrimary\) continue/)
-    expect(source).toMatch(/role', 'PRIMARY'/)
+    expect(source).toMatch(/if \(!isCovered && !isPrimary && !isOperator\) continue/)
+    expect(source).toMatch(/'PRIMARY',\s*'OPERATOR'/)
   })
 })
