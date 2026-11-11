@@ -15,6 +15,7 @@ import type { ProviderAdapter, ProviderEnrichment, ProviderPerson } from './prov
 import { toContactVerification } from './providers/types'
 import type { TelemetrySink } from './providers/provider-http'
 import { emitAction } from '@/lib/action-ledger'
+import { getProviderAdapter, providerConfigured } from './provider-registry'
 
 export type EnrichmentOutcome =
   | 'ENRICHED'
@@ -404,4 +405,45 @@ async function persistLeadEmail(
       idempotencyKey: `email:verified:${leadId}:${normalized}`,
     })
   }
+}
+
+export interface StaleContact {
+  id: string
+  value: string
+  verificationStatus: string
+  verifiedAt: string | null
+}
+
+/**
+ * §26 — an old verified address is reverified BEFORE it is sent to.
+ *
+ * Reverification is free (Snov verification), happens only when a send is about
+ * to occur (never a bulk sweep), and a missing verifier never blocks a send.
+ */
+export async function reverifyStaleContact(
+  client: DbClient,
+  orgId: string,
+  contact: StaleContact,
+): Promise<'FRESH' | 'REVERIFIED' | 'INVALID' | 'UNVERIFIED'> {
+  if (contact.verificationStatus !== 'VERIFIED' || !contact.verifiedAt) return 'FRESH'
+  const verifiedAt = new Date(contact.verifiedAt).getTime()
+  if (!Number.isFinite(verifiedAt) || Date.now() - verifiedAt < STALE_DAYS_DEFAULT * 86_400_000) return 'FRESH'
+  if (!providerConfigured('snov')) return 'FRESH'
+
+  const snov = getProviderAdapter('snov', { organizationId: orgId })
+  const result = await snov.verifyEmail(contact.value)
+  const status = toContactVerification(result.verification)
+  await client
+    .from('contact_points')
+    .update({
+      verification_status: status,
+      verification_method: 'snov',
+      verified_at: status === 'VERIFIED' ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', contact.id)
+
+  if (status === 'VERIFIED') return 'REVERIFIED'
+  if (status === 'INVALID' || status === 'BOUNCED') return 'INVALID'
+  return 'UNVERIFIED'
 }

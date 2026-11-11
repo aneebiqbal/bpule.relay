@@ -51,6 +51,13 @@ enriches by URL when the lead is qualified and Prospeo is configured. Only a
 VERIFIED (or explicitly risky-but-real) address is persisted, and a provider
 outage never fails the save.
 
+## Stale addresses (§26)
+
+A verified address older than 75 days is reverified with Snov's free verifier
+immediately before a send. If it no longer verifies, the send is blocked. A
+missing Snov configuration never blocks a send; Fresh Prospects still marks the
+address stale so a rep can act before trying.
+
 ## Admin surface
 
 `/admin/providers` houses provider status/budget and saved-search configuration;

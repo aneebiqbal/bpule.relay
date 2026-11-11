@@ -25,6 +25,7 @@ import type { DbClient } from '@/lib/db/types'
 import type { Profile } from '@/lib/domain/types'
 import { loadProfileEvidence } from '@/lib/generation/profile-evidence'
 import { buildSalesGenerationContext, formatEvidenceBlock } from '@/lib/generation/sales-context'
+import { reverifyStaleContact } from '@/lib/enrichment/enrichment-service'
 
 /**
  * Record a failed attempt. Never called on the success path, and never allowed
@@ -495,6 +496,20 @@ export async function sendPreparedEmail(input: {
         ? `Recipient is not verified (${contact.source === 'INFERRED_PATTERN' ? 'inferred pattern guess' : contact.verificationStatus.toLowerCase()}). Verify the contact before sending.`
         : 'No verified recipient on file. Verify or discover a confirmed contact before sending.',
     )
+  }
+
+  // §26: an old verified address is reverified before it is sent to. Free Snov
+  // verification, only at send time — never a bulk sweep.
+  if (contact) {
+    const reverify = await reverifyStaleContact(input.client, input.orgId, {
+      id: contact.id,
+      value: contact.value,
+      verificationStatus: contact.verificationStatus,
+      verifiedAt: contact.verifiedAt,
+    })
+    if (reverify === 'INVALID' || reverify === 'UNVERIFIED') {
+      throw new Error('This contact no longer verifies and cannot be emailed.')
+    }
   }
 
   const email = draft.contactEmail ?? contact?.value ?? null

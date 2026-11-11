@@ -35,12 +35,15 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/enrichment/provider-registry', () => ({
+  // One fake adapter for every provider: the daily tests use the prospeo-shaped
+  // adapter under the snov provider name to stay isolated from the contracts
+  // suite's prospeo budget row.
   getProviderAdapter: (_name: string) => mocks.adapter,
   providerConfigured: (name: string) => (name === 'snov' ? mocks.snovConfigured() : true),
 }))
 
 const { runSavedSearch } = await import('@/lib/enrichment/search-service')
-const { selectivelyEnrichCandidate } = await import('@/lib/enrichment/enrichment-service')
+const { reverifyStaleContact, selectivelyEnrichCandidate } = await import('@/lib/enrichment/enrichment-service')
 const { ProspeoAdapter } = await import('@/lib/enrichment/providers/prospeo')
 
 const createdSearchIds: string[] = []
@@ -295,6 +298,62 @@ describe('V63_MANUAL_PATH_ENRICHMENT', () => {
       globalThis.fetch = originalFetch
     }
   })
+})
+
+describe('V63_STALE_EMAIL_REVERIFY', () => {
+  it('reverifies an old verified address before send and blocks an invalid one', async () => {
+    const client = neonServiceDbClient()
+    const old = new Date(Date.now() - 120 * 86_400_000).toISOString()
+    const { data: contact, error } = await client
+      .from('contact_points')
+      .insert({
+        organization_id: ORG,
+        lead_id: null,
+        person_id: `test-v63-stale-${RUN}`,
+        type: 'email',
+        value: 'stale@pragmatiq.com',
+        source: 'CONNECTED_PROVIDER',
+        source_type: 'prospeo',
+        verification_status: 'VERIFIED',
+        verification_method: 'prospeo',
+        is_primary: true,
+        is_business_contact: true,
+        discovered_at: old,
+        verified_at: old,
+      })
+      .select('id')
+      .single()
+    expect(error).toBeNull()
+    expect(contact?.id).toBeTruthy()
+
+    mocks.snovConfigured.mockReturnValue(true)
+    mocks.adapter.verifyEmail.mockResolvedValue({ email: 'stale@pragmatiq.com', verification: 'INVALID', creditsUsed: 0, free: true })
+
+    const outcome = await reverifyStaleContact(client, ORG, {
+      id: contact!.id,
+      value: 'stale@pragmatiq.com',
+      verificationStatus: 'VERIFIED',
+      verifiedAt: old,
+    })
+    expect(outcome).toBe('INVALID')
+    expect(mocks.adapter.verifyEmail).toHaveBeenCalledTimes(1)
+
+    const { data: updated } = await client.from('contact_points').select('verification_status').eq('id', contact!.id).single()
+    expect(updated?.verification_status).toBe('INVALID')
+
+    // A fresh address is not reverified.
+    mocks.adapter.verifyEmail.mockClear()
+    const fresh = await reverifyStaleContact(client, ORG, {
+      id: contact!.id,
+      value: 'stale@pragmatiq.com',
+      verificationStatus: 'VERIFIED',
+      verifiedAt: new Date().toISOString(),
+    })
+    expect(fresh).toBe('FRESH')
+    expect(mocks.adapter.verifyEmail).not.toHaveBeenCalled()
+
+    await client.from('contact_points').delete().eq('id', contact!.id)
+  }, 60_000)
 })
 
 describe('V63_SNV_FALLBACK_IS_REACHABLE', () => {
