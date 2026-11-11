@@ -48,13 +48,22 @@ async function loadLeadData(id: string) {
   if (!canOpenLead(auth, scope, lead)) notFound()
 
   // Owner attribution for the context panel — a name, never a raw uuid.
-  const [profiles, queue, owner] = await Promise.all([
+  // The lead's SENDER profile must be in the list even when the viewer is not
+  // its owner (e.g. an admin working on the team's behalf): otherwise the
+  // workspace reads "Profile not assigned" on a lead that plainly has one.
+  const [profiles, queue, owner, senderProfile] = await Promise.all([
     store.listProfiles(),
     store.getQueue(),
     lead.ownerRepId ? store.getRepInfo(lead.ownerRepId).catch(() => null) : Promise.resolve(null),
+    lead.senderProfileId
+      ? store.getProfile(lead.senderProfileId).catch(() => null)
+      : Promise.resolve(null),
   ])
+  const mergedProfiles = senderProfile && !profiles.some((profile) => profile.id === senderProfile.id)
+    ? [...profiles, senderProfile]
+    : profiles
 
-  return { lead, profiles, dailyLimit: queue.dailyLimit, todaySends: queue.todaySends, ownerName: owner?.name ?? null }
+  return { lead, profiles: mergedProfiles, dailyLimit: queue.dailyLimit, todaySends: queue.todaySends, ownerName: owner?.name ?? null }
 }
 
 export default async function LeadPage({ params, searchParams }: LeadPageProps) {
