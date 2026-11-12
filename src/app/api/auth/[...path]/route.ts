@@ -32,13 +32,38 @@ export function forwardResponse(response: Response, secureContext: boolean): Res
   const headers = new Headers(response.headers)
   headers.delete('set-cookie')
   for (const cookie of cookies) {
-    headers.append('set-cookie', cookie.replace(/;\s*Secure/i, ''))
+    // A `__Secure-` prefixed name is refused by browsers unless the Secure
+    // attribute is present, so both must be stripped together on plain HTTP.
+    headers.append('set-cookie', cookie
+      .replace(/;\s*Secure/i, '')
+      .replace(/(^|\s)__Secure-/i, '$1'))
   }
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   })
+}
+
+/**
+ * On plain HTTP the browser cannot store a `__Secure-` prefixed cookie, so the
+ * outbound filter below strips the prefix. The SDK still looks for the prefixed
+ * name, so inbound requests must restore it or every call appears signed out.
+ */
+function restoreSecureCookiePrefix(request: Request): Request {
+  const cookies = request.headers.get('cookie')
+  if (!cookies || cookies.includes('__Secure-')) return request
+  const rewritten = cookies.replace(/(^|;\s*)(neon-auth\.)/g, '$1__Secure-$2')
+  if (rewritten === cookies) return request
+  const headers = new Headers(request.headers)
+  headers.set('cookie', rewritten)
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body: request.body,
+    // Node's undici requires duplex when a streaming body is supplied.
+    duplex: 'half',
+  } as RequestInit)
 }
 
 async function handler(
@@ -48,7 +73,11 @@ async function handler(
 ): Promise<Response> {
   const auth = await getNeonAuthInstance()
   const secureContext = (request as Request & { nextUrl?: URL }).nextUrl?.protocol === 'https:'
-  return forwardResponse(await auth.handler()[method](request, context), secureContext)
+  const devRequest =
+    !secureContext && process.env.NODE_ENV !== 'production'
+      ? restoreSecureCookiePrefix(request)
+      : request
+  return forwardResponse(await auth.handler()[method](devRequest, context), secureContext)
 }
 
 export function GET(request: Request, context: RouteContext) {

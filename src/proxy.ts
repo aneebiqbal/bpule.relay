@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { isDemoMode } from "@/lib/ai/config";
 import { getAuthProvider } from "@/lib/auth/provider";
 
@@ -37,13 +37,35 @@ const PROTECTED_PREFIXES = [
 ];
 
 /**
+ * Neon Auth's session cookies are named with a `__Secure-` prefix, which a
+ * browser will only store over HTTPS. On plain-HTTP local development the
+ * `/api/auth` proxy strips the prefix so the cookie can be stored at all, but
+ * the SDK then looks for the prefixed name and sees no session.
+ *
+ * Restoring the prefix on the incoming request lets the SDK read the session.
+ * Production (HTTPS) is untouched: the prefix is present end to end.
+ */
+function restoreSecureCookiePrefix(request: NextRequest): NextRequest {
+  if (request.nextUrl.protocol === 'https:') return request;
+  if (process.env.NODE_ENV === 'production') return request;
+  const cookies = request.headers.get('cookie');
+  if (!cookies || cookies.includes('__Secure-')) return request;
+  const rewritten = cookies.replace(/(^|;\s*)(neon-auth\.)/g, '$1__Secure-$2');
+  if (rewritten === cookies) return request;
+  const headers = new Headers(request.headers);
+  headers.set('cookie', rewritten);
+  return new NextRequest(request, { headers });
+}
+
+/**
  * Next.js 16 proxy: resolves the session for the active auth provider and
  * handles auth-based redirects. Replaces middleware.ts.
  *
  * The provider is authoritative, so a transient verification failure is
  * inconclusive and never redirects an authenticated user to /login.
  */
-export async function proxy(request: NextRequest) {
+export async function proxy(originalRequest: NextRequest) {
+  const request = restoreSecureCookiePrefix(originalRequest);
   const { pathname } = request.nextUrl;
 
   if (isDemoMode()) {
@@ -51,6 +73,14 @@ export async function proxy(request: NextRequest) {
   }
 
   const response = NextResponse.next({ request });
+
+  // The proxy's own session check reads the original (unprefixed) cookie via
+  // next/headers, so on plain-HTTP dev it cannot see the session. The
+  // downstream request carries the restored prefix, so defer to it instead of
+  // redirecting an authenticated user to /login.
+  if (process.env.NODE_ENV !== 'production' && request.nextUrl.protocol !== 'https:') {
+    return response;
+  }
 
   let isAuthenticated = false;
   let authCheckInconclusive = false;
