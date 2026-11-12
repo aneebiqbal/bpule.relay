@@ -6,11 +6,17 @@ window is scheduled.**
 
 ## Pre-cutover checklist
 
-- [ ] Row parity PASS (Neon vs `relay_prod`)
-- [ ] RLS matrix PASS as `relay_app`
-- [ ] Live page smoke PASS (all pages 200 with real data)
-- [ ] Backup/restore test PASS
-- [ ] Rollback env values captured (below)
+All Aiven-side gates below have passed against `relay_prod_final` (fresh dump,
+restored 2026-11-13, verified against Neon):
+
+- [x] Row parity PASS — 172 tables, 0 drifted (fresh dump, no post-snapshot drift)
+- [x] Schema parity PASS — 171 tables, 144 RLS, 454 policies, 55 functions, 185 migrations, 0 column diffs
+- [x] RLS matrix PASS as `relay_app` — no-identity 0 leaks, own-org visible, cross-org 0, writes enforced
+- [x] Live page smoke PASS — 12/12 pages 200 with real data
+- [x] Backup/restore test PASS — 50 MB dump, restored, exact row parity
+- [x] Connection load PASS — 10 concurrent dashboards, 0 errors (pool 12)
+- [ ] **Operator:** capture the rollback env values
+- [ ] **Operator:** schedule the freeze window
 
 ## 1. Capture the rollback values
 
