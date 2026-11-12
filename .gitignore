@@ -74,3 +74,7 @@ feedback-screenshots/
 # Local HTTPS dev certificates (next dev --experimental-https)
 certificates/
 supabase/aiven/.applied/
+
+# Production database dumps (real prospect PII). Never commit.
+supabase/aiven/*.dump
+*.dump
