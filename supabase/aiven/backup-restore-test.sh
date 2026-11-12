@@ -68,10 +68,16 @@ cat /tmp/src-parity.txt /tmp/dst-parity.txt
 echo "== row counts (drift check) =="
 "$PSQL" "$SOURCE_URL" -Atc "
 select tablename from pg_tables where schemaname='public' order by 1" > /tmp/tables.txt
-drift=0
-while read -r t; do
-  a=$("$PSQL" "$SOURCE_URL" -Atc "select count(*) from \"$t\"")
-  b=$("$PSQL" "$RESTORE_URL" -Atc "select count(*) from \"$t\"")
-  [ "$a" = "$b" ] || { echo "DRIFT $t: $a vs $b"; drift=$((drift+1)); }
-done < /tmp/tables.txt
-echo "ROW DRIFT TABLES: $drift"
+SQL=$(python3 - <<'PY'
+tables=[l.strip() for l in open('/tmp/tables.txt') if l.strip()]
+parts=[f"select '{t}' as t, count(*)::bigint as c from \"{t}\"" for t in tables]
+print(" union all ".join(parts) + " order by 1")
+PY
+)
+"$PSQL" "$SOURCE_URL" -Atc "$SQL" > /tmp/src-exact.txt
+"$PSQL" "$RESTORE_URL" -Atc "$SQL" > /tmp/dst-exact.txt
+if diff -q /tmp/src-exact.txt /tmp/dst-exact.txt >/dev/null; then
+  echo "ROW PARITY: PASS ($(wc -l < /tmp/src-exact.txt) tables, exact counts)"
+else
+  echo "ROW DRIFT:"; diff /tmp/src-exact.txt /tmp/dst-exact.txt | head -20
+fi

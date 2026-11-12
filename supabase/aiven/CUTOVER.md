@@ -56,9 +56,15 @@ In the Vercel project → Settings → Environment Variables (Production):
 RELAY_DB_PROVIDER=postgres
 DATABASE_URL=postgres://relay_app:<app-pw>@<aiven-host>:22864/relay_prod_final
 SERVICE_DATABASE_URL=postgres://relay_service:<service-pw>@<aiven-host>:22864/relay_prod_final
-DATABASE_POOL_MAX=3
+DATABASE_POOL_MAX=12
 SERVICE_DATABASE_POOL_MAX=1
 ```
+
+**Pool sizing note.** The suggested `2–3` runtime pool was measured to starve
+this app: the dashboard fires ~627 queries with ~20-way parallelism, so a pool
+of 3 caps throughput and 5 concurrent dashboards time out (300s+). At pool 12,
+5 concurrent dashboards complete (200, 47–52s). Aiven Developer-1 allows 100
+connections; use 12 and scale up only with evidence.
 
 Do **not** expose the `avnadmin` URL.
 
