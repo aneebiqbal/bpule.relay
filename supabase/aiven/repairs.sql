@@ -20,3 +20,6 @@ alter table upwork_applications add column if not exists screening_answers jsonb
 
 -- relay_runs: sender attribution for the V6.3 attribution backfill.
 alter table relay_runs add column if not exists sender_profile_id uuid references profiles(id) on delete set null;
+
+-- One canonical application per job (the V5.1 backfill uses ON CONFLICT (job_id)).
+create unique index if not exists ua_one_per_job_idx on upwork_applications (job_id);
