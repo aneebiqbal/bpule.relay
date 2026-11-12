@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { createEnrichmentRun, ENRICH_MAX_FILES, type UploadFile } from '@/lib/profile-intelligence/enrichment-service'
 import { enrichmentErrorResponse, requireProfileManager } from '@/lib/profile-intelligence/enrichment-http'
-import { createServiceSupabaseAuth } from '@/lib/supabase/service'
+import { createProfileClient } from '@/lib/supabase/service'
 
 export const maxDuration = 60
 
@@ -12,7 +12,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const gate = await requireProfileManager()
   if ('response' in gate) return gate.response
 
-  const client = createServiceSupabaseAuth()
+  const client = createProfileClient()
   const { data, error } = await client
     .from('profile_enrichment_runs')
     .select('id, status, source_ids, created_at, proposed_at, applied_at, error_message, audit, proposal->summary')
@@ -44,7 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   try {
     const uploads: UploadFile[] = await Promise.all(files.map(async (f) => ({ name: f.name, type: f.type, bytes: new Uint8Array(await f.arrayBuffer()) })))
-    const result = await createEnrichmentRun(createServiceSupabaseAuth(), {
+    const result = await createEnrichmentRun(createProfileClient(), {
       orgId: gate.auth.orgId, profileId, actorRepId: gate.auth.repId, files: uploads,
     })
     return NextResponse.json(result)

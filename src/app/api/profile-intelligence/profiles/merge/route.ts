@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const targetId = typeof body?.targetProfileId === 'string' ? body.targetProfileId : null
   if (!sourceId || !targetId) return NextResponse.json({ error: 'sourceProfileId and targetProfileId are required.' }, { status: 400 })
 
-  const client = createServiceSupabaseAuth()
+  const client = createServiceSupabase()
   try {
     if (body.mode === 'execute') {
       if (typeof body.previewToken !== 'string') return NextResponse.json({ error: 'Run a dry-run preview first.' }, { status: 400 })

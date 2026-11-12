@@ -11,7 +11,7 @@ import type { DbClient } from '@/lib/db/types'
  * DELETE and never writes profiles.id or any *_profile_id relationship column.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ProfileClient, ProfileStorageClient } from '@/lib/supabase/service'
 import {
   buildPlan,
   buildProposal,
@@ -60,7 +60,7 @@ export function resolveMime(filename: string, declared: string | null | undefine
 }
 
 
-export async function loadProfileState(client: SupabaseClient, orgId: string, profileId: string): Promise<ExistingProfileState | null> {
+export async function loadProfileState(client: ProfileClient, orgId: string, profileId: string): Promise<ExistingProfileState | null> {
   const { data: profile } = await client.from('profiles').select('*').eq('id', profileId).eq('organization_id', orgId).maybeSingle()
   if (!profile) return null
   const [projects, proofs, reviews, claims, experience] = await Promise.all([
@@ -91,7 +91,7 @@ export interface UploadFile {
 }
 
 export async function createEnrichmentRun(
-  client: SupabaseClient,
+  client: ProfileStorageClient,
   args: { orgId: string; profileId: string; actorRepId: string; files: UploadFile[] },
 ) {
   const { orgId, profileId, actorRepId, files } = args
@@ -182,7 +182,7 @@ export async function createEnrichmentRun(
 
 
 export async function processNextEnrichmentSource(
-  client: SupabaseClient,
+  client: ProfileStorageClient,
   args: { orgId: string; runId: string; extractor: SourceExtractor },
 ) {
   const run = await getRunOrThrow(client, args.orgId, args.runId)
@@ -224,7 +224,7 @@ export async function processNextEnrichmentSource(
 
 /** Builds (or rebuilds against fresh state) the dry-run diff. Never mutates the profile. */
 export async function proposeRun(
-  client: SupabaseClient,
+  client: ProfileClient,
   orgId: string,
   runId: string,
   options: { selectedPerson?: string | null } = {},
@@ -265,7 +265,7 @@ export async function proposeRun(
 export type AiContextSynthesizer = (profile: Record<string, any>, state: ExistingProfileState, orgId: string) => Promise<Record<string, unknown> | null>
 
 export async function applyEnrichmentRun(
-  client: SupabaseClient,
+  client: ProfileClient,
   args: { orgId: string; runId: string; actorRepId: string; decisions: Record<string, Decision>; synthesize?: AiContextSynthesizer },
 ) {
   const run = await getRunOrThrow(client, args.orgId, args.runId)
@@ -330,7 +330,7 @@ export async function applyEnrichmentRun(
  * A human states which person in a multi-person source this profile is.
  * Only rebuilds the dry-run diff; nothing on the profile changes.
  */
-export async function selectEnrichmentPerson(client: SupabaseClient, orgId: string, runId: string, personName: string | null) {
+export async function selectEnrichmentPerson(client: ProfileClient, orgId: string, runId: string, personName: string | null) {
   const run = await getRunOrThrow(client, orgId, runId)
   if (run.status !== 'proposed') throw new EnrichmentError(`Import is ${run.status}; cannot change the person now.`, 409)
   const known = new Set([
@@ -341,7 +341,7 @@ export async function selectEnrichmentPerson(client: SupabaseClient, orgId: stri
   return proposeRun(client, orgId, runId, { selectedPerson: personName })
 }
 
-export async function discardEnrichmentRun(client: SupabaseClient, orgId: string, runId: string) {
+export async function discardEnrichmentRun(client: ProfileClient, orgId: string, runId: string) {
   const run = await getRunOrThrow(client, orgId, runId)
   if (run.status === 'applied') throw new EnrichmentError('Applied imports cannot be discarded.', 409)
   const { data } = await client.from('profile_enrichment_runs').update({ status: 'discarded', updated_at: new Date().toISOString() }).eq('id', runId).select('*').single()
@@ -349,7 +349,7 @@ export async function discardEnrichmentRun(client: SupabaseClient, orgId: string
   return data
 }
 
-export async function getRunOrThrow(client: SupabaseClient, orgId: string, runId: string) {
+export async function getRunOrThrow(client: ProfileClient, orgId: string, runId: string) {
   const { data } = await client.from('profile_enrichment_runs').select('*').eq('id', runId).eq('organization_id', orgId).maybeSingle()
   if (!data) throw new EnrichmentError('Import not found.', 404)
   return data
@@ -363,7 +363,7 @@ const HUMAN_FIELDS = ['full_name', 'display_name', 'headline', 'current_role', '
  * never override them. Only additive writes to profile_claims.
  */
 export async function recordHumanEdits(
-  client: SupabaseClient,
+  client: ProfileClient,
   args: { orgId: string; profileId: string; repId: string; before: Record<string, any>; after: Record<string, any> },
 ) {
   for (const field of HUMAN_FIELDS) {
@@ -388,7 +388,7 @@ export async function recordHumanEdits(
 }
 
 
-export async function identityCheck(client: SupabaseClient, orgId: string, sourceId: string, targetId: string) {
+export async function identityCheck(client: ProfileClient, orgId: string, sourceId: string, targetId: string) {
   const { data: rows } = await client.from('profiles').select('*').in('id', [sourceId, targetId]).eq('organization_id', orgId)
   const src = rows?.find((r) => r.id === sourceId)
   const tgt = rows?.find((r) => r.id === targetId)
@@ -419,7 +419,7 @@ export function mergePreviewToken(report: { counts_before?: unknown }): string {
   return sha256(JSON.stringify(report.counts_before ?? {})).slice(0, 24)
 }
 
-export async function previewProfileMerge(client: SupabaseClient, args: { orgId: string; sourceId: string; targetId: string }) {
+export async function previewProfileMerge(client: ProfileClient, args: { orgId: string; sourceId: string; targetId: string }) {
   const identity = await identityCheck(client, args.orgId, args.sourceId, args.targetId)
   const { data: report, error } = await client.rpc('preview_profile_merge', {
     p_organization_id: args.orgId, p_source_profile_id: args.sourceId, p_target_profile_id: args.targetId,
@@ -429,7 +429,7 @@ export async function previewProfileMerge(client: SupabaseClient, args: { orgId:
 }
 
 export async function executeProfileMerge(
-  client: SupabaseClient,
+  client: ProfileClient,
   args: { orgId: string; sourceId: string; targetId: string; actorRepId: string; previewToken: string; acknowledgeIdentityRisk?: boolean },
 ) {
   const preview = await previewProfileMerge(client, args)

@@ -19,7 +19,11 @@ const state = vi.hoisted(() => ({
 vi.mock('@/lib/auth/organization', () => ({
   getAuthContext: async () => ({ orgId: 'org-1', repId: 'rep-1', isOwner: true, isAdmin: true, isManager: false, permissions: [] }),
 }))
-vi.mock('@/lib/supabase/service', () => ({ createServiceSupabaseAuth: () => state.fake!.client }))
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceSupabaseAuth: () => state.fake!.client,
+  createServiceSupabase: () => state.fake!.client,
+  createProfileClient: () => state.fake!.client,
+}))
 vi.mock('@/lib/ai/runtime', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/ai/runtime')>()
   const KNOWN = ['Jordan Avery', 'Sam Lee', 'Priya Raman', 'Mateo Cruz']

@@ -23,6 +23,7 @@
 import { execFileSync, execSync } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ProfileClient, ProfileStorageClient } from '@/lib/supabase/service'
 import {
   applyEnrichmentRun,
   createEnrichmentRun,
@@ -47,6 +48,8 @@ function dbUrl(): string {
   if (!url || !/@(127\.0\.0\.1|localhost):/.test(url)) throw new Error('REFUSING: DB url is not local.')
   return url
 }
+
+const asDb = (c: SupabaseClient): ProfileClient => c as unknown as ProfileClient
 
 function connect(): SupabaseClient {
   let url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -163,10 +166,11 @@ EXTRACTIONS.set('HASSAN-LOCATION-ONLY', {
 const file = (key: string, name: string, type = 'text/plain', variant = '') => ({ name, type, bytes: new TextEncoder().encode(`${key}\nfixture body ${variant}\n`) })
 
 async function runImport(client: SupabaseClient, ctx: Ctx, files: ReturnType<typeof file>[]) {
-  const created = await createEnrichmentRun(client, { orgId: ctx.orgId, profileId: ctx.profileA, actorRepId: ctx.rep1, files })
-  let step = await processNextEnrichmentSource(client, { orgId: ctx.orgId, runId: created.run.id, extractor })
+  const c = client as unknown as ProfileStorageClient
+  const created = await createEnrichmentRun(c, { orgId: ctx.orgId, profileId: ctx.profileA, actorRepId: ctx.rep1, files })
+  let step = await processNextEnrichmentSource(c, { orgId: ctx.orgId, runId: created.run.id, extractor })
   let guard = 0
-  while (!step.done && guard++ < 20) step = await processNextEnrichmentSource(client, { orgId: ctx.orgId, runId: created.run.id, extractor })
+  while (!step.done && guard++ < 20) step = await processNextEnrichmentSource(c, { orgId: ctx.orgId, runId: created.run.id, extractor })
   return { created, run: step.run }
 }
 
@@ -192,7 +196,7 @@ async function buildFixture(client: SupabaseClient): Promise<Ctx> {
   }).select('id').single(), 'profileC')).id
 
   // Human-verified truth: current role was confirmed by a human.
-  await recordHumanEdits(client, { orgId, profileId: profileA, repId: rep1, before: { current_role: null }, after: { current_role: 'Senior Backend Engineer' } })
+  await recordHumanEdits(client as unknown as ProfileClient, { orgId, profileId: profileA, repId: rep1, before: { current_role: null }, after: { current_role: 'Senior Backend Engineer' } })
 
   const riA = (await must(client.from('revenue_identities').insert({ organization_id: orgId, slug: `hassan-${tag}`, identity_name: 'Hassan Raza', profile_id: profileA, channel: 'linkedin' }).select('id').single(), 'ri')).id
   await must(client.from('profile_assignments').insert([{ rep_id: rep1, profile_id: profileA }, { rep_id: rep2, profile_id: profileC }]), 'assign')
@@ -289,7 +293,7 @@ async function main() {
   console.log(`Fixture org ${ctx.orgId.slice(0, 8)}… profile A ${ctx.profileA}`)
   const before = await relationshipSnapshot(client, ctx)
   const countsBefore = await counts(client, ctx.profileA)
-  const pBefore = (await loadProfileState(client, ctx.orgId, ctx.profileA))!.profile
+  const pBefore = (await loadProfileState(client as unknown as ProfileClient, ctx.orgId, ctx.profileA))!.profile
 
   // 1 ─ Dry-run diff: multi-file import produces a proposal, zero mutation.
   section('1. Multi-file import → dry-run diff (no mutation)')
@@ -297,7 +301,7 @@ async function main() {
   check(imp.run.status === 'proposed', `run proposed (got ${imp.run.status})`)
   const proposal = imp.run.proposal as EnrichmentProposal
   const find = (pred: (c: EnrichmentProposal['changes'][number]) => boolean) => proposal.changes.find(pred)
-  const pNow = (await loadProfileState(client, ctx.orgId, ctx.profileA))!.profile
+  const pNow = (await loadProfileState(client as unknown as ProfileClient, ctx.orgId, ctx.profileA))!.profile
   check(JSON.stringify(pNow) === JSON.stringify(pBefore), 'profile row byte-identical after extraction + diff (dry-run only)')
   check(JSON.stringify(await counts(client, ctx.profileA)) === JSON.stringify(countsBefore), 'no child rows written before apply')
   check(find((c) => c.field === 'location')?.classification === 'NEW_FACT', 'empty location → NEW_FACT')
@@ -337,7 +341,7 @@ async function main() {
     },
   })
   check(!!rbErr, `RPC failed as intended (${rbErr?.message.slice(0, 60)}…)`)
-  const pAfterRb = (await loadProfileState(client, ctx.orgId, ctx.profileA))!.profile
+  const pAfterRb = (await loadProfileState(client as unknown as ProfileClient, ctx.orgId, ctx.profileA))!.profile
   check(JSON.stringify(pAfterRb) === JSON.stringify(pBefore), 'profile unchanged after rollback')
   check(JSON.stringify(await counts(client, ctx.profileA)) === JSON.stringify(countsBefore), 'no partial child rows remain after rollback')
   check((await proposeRunStatus(client, imp.run.id)) === 'proposed', 'run still retryable (proposed)')
@@ -346,14 +350,14 @@ async function main() {
   // 3 ─ Apply with default decisions.
   section('3. Apply (defaults) → merged into SAME profile.id')
   let synthCalls = 0
-  const applied = await applyEnrichmentRun(client, {
+  const applied = await applyEnrichmentRun(client as unknown as ProfileClient, {
     orgId: ctx.orgId, runId: imp.run.id, actorRepId: ctx.rep1, decisions: {},
     synthesize: async (p) => { synthCalls++; return { identitySummary: `recomputed for ${p.full_name}`, skills: p.primary_skills } },
   })
   check(applied.profileId === ctx.profileA, 'profile.id_before === profile.id_after')
   const after1 = await relationshipSnapshot(client, ctx)
   sameRelationships(before, after1, 'after apply')
-  const s1 = (await loadProfileState(client, ctx.orgId, ctx.profileA))!
+  const s1 = (await loadProfileState(client as unknown as ProfileClient, ctx.orgId, ctx.profileA))!
   const p1 = s1.profile
   check(p1.current_role === 'Senior Backend Engineer' && p1.company === 'BPulse', 'human-verified current role + company preserved')
   check(p1.professional_summary === 'Backend engineer.', 'higher-authority summary not overwritten')
@@ -387,7 +391,7 @@ async function main() {
   check(JSON.stringify(runRow.relationship_counts_before) !== '{}' && runRow.relationship_counts_before['leads.sender_profile_id'] === runRow.relationship_counts_after['leads.sender_profile_id'],
     'DB-side invariant: relationship counts recorded before/after and equal for leads')
   let reapplyErr: unknown = null
-  try { await applyEnrichmentRun(client, { orgId: ctx.orgId, runId: imp.run.id, actorRepId: ctx.rep1, decisions: {} }) } catch (e) { reapplyErr = e }
+  try { await applyEnrichmentRun(client as unknown as ProfileClient, { orgId: ctx.orgId, runId: imp.run.id, actorRepId: ctx.rep1, decisions: {} }) } catch (e) { reapplyErr = e }
   check(reapplyErr instanceof EnrichmentError && reapplyErr.status === 409, 'applying the same run twice is refused')
 
   // 4 ─ Idempotency: identical bytes, and identical facts in a different file.
@@ -399,12 +403,12 @@ async function main() {
   const dp = docx.run.proposal as EnrichmentProposal
   const actionable = dp.changes.filter((c) => c.defaultDecision === 'apply')
   check(actionable.length === 0, `different file, same facts → nothing to apply (${actionable.map((c) => `${c.field}:${c.incomingValue}`).join('; ') || 'none'})`)
-  await applyEnrichmentRun(client, { orgId: ctx.orgId, runId: docx.run.id, actorRepId: ctx.rep1, decisions: {} })
+  await applyEnrichmentRun(client as unknown as ProfileClient, { orgId: ctx.orgId, runId: docx.run.id, actorRepId: ctx.rep1, decisions: {} })
   const c2 = await counts(client, ctx.profileA)
   check(c2.proofs === c1.proofs && c2.reviews === c1.reviews && c2.projects === c1.projects && c2.claims === c1.claims && c2.experience === c1.experience,
     `no duplicate rows after re-import (claims ${c1.claims}→${c2.claims}, proofs ${c1.proofs}→${c2.proofs})`)
   check(c2.sources === c1.sources + 1, 'the genuinely new file is linked once as a source')
-  const p2 = (await loadProfileState(client, ctx.orgId, ctx.profileA))!.profile
+  const p2 = (await loadProfileState(client as unknown as ProfileClient, ctx.orgId, ctx.profileA))!.profile
   check(JSON.stringify(p2.primary_skills) === JSON.stringify(p1.primary_skills), 'skills unchanged by re-import')
   const { data: corro } = await client.from('profile_claims').select('corroborating_source_ids').eq('profile_id', ctx.profileA).eq('claim_key', 'years_experience').single()
   check(corro?.corroborating_source_ids.length === 2, 'duplicate fact corroborates existing claim instead of duplicating it')
@@ -415,9 +419,9 @@ async function main() {
   await client.from('profiles').update({ headline: 'Edited by a human meanwhile' }).eq('id', ctx.profileA)
   const cS = await counts(client, ctx.profileA)
   let staleErr: any = null
-  try { await applyEnrichmentRun(client, { orgId: ctx.orgId, runId: stale.run.id, actorRepId: ctx.rep1, decisions: {} }) } catch (e) { staleErr = e }
+  try { await applyEnrichmentRun(client as unknown as ProfileClient, { orgId: ctx.orgId, runId: stale.run.id, actorRepId: ctx.rep1, decisions: {} }) } catch (e) { staleErr = e }
   check(staleErr instanceof EnrichmentError && staleErr.status === 409, 'stale diff → 409')
-  const pS = (await loadProfileState(client, ctx.orgId, ctx.profileA))!.profile
+  const pS = (await loadProfileState(client as unknown as ProfileClient, ctx.orgId, ctx.profileA))!.profile
   check(pS.headline === 'Edited by a human meanwhile' && JSON.stringify(pS.languages ?? []) === JSON.stringify(p2.languages ?? []), 'human edit intact, nothing from stale diff written')
   check(JSON.stringify(await counts(client, ctx.profileA)) === JSON.stringify(cS), 'no rows written by refused apply')
   const refreshed = (await client.from('profile_enrichment_runs').select('status, proposal').eq('id', stale.run.id).single()).data!
@@ -436,8 +440,8 @@ async function main() {
   const hp = hr.run.proposal as EnrichmentProposal
   const roleC = hp.changes.find((c) => c.field === 'current_role')!
   const compC = hp.changes.find((c) => c.field === 'company')!
-  await applyEnrichmentRun(client, { orgId: ctx.orgId, runId: hr.run.id, actorRepId: ctx.rep1, decisions: { [roleC.id]: 'apply', [compC.id]: 'apply' } })
-  const s7 = (await loadProfileState(client, ctx.orgId, ctx.profileA))!
+  await applyEnrichmentRun(client as unknown as ProfileClient, { orgId: ctx.orgId, runId: hr.run.id, actorRepId: ctx.rep1, decisions: { [roleC.id]: 'apply', [compC.id]: 'apply' } })
+  const s7 = (await loadProfileState(client as unknown as ProfileClient, ctx.orgId, ctx.profileA))!
   check(s7.profile.current_role === 'Staff Engineer' && s7.profile.company === 'NovaPay', 'explicit human decision moved current role')
   check(s7.experience.some((e) => e.role === 'Senior Backend Engineer' && !e.is_current) && s7.experience.filter((e) => e.is_current).length === 1 && s7.experience.find((e) => e.is_current)?.role === 'Staff Engineer',
     `old role kept as history, one current (${s7.experience.map((e) => `${e.role}${e.is_current ? '*' : ''}`).join(', ')})`)
@@ -468,21 +472,21 @@ async function main() {
   const beforeMerge = await relationshipSnapshot(client, ctx)
   const bRowBefore = (await must(client.from('profiles').select('*').eq('id', profileB).single(), 'b'))
 
-  const preview = await previewProfileMerge(client, { orgId: ctx.orgId, sourceId: profileB, targetId: ctx.profileA })
+  const preview = await previewProfileMerge(asDb(client), { orgId: ctx.orgId, sourceId: profileB, targetId: ctx.profileA })
   check(preview.report.dry_run === true && preview.identity.likelySamePerson, `dry-run ok; identity score ${preview.identity.score} (${preview.identity.signals.join('; ')})`)
   check(preview.report.removed_duplicates.length === 2, `dry-run predicts 2 duplicates removed (assignment + proof): ${preview.report.removed_duplicates.map((d: any) => d.table).join(', ')}`)
   const bRowAfterPreview = (await must(client.from('profiles').select('*').eq('id', profileB).single(), 'b2'))
   check(JSON.stringify(bRowAfterPreview) === JSON.stringify(bRowBefore) && (await relationshipSnapshot(client, ctx)).leads.join() === beforeMerge.leads.join(), 'dry-run changed nothing')
 
   let tokErr: any = null
-  try { await executeProfileMerge(client, { orgId: ctx.orgId, sourceId: profileB, targetId: ctx.profileA, actorRepId: ctx.rep1, previewToken: 'wrong' }) } catch (e) { tokErr = e }
+  try { await executeProfileMerge(asDb(client), { orgId: ctx.orgId, sourceId: profileB, targetId: ctx.profileA, actorRepId: ctx.rep1, previewToken: 'wrong' }) } catch (e) { tokErr = e }
   check(tokErr?.status === 409, 'execute without a matching dry-run token is refused')
   let unrelatedErr: any = null
-  const pvC = await previewProfileMerge(client, { orgId: ctx.orgId, sourceId: ctx.profileC, targetId: ctx.profileA })
-  try { await executeProfileMerge(client, { orgId: ctx.orgId, sourceId: ctx.profileC, targetId: ctx.profileA, actorRepId: ctx.rep1, previewToken: pvC.previewToken }) } catch (e) { unrelatedErr = e }
+  const pvC = await previewProfileMerge(asDb(client), { orgId: ctx.orgId, sourceId: ctx.profileC, targetId: ctx.profileA })
+  try { await executeProfileMerge(asDb(client), { orgId: ctx.orgId, sourceId: ctx.profileC, targetId: ctx.profileA, actorRepId: ctx.rep1, previewToken: pvC.previewToken }) } catch (e) { unrelatedErr = e }
   check(!pvC.identity.likelySamePerson && unrelatedErr?.status === 409, 'different people (Fiza → Hassan) blocked without explicit acknowledgement')
 
-  const merged = await executeProfileMerge(client, { orgId: ctx.orgId, sourceId: profileB, targetId: ctx.profileA, actorRepId: ctx.rep1, previewToken: preview.previewToken })
+  const merged = await executeProfileMerge(asDb(client), { orgId: ctx.orgId, sourceId: profileB, targetId: ctx.profileA, actorRepId: ctx.rep1, previewToken: preview.previewToken })
   const bAfter = (await must(client.from('profiles').select('*').eq('id', profileB).single(), 'bAfter'))
   check(bAfter.archived_at && bAfter.merged_into_profile_id === ctx.profileA, 'B archived (not deleted), merged_into = A')
   check((await must(client.from('leads').select('sender_profile_id').eq('id', bLead).single(), 'l')).sender_profile_id === ctx.profileA, "B's lead reassigned to A (same lead id)")
@@ -490,7 +494,7 @@ async function main() {
   check(merged.reassigned_refs['leads.sender_profile_id']?.includes(bLead), 'merge log preserves historical sender attribution (which rows were B)')
   const { data: refsToB } = await client.rpc('profile_relationship_counts', { p_profile_id: profileB })
   check(Object.entries(refsToB as Record<string, number>).every(([k, n]) => k === 'profiles.merged_into_profile_id' || n === 0), 'FK integrity: nothing references B')
-  const aAfter = (await loadProfileState(client, ctx.orgId, ctx.profileA))!
+  const aAfter = (await loadProfileState(client as unknown as ProfileClient, ctx.orgId, ctx.profileA))!
   check(aAfter.profile.bio === 'Upwork bio for Hassan' && aAfter.profile.primary_skills.includes('Go') && aAfter.profile.primary_skills.filter((s: string) => s.toLowerCase() === 'python').length === 1,
     "A's empty bio filled from B; skills unioned without duplicate")
   check(aAfter.proofs.filter((p) => p.safe_claim.startsWith('Built payment')).length === 1 && aAfter.proofs.some((p) => p.safe_claim === 'Wrote a Go ledger service'), 'proofs deduplicated, unique B proof kept')
@@ -525,7 +529,7 @@ async function main() {
   check(dLogs === 0, 'no merge log written for failed merge')
 
   let againErr: any = null
-  try { await previewProfileMerge(client, { orgId: ctx.orgId, sourceId: profileB, targetId: ctx.profileA }) } catch (e) { againErr = e }
+  try { await previewProfileMerge(asDb(client), { orgId: ctx.orgId, sourceId: profileB, targetId: ctx.profileA }) } catch (e) { againErr = e }
   check(againErr?.status === 400, 'archived B cannot be merged again')
 
   console.log(`\n${passes} passed, ${failures} failed`)

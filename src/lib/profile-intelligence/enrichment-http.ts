@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext, type AuthContext } from '@/lib/auth/organization'
 import { profileAccess } from './access'
-import { createServiceSupabaseAuth } from '@/lib/supabase/service'
+import { createProfileClient } from '@/lib/supabase/service'
 import { EnrichmentError, type AiContextSynthesizer } from './enrichment-service'
 import { synthesizeAiContext } from './pipeline'
 
@@ -22,7 +22,7 @@ export function enrichmentErrorResponse(err: unknown, route: string): NextRespon
 
 /** Ensures the run in the URL belongs to the profile in the URL. */
 export async function assertRunForProfile(orgId: string, profileId: string, runId: string) {
-  const client = createServiceSupabaseAuth()
+  const client = createProfileClient()
   const { data } = await client.from('profile_enrichment_runs').select('id, profile_id').eq('id', runId).eq('organization_id', orgId).maybeSingle()
   if (!data || data.profile_id !== profileId) throw new EnrichmentError('Import not found for this profile.', 404)
   return client

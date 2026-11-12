@@ -1,4 +1,4 @@
-import { createServiceSupabase, createServiceSupabaseAuth } from '@/lib/supabase/service'
+import { createServiceSupabase } from '@/lib/supabase/service'
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
@@ -174,7 +174,7 @@ export async function PATCH(
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid body.' }, { status: 400 })
 
-  const client = createServiceSupabaseAuth()
+  const client = createServiceSupabase()
 
   const editableFields = [
     'full_name', 'display_name', 'headline', 'current_role', 'company',

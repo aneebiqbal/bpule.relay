@@ -57,6 +57,22 @@ export function createServiceSupabaseAuth(): SupabaseClient {
 }
 
 /**
+ * A provider-aware DB client that also carries Supabase Storage.
+ *
+ * Profile enrichment needs both: its rows must go to the configured database
+ * provider (Aiven after the cutover), while uploaded source files stay on
+ * Supabase Storage until Neon Storage lands.
+ */
+export type ProfileClient = DbClient
+export type ProfileStorageClient = DbClient & { storage: SupabaseClient['storage'] }
+
+export function createProfileClient(): ProfileStorageClient {
+  const db = createServiceSupabase()
+  const raw = createServiceSupabaseAuth()
+  return Object.assign(Object.create(Object.getPrototypeOf(db)), db, { storage: raw.storage })
+}
+
+/**
  * Verifies the request actually came from Vercel Cron (or a manual trigger
  * that knows the secret), never from a browser. Vercel sends
  * `Authorization: Bearer $CRON_SECRET` on every scheduled invocation when
