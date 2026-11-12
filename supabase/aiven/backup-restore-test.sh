@@ -39,8 +39,14 @@ echo "== restore into $RESTORE =="
 "$PSQL" "$ADMIN" -v ON_ERROR_STOP=1 \
   -c "drop database if exists $RESTORE" \
   -c "create database $RESTORE" >/dev/null
+# Aiven-managed objects (_avnadmin_monitor) may already exist; those errors are
+# harmless, so the exit code is inspected rather than fatal.
+set +e
 "$PG_RESTORE" --dbname="$RESTORE_URL" --no-owner --no-acl "$DUMP" 2>&1 | tee /tmp/aiven-backup-restore.log
+restore_status=$?
+set -e
 echo "RESTORE ERRORS: $(grep -c 'ERROR' /tmp/aiven-backup-restore.log || true)"
+echo "RESTORE EXIT: $restore_status"
 
 echo "== parity =="
 "$PSQL" "$SOURCE_URL" -Atc "
