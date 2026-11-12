@@ -18,8 +18,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PSQL="${PSQL:-/opt/homebrew/opt/postgresql@17/bin/psql}"
-PG_DUMP="${PG_DUMP:-/opt/homebrew/opt/postgresql@17/bin/pg_dump}"
-PG_RESTORE="${PG_RESTORE:-/opt/homebrew/opt/postgresql@17/bin/pg_restore}"
+# pg_dump must be at least the server version of the database being dumped.
+PG18="$(ls -d /opt/homebrew/opt/postgresql@18/bin 2>/dev/null || true)"
+if [ -n "$PG18" ] && [ -x "$PG18/pg_dump" ]; then
+  PG_DUMP="${PG_DUMP:-$PG18/pg_dump}"
+  PG_RESTORE="${PG_RESTORE:-$PG18/pg_restore}"
+else
+  PG_DUMP="${PG_DUMP:-/opt/homebrew/opt/postgresql@17/bin/pg_dump}"
+  PG_RESTORE="${PG_RESTORE:-/opt/homebrew/opt/postgresql@17/bin/pg_restore}"
+fi
 
 NEON="${NEON_DATABASE_URL:?set NEON_DATABASE_URL (Neon service/owner role)}"
 ADMIN="${AIVEN_ADMIN_URL:?set AIVEN_ADMIN_URL (Aiven avnadmin)}"
