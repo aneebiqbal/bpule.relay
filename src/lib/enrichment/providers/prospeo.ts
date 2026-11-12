@@ -87,11 +87,14 @@ export class ProspeoAdapter implements ProviderAdapter {
     const seniority = nonEmpty(query.seniority)
     if (seniority.length > 0) filters.person_seniority = { include: seniority }
 
-    const locations = nonEmpty(query.countries).map((country) => ({ location: country, location_type: 'country' }))
+    // Documented format: include is a plain array of Search-Suggestions location
+    // strings (not { location, location_type } objects).
+    const locations = nonEmpty(query.countries)
     if (locations.length > 0) filters.company_location_search = { include: locations }
 
+    // Documented format: a plain array of employee-range values.
     const size = nonEmpty(query.companySize)
-    if (size.length > 0) filters.company_headcount_range = { include: size }
+    if (size.length > 0) filters.company_headcount_range = size
 
     const industries = nonEmpty(query.industries)
     if (industries.length > 0) filters.company_industry = { include: industries }
