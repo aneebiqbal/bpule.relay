@@ -62,7 +62,7 @@ alter table team_memberships enable row level security;
 drop policy if exists "tm_select" on team_memberships;
 create policy "tm_select" on team_memberships for select
   to authenticated using (
-    organization_id = current_org_id()
+    exists (select 1 from teams t where t.id = team_memberships.team_id and t.organization_id = current_org_id())
     and (person_id in (select id from reps where auth_user_id = auth.uid()) or is_org_admin())
   );
 

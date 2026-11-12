@@ -10,6 +10,7 @@
  */
 import { createServerSupabase } from '@/lib/supabase/server'
 import { neonDbClient } from './neon'
+import { postgresDbClient } from './postgres'
 import { resolveDbProvider, type DbClient, type DbProvider } from './types'
 
 /** The provider this process is running. Read once per request. */
@@ -34,6 +35,10 @@ export async function getDbClient(userId?: string): Promise<DbClient> {
   if (provider === 'supabase') {
     // createServerSupabase already returns the canonical client.
     return createServerSupabase()
+  }
+  if (provider === 'postgres') {
+    if (!userId) throw new Error('A signed-in user id is required for the postgres provider')
+    return postgresDbClient(userId)
   }
   if (!userId) throw new Error('A signed-in user id is required for the Neon provider')
   return neonDbClient(userId)

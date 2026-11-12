@@ -23,6 +23,8 @@ insert into public.relay_reconciliation_target_backup
   (target_id, revenue_identity_id, rep_id, activity_type, target_count, reason)
 select dt.id, dt.revenue_identity_id, dt.rep_id, dt.activity_type, dt.target_count, r.reason
   from daily_targets dt
+  join revenue_identities ri on ri.id = dt.revenue_identity_id
+  left join profiles p on p.id = ri.profile_id
   cross join lateral (
     select case
       when ri.status = 'archived' then 'identity_archived'
@@ -37,8 +39,6 @@ select dt.id, dt.revenue_identity_id, dt.rep_id, dt.activity_type, dt.target_cou
       else null
     end as reason
   ) r
-  join revenue_identities ri on ri.id = dt.revenue_identity_id
-  left join profiles p on p.id = ri.profile_id
  where dt.active and r.reason is not null;
 
 update daily_targets dt

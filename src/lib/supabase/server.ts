@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { supabaseDbClient } from '@/lib/db/supabase'
 import { neonDbClient } from '@/lib/db/neon'
+import { postgresDbClient } from '@/lib/db/postgres'
 import { resolveDbProvider } from '@/lib/db/types'
 import type { DbClient } from '@/lib/db/types'
 
@@ -66,11 +67,12 @@ export const getSupabaseAuthClient = cachedClient
  */
 export const createServerSupabase = cache(async (): Promise<DbClient> => {
   const supabase = await cachedClient()
-  if (resolveDbProvider() === 'neon') {
+  const provider = resolveDbProvider()
+  if (provider === 'neon' || provider === 'postgres') {
     const { getAuthProvider } = await import('@/lib/auth/provider')
     const { user } = await (await getAuthProvider()).getSession()
-    if (!user?.id) throw new Error('No signed-in user id for the Neon database provider')
-    return neonDbClient(user.id)
+    if (!user?.id) throw new Error(`No signed-in user id for the ${provider} database provider`)
+    return provider === 'postgres' ? postgresDbClient(user.id) : neonDbClient(user.id)
   }
   return supabaseDbClient(supabase)
 })

@@ -105,17 +105,17 @@ export interface DbClient {
   from<T = any>(table: string): DbQueryBuilder<T>
   rpc<T = any>(functionName: string, args?: Record<string, unknown>): PromiseLike<DbResult<T>>
   /**
-   * Raw SQL aggregate. Only the Neon provider supports it; the Supabase
-   * (PostgREST) adapter returns an error so callers can fall back to the
-   * in-memory computation. `?` placeholders are rewritten to `$n`.
+   * Raw SQL aggregate. Supported by the Neon and standard-Postgres adapters;
+   * the Supabase (PostgREST) adapter returns an error so callers can fall back
+   * to the in-memory computation. `?` placeholders are rewritten to `$n`.
    */
   raw?<T = any>(sql: string, params?: unknown[]): PromiseLike<DbResult<T>>
   /** The provider that produced this client, for diagnostics only. */
-  readonly provider: 'supabase' | 'neon'
+  readonly provider: 'supabase' | 'neon' | 'postgres'
 }
 
 /** Which provider the process is running. */
-export type DbProvider = 'supabase' | 'neon'
+export type DbProvider = 'supabase' | 'neon' | 'postgres'
 
 /**
  * The provider the server rendered into the page.
@@ -140,5 +140,7 @@ export function resolveDbProvider(env: NodeJS.ProcessEnv = process.env): DbProvi
   )
     .trim()
     .toLowerCase()
-  return raw === 'neon' ? 'neon' : 'supabase'
+  if (raw === 'neon') return 'neon'
+  if (raw === 'postgres' || raw === 'aiven' || raw === 'pg') return 'postgres'
+  return 'supabase'
 }

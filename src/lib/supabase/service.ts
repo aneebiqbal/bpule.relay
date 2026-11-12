@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { supabaseDbClient } from '@/lib/db/supabase'
 import { neonServiceDbClient } from '@/lib/db/neon'
+import { postgresServiceDbClient } from '@/lib/db/postgres'
 import { resolveDbProvider } from '@/lib/db/types'
 import type { DbClient } from '@/lib/db/types'
 
@@ -16,8 +17,12 @@ import type { DbClient } from '@/lib/db/types'
  * which keeps the RLS bypass.
  */
 export function createServiceSupabase(): DbClient {
-  if (resolveDbProvider() === 'neon') {
+  const provider = resolveDbProvider()
+  if (provider === 'neon') {
     return neonServiceDbClient()
+  }
+  if (provider === 'postgres') {
+    return postgresServiceDbClient()
   }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

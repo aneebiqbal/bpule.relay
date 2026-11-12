@@ -36,7 +36,7 @@ insert into reps (id, name, role, auth_user_id) values
 ('bbbbbbbb-0000-0000-0000-000000000010', 'Fizza', 'rep', (select au.id from auth.users au where au.email='fizza@scout.dev')),
 ('bbbbbbbb-0000-0000-0000-000000000011', 'Zaira', 'rep', (select au.id from auth.users au where au.email='zaira@scout.dev')),
 ('bbbbbbbb-0000-0000-0000-000000000012', 'Mehak', 'rep', (select au.id from auth.users au where au.email='mehak@scout.dev'))
-on conflict (reps.id) do nothing;
+on conflict (id) do nothing;
 
 insert into profiles (id, rep_id, platform, label) values
 ('60000000-0000-0000-0000-000000000010', 'bbbbbbbb-0000-0000-0000-000000000010', 'upwork', 'Fizza Upwork'),

@@ -376,7 +376,12 @@ function parseFilterString(filter: string, joiner = 'OR'): { sql: string; params
 
 type Op = 'select' | 'insert' | 'update' | 'upsert' | 'delete'
 
-class NeonQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T> {
+/**
+ * Generic Postgres query builder. It emits `?` placeholders and leaves the
+ * driver-specific rewriting and RLS identity to the executor, so the Neon and
+ * standard-Postgres adapters share it.
+ */
+export class PostgresQueryBuilder<T = Record<string, unknown>> implements DbQueryBuilder<T> {
   private columns = '*'
   private count?: CountStrategy
   private filters: string[] = []
@@ -722,7 +727,7 @@ export class NeonDbClient implements DbClient {
   ) {}
 
   from<T = Record<string, unknown>>(table: string): DbQueryBuilder<T> {
-    return new NeonQueryBuilder<T>(this.executor, table)
+    return new PostgresQueryBuilder<T>(this.executor, table)
   }
 
   async rpc<T = any>(functionName: string, args: Record<string, unknown> = {}): Promise<DbResult<T>> {
