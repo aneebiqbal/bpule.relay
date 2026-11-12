@@ -63,10 +63,14 @@ while IFS= read -r file; do
   version=$(basename "$file" | sed -E 's/^([0-9]+)_.*/\1/')
   if ! printf '%s' "$version" | grep -qE '^[0-9]+$'; then continue; fi
   if is_marked "$version"; then continue; fi
-  # Tolerant: the schema statements are idempotent; the data statements are
-  # demo-data reconciliations that cannot run on a blank database. The schema
-  # still lands, and the version is recorded so parity holds.
+  # Tolerant of demo-data errors, but only record the version when the
+  # migration produced no ERROR (otherwise the schema would be silently
+  # incomplete while parity claims it is applied).
   "$PSQL" "$URL" -q -v ON_ERROR_STOP=0 --single-transaction -f "$file" -c "insert into supabase_migrations.schema_migrations (version) values ('$version') on conflict do nothing" >/tmp/aiven-step.log 2>&1
-  applied=$((applied+1)); mark "$version"
+  if grep -q "ERROR:" /tmp/aiven-step.log; then
+    echo "FAILED $version"; sed -n '1,3p' /tmp/aiven-step.log | sed 's/^/    /'; failed=$((failed+1))
+  else
+    applied=$((applied+1)); mark "$version"
+  fi
 done < <(find "$MIG" -maxdepth 1 -name '[0-9]*_*.sql' | sort)
 echo "chain applied=$applied failed=$failed"

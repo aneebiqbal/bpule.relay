@@ -32,6 +32,16 @@ function pgTypeParser(id: number, format?: string): (value: string | null) => un
 let pool: Pool | null = null
 let servicePool: Pool | null = null
 
+/**
+ * Aiven (and most managed Postgres proxies) present a private CA. Verification
+ * is off by default for the certification; set DATABASE_SSL_VERIFY=true with
+ * the CA in the system trust store for production.
+ */
+function sslConfig(): { rejectUnauthorized: boolean } | undefined {
+  if (process.env.DATABASE_SSL === 'false') return undefined
+  return { rejectUnauthorized: process.env.DATABASE_SSL_VERIFY === 'true' }
+}
+
 /** Runtime pool. Keep this small: Vercel runs many concurrent processes. */
 export function getPostgresPool(): Pool {
   if (pool) return pool
@@ -41,6 +51,7 @@ export function getPostgresPool(): Pool {
     connectionString: url,
     max: Number(process.env.DATABASE_POOL_MAX ?? 3),
     types: { getTypeParser: (id, format) => pgTypeParser(id, format) },
+    ssl: sslConfig(),
   })
   pool.on('error', (err) => {
     // A failing idle client must never become an uncaughtException.
@@ -58,6 +69,7 @@ export function getPostgresServicePool(): Pool {
     connectionString: url,
     max: Number(process.env.SERVICE_DATABASE_POOL_MAX ?? 1),
     types: { getTypeParser: (id, format) => pgTypeParser(id, format) },
+    ssl: sslConfig(),
   })
   servicePool.on('error', (err) => {
     console.error('[db] postgres service client error (degraded):', String(err instanceof Error ? err.message : err))
