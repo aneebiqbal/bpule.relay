@@ -68,12 +68,21 @@ create policy "tm_select" on team_memberships for select
 
 drop policy if exists "tm_insert" on team_memberships;
 create policy "tm_insert" on team_memberships for insert
-  to authenticated with check (organization_id = current_org_id() and is_org_admin());
+  to authenticated with check (
+    exists (select 1 from teams t where t.id = team_memberships.team_id and t.organization_id = current_org_id())
+    and is_org_admin()
+  );
 
 drop policy if exists "tm_update" on team_memberships;
 create policy "tm_update" on team_memberships for update
-  to authenticated using (organization_id = current_org_id() and is_org_admin())
-  with check (organization_id = current_org_id() and is_org_admin());
+  to authenticated using (
+    exists (select 1 from teams t where t.id = team_memberships.team_id and t.organization_id = current_org_id())
+    and is_org_admin()
+  )
+  with check (
+    exists (select 1 from teams t where t.id = team_memberships.team_id and t.organization_id = current_org_id())
+    and is_org_admin()
+  );
 
 -- ============================================================================
 -- ORGANIZATION ROLES

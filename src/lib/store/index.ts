@@ -5,7 +5,7 @@ import { SupabaseStore } from '@/lib/store/supabase-store'
 import { getDemoStore } from '@/lib/store/demo-registry'
 import { isDemoMode } from '@/lib/ai/config'
 import { getCurrentUser } from '@/lib/auth/current'
-import { getDbClient, isNeonDbProvider } from '@/lib/db/provider'
+import { currentDbProvider, getDbClient } from '@/lib/db/provider'
 
 /**
  * Request-scoped store. Cached so a layout, page and any nested callers share
@@ -24,14 +24,17 @@ export const createScoutStore = cache(async (): Promise<ScoutStore> => {
     return getDemoStore(user.rep)
   }
 
-  const client = isNeonDbProvider()
-    ? await getDbClient(user.authUserId)
-    : await getDbClient()
+  // Neon and standard Postgres carry the RLS identity in a session GUC, so
+  // they need the signed-in user id. Supabase (PostgREST) does not.
+  const provider = currentDbProvider()
+  const identityBound = provider !== 'supabase'
+  const client = identityBound ? await getDbClient(user.authUserId) : await getDbClient()
   return new SupabaseStore(
     user.rep,
     client,
     user.organization,
-    isNeonDbProvider() ? null : await getSupabaseAuthClient(),
+    // Object storage stays on Supabase until Neon Storage lands.
+    provider === 'neon' ? null : await getSupabaseAuthClient(),
   )
 })
 
