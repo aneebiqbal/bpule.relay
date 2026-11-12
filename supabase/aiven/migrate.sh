@@ -60,26 +60,11 @@ echo "RESTORE ERRORS: $restore_errors"
 echo "== analyze =="
 "$PSQL" "$TARGET_URL" -c "analyze" >/dev/null
 
-echo "== recreate application roles =="
-# Passwords come from the environment; never hardcode them.
-"$PSQL" "$TARGET_URL" -v ON_ERROR_STOP=1 <<SQL
-do \$\$ begin if not exists (select 1 from pg_roles where rolname='relay_app') then
-  create role relay_app login password '${RELAY_APP_PASSWORD:?set RELAY_APP_PASSWORD}';
-end if; end \$\$;
-do \$\$ begin if not exists (select 1 from pg_roles where rolname='relay_service') then
-  create role relay_service login password '${RELAY_SERVICE_PASSWORD:?set RELAY_SERVICE_PASSWORD}' bypassrls;
-end if; end \$\$;
-SQL
-
-echo "== grant runtime access =="
-"$PSQL" "$TARGET_URL" -v ON_ERROR_STOP=1 <<'SQL'
-grant usage on schema public to relay_app, relay_service;
-grant select, insert, update, delete on all tables in schema public to relay_app;
-grant select, insert, update, delete on all tables in schema public to relay_service;
-grant usage, select on all sequences in schema public to relay_app, relay_service;
-grant execute on all functions in schema public to relay_app, relay_service;
-alter default privileges in schema public grant all on tables to relay_app, relay_service;
-SQL
+echo "== recreate application roles + grants =="
+"$PSQL" "$TARGET_URL" -v ON_ERROR_STOP=1 \
+  -v relay_app_pw="$RELAY_APP_PASSWORD" \
+  -v relay_service_pw="$RELAY_SERVICE_PASSWORD" \
+  -f "$ROOT/supabase/aiven/grants.sql" >/dev/null
 
 echo "== done =="
 echo "TARGET_URL: $TARGET_URL"
