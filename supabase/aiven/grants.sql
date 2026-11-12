@@ -35,10 +35,19 @@ grant select, insert, update, delete on all tables in schema public to relay_ser
 grant usage, select on all sequences in schema public to relay_app, relay_service;
 grant execute on all functions in schema public to relay_app, relay_service;
 
--- The auth/storage/extensions schemas stay owner-only; the app never writes them
--- through the runtime connection.
-revoke all on schema auth from relay_app, relay_service;
-revoke all on schema storage from relay_app, relay_service;
+-- The auth/extensions schemas stay owner-only; the app never writes them
+-- through the runtime connection. (Supabase-only schemas such as `storage`
+-- are absent on Neon and therefore on Aiven.)
+do $$ begin
+  if exists (select 1 from pg_namespace where nspname = 'auth') then
+    revoke all on schema auth from relay_app, relay_service;
+  end if;
+end $$;
+do $$ begin
+  if exists (select 1 from pg_namespace where nspname = 'storage') then
+    revoke all on schema storage from relay_app, relay_service;
+  end if;
+end $$;
 
 alter default privileges in schema public grant all on tables to relay_app, relay_service;
 alter default privileges in schema public grant all on sequences to relay_app, relay_service;

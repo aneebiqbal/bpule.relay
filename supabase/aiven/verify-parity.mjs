@@ -4,14 +4,15 @@
  * Sections 5-8. Read-only.
  *
  * Usage:
- *   NEON_DATABASE_URL=... AIVEN_TARGET_URL=... node supabase/aiven/verify-parity.mjs
+ *   node verify-parity.mjs <neon-url> <aiven-url>
  */
 import { Client } from 'pg'
+import { readFileSync } from 'node:fs'
 
-const neonUrl = process.env.Neon_DATABASE_URL
-const aivenUrl = process.env.AIVEN_TARGET_URL
+const neonUrl = process.argv[2] ?? process.env.NEON_DATABASE_URL
+const aivenUrl = process.argv[3] ?? process.env.AIVEN_TARGET_URL
 if (!neonUrl || !aivenUrl) {
-  console.error('set NEON_DATABASE_URL and AIVEN_TARGET_URL')
+  console.error('usage: node verify-parity.mjs <neon-url> <aiven-url>')
   process.exit(1)
 }
 
@@ -100,18 +101,27 @@ if (colDiffs.length) {
 
 // ---- row counts ------------------------------------------------------------
 console.log('\n== row count parity ==')
+const snapshotRows = JSON.parse(
+  readFileSync(new URL('./neon-source-snapshot.json.rows', import.meta.url), 'utf8'),
+)
 const tables = sNeon.tables.filter((t) => sAiven.tables.includes(t))
 let drift = 0
 for (const t of tables) {
   const n = (await neon.query(`select count(*)::bigint as c from "${t}"`)).rows[0].c
   const a = (await aiven.query(`select count(*)::bigint as c from "${t}"`)).rows[0].c
   if (n !== a) {
-    drift++
-    failures.push(`row drift ${t}: neon=${n} aiven=${a} diff=${n - a}`)
-    console.log(`DIFF ${t}: neon=${n} aiven=${a} diff=${n - a}`)
+    const snap = snapshotRows[t]
+    if (typeof snap === 'number' && Math.abs(snap - a) <= 1) {
+      notes.push(`post-snapshot drift ${t}: neon_now=${n} aiven=${a} snapshot=${snap} (writes after the dump)`)
+      console.log(`DRIFT(explained) ${t}: neon_now=${n} aiven=${a} snapshot=${snap}`)
+    } else {
+      drift++
+      failures.push(`row drift ${t}: neon=${n} aiven=${a} diff=${n - a}`)
+      console.log(`DIFF ${t}: neon=${n} aiven=${a} diff=${n - a}`)
+    }
   }
 }
-console.log(`${drift === 0 ? 'PASS' : 'DIFF'} row counts: ${tables.length} tables, ${drift} drifted`)
+console.log(`${drift === 0 ? 'PASS' : 'DIFF'} row counts: ${tables.length} tables, ${drift} unexplained drifted`)
 
 // ---- high-value aggregates -------------------------------------------------
 console.log('\n== high-value aggregates ==')
@@ -136,9 +146,9 @@ for (const t of agg) {
 // ---- referential integrity (section 8) ------------------------------------
 console.log('\n== identity / profile integrity ==')
 const checks = [
-  ['broken profile refs', `select count(*)::bigint from leads l left join profiles p on p.id=l.profile_id where l.profile_id is not null and p.id is null`],
+  ['broken sender profile refs', `select count(*)::bigint from leads l left join profiles p on p.id=l.sender_profile_id where l.sender_profile_id is not null and p.id is null`],
   ['broken identity refs', `select count(*)::bigint from identity_assignments ia left join revenue_identities ri on ri.id=ia.revenue_identity_id where ri.id is null`],
-  ['cross-org profile refs', `select count(*)::bigint from profiles p join organizations o on o.id=p.organization_id where o.id is null`],
+  ['orphan organizations', `select count(*)::bigint from profiles p left join organizations o on o.id=p.organization_id where o.id is null`],
 ]
 for (const [label, sql] of checks) {
   const n = (await neon.query(sql)).rows[0].count

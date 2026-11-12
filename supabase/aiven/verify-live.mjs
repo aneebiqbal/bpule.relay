@@ -3,17 +3,17 @@
  * Live RLS matrix + function certification on restored real data (sections 9-12).
  *
  * Runs as relay_app with a REAL rep identity from the restored database.
- * Read-only except for one reversible write fixture, which is rolled back.
+ * One reversible write fixture, rolled back.
  *
  * Usage:
- *   AIVEN_APP_URL=... AIVEN_SERVICE_URL=... node supabase/aiven/verify-live.mjs
+ *   node verify-live.mjs <aiven-relay_app-url> <aiven-relay_service-url>
  */
 import { Client } from 'pg'
 
-const appUrl = process.env.AIVEN_APP_URL
-const serviceUrl = process.env.AIVEN_SERVICE_URL
+const appUrl = process.argv[2] ?? process.env.AIVEN_APP_URL
+const serviceUrl = process.argv[3] ?? process.env.AIVEN_SERVICE_URL
 if (!appUrl || !serviceUrl) {
-  console.error('set AIVEN_APP_URL and AIVEN_SERVICE_URL')
+  console.error('usage: node verify-live.mjs <aiven-app-url> <aiven-service-url>')
   process.exit(1)
 }
 const ssl = { rejectUnauthorized: false }
@@ -36,7 +36,7 @@ const PROTECTED = [
 // --- pick a real rep with an auth identity ---------------------------------
 const rep = (
   await service.query(
-    `select r.id, r.organization_id, r.name
+    `select r.id as rep_id, r.auth_user_id, r.organization_id, r.name
        from reps r where r.auth_user_id is not null
       order by r.created_at limit 1`,
   )
@@ -45,7 +45,9 @@ if (!rep) {
   console.error('no rep with auth_user_id in the restored data')
   process.exit(1)
 }
-console.log(`identity: rep=${rep.name} (${rep.id}) org=${rep.organization_id}`)
+// The runtime GUC carries the AUTH USER id (src/lib/db/*), not the rep id.
+const identity = rep.auth_user_id
+console.log(`identity: rep=${rep.name} (rep_id=${rep.rep_id}) auth_user_id=${identity} org=${rep.organization_id}`)
 
 // --- role attributes -------------------------------------------------------
 const roles = (
@@ -57,32 +59,39 @@ const roles = (
   )
 ).rows
 console.log('\n== roles ==')
-for (const r of roles) console.log(`${r.rolname}: bypassrls=${r.rolbypassrls} login=${r.rolcanlogin} member_of_authenticated=${r.member_of_authenticated}`)
+for (const r of roles) {
+  console.log(`${r.rolname}: bypassrls=${r.rolbypassrls} login=${r.rolcanlogin} member_of_authenticated=${r.member_of_authenticated}`)
+}
 const appRole = roles.find((r) => r.rolname === 'relay_app')
 if (appRole?.rolbypassrls !== false) failures.push('relay_app must not bypass RLS')
+if (Number(appRole?.member_of_authenticated) < 1) failures.push('relay_app must be a member of authenticated')
 
-// --- helper: run a query with/without identity ----------------------------
 async function count(client, table, where = '', params = []) {
   const sql = `select count(*)::bigint as c from "${table}" ${where ? 'where ' + where : ''}`
-  return (await client.query(sql, params)).rows[0].c
+  const rows = (await client.query(sql, params)).rows
+  return Number(rows[0].c)
 }
 
 // --- no identity -----------------------------------------------------------
 console.log('\n== no identity: protected rows must be 0 ==')
+let leaked = 0
 for (const t of PROTECTED) {
   try {
     const c = await count(app, t)
-    if (c !== 0) failures.push(`no-identity leak: ${t}=${c}`)
+    if (c !== 0) {
+      failures.push(`no-identity leak: ${t}=${c}`)
+      leaked++
+    }
   } catch (e) {
     failures.push(`no-identity query failed ${t}: ${e.message}`)
   }
 }
-console.log('checked', PROTECTED.length, 'tables')
+console.log(`${leaked === 0 ? 'PASS' : 'FAIL'} ${PROTECTED.length} tables checked`)
 
 // --- with identity ---------------------------------------------------------
 console.log('\n== with identity: own-org visibility ==')
 await app.query('begin')
-await app.query('select set_config($1,$2,true)', ['app.current_user_id', rep.id])
+await app.query('select set_config($1,$2,true)', ['app.current_user_id', identity])
 const own = {}
 for (const t of PROTECTED) {
   try {
@@ -96,27 +105,31 @@ console.log(own)
 
 console.log('\n== cross-org: must be 0 ==')
 await app.query('begin')
-await app.query('select set_config($1,$2,true)', ['app.current_user_id', rep.id])
+await app.query('select set_config($1,$2,true)', ['app.current_user_id', identity])
+let cross = 0
 for (const t of PROTECTED) {
   try {
     const c = await count(app, t, 'organization_id <> $1', [rep.organization_id])
-    if (c !== 0) failures.push(`cross-org leak: ${t}=${c}`)
+    if (c !== 0) {
+      failures.push(`cross-org leak: ${t}=${c}`)
+      cross++
+    }
   } catch (e) {
     failures.push(`cross-org query failed ${t}: ${e.message}`)
   }
 }
 await app.query('commit')
-console.log('cross-org checked')
+console.log(`${cross === 0 ? 'PASS' : 'FAIL'} cross-org checked`)
 
 // --- write test (rolled back) ---------------------------------------------
 console.log('\n== write test ==')
 await app.query('begin')
-await app.query('select set_config($1,$2,true)', ['app.current_user_id', rep.id])
+await app.query('select set_config($1,$2,true)', ['app.current_user_id', identity])
 try {
   const ins = await app.query(
     `insert into profiles (id, organization_id, rep_id, platform, label)
-     values ($1,$2,$3,'cert','rls-live-test') returning id`,
-    ['99999999-9999-9999-9999-999999999999', rep.organization_id, rep.id],
+     values ($1,$2,$3,'linkedin','rls-live-test') returning id`,
+    ['99999999-9999-9999-9999-999999999999', rep.organization_id, rep.rep_id],
   )
   console.log('own-org write: OK', ins.rows[0].id)
 } catch (e) {
@@ -125,11 +138,11 @@ try {
 try {
   await app.query(
     `insert into profiles (id, organization_id, rep_id, platform, label)
-     values ($1,$2,$3,'cert','rls-cross-org')`,
-    ['88888888-8888-8888-8888-888888888888', '00000000-0000-0000-0000-000000000000', rep.id],
+     values ($1,$2,$3,'linkedin','rls-cross-org')`,
+    ['88888888-8888-8888-8888-888888888888', '00000000-0000-0000-0000-000000000000', rep.rep_id],
   )
   failures.push('cross-org write was allowed (RLS failure)')
-} catch (e) {
+} catch {
   console.log('cross-org write: blocked OK')
 }
 await app.query('rollback')
@@ -137,10 +150,10 @@ await app.query('rollback')
 // --- functions -------------------------------------------------------------
 console.log('\n== functions ==')
 await app.query('begin')
-await app.query('select set_config($1,$2,true)', ['app.current_user_id', rep.id])
+await app.query('select set_config($1,$2,true)', ['app.current_user_id', identity])
 const fns = [
   ['current_org_id', `select current_org_id() as v`],
-  ['caller_may_act_for', `select caller_may_act_for($1,$2) as v`, [rep.organization_id, rep.id]],
+  ['caller_may_act_for', `select caller_may_act_for($1,$2) as v`, [rep.organization_id, rep.rep_id]],
   ['request_is_service_role', `select request_is_service_role() as v`],
 ]
 for (const [name, sql, params] of fns) {
