@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const client = createProfileClient()
   const { data, error } = await client
     .from('profile_enrichment_runs')
-    .select('id, status, source_ids, created_at, proposed_at, applied_at, error_message, audit, proposal->summary')
+    .select('id, status, source_ids, created_at, proposed_at, applied_at, error_message, audit, summary:proposal->>summary')
     .eq('profile_id', profileId)
     .eq('organization_id', gate.auth.orgId)
     .order('created_at', { ascending: false })
