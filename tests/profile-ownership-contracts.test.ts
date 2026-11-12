@@ -10,13 +10,13 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-import { serviceDbClient } from '@/lib/db/client'
   getBackupEligibleProfilesForRep,
   getExecutableProfilesForRep,
   getPrimaryProfilesForRep,
   type CanonicalAssignmentSet,
   type CanonicalProfileAssignment,
 } from '@/lib/profiles/canonical'
+import { serviceDbClient } from '@/lib/db/client'
 
 const ROOT = process.cwd()
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8')

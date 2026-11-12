@@ -8,10 +8,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-import { serviceDbClient } from '@/lib/db/client'
   computeTeamPlanTotalFromProgress,
   loadDailyPlanProgress,
 } from '@/lib/targets/load-plan-progress'
+import { serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const TODAY = new Date().toISOString().slice(0, 10)

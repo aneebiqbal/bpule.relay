@@ -35,6 +35,11 @@ grant select, insert, update, delete on all tables in schema public to relay_ser
 grant usage, select on all sequences in schema public to relay_app, relay_service;
 grant execute on all functions in schema public to relay_app, relay_service;
 
+-- Migration history is read by the runtime (migration-version contracts) and by
+-- the migrator; Neon granted this by default, Aiven does not.
+grant usage on schema supabase_migrations to relay_app, relay_service;
+grant select on all tables in schema supabase_migrations to relay_app, relay_service;
+
 -- The auth/extensions schemas stay owner-only; the app never writes them
 -- through the runtime connection. (Supabase-only schemas such as `storage`
 -- are absent on Neon and therefore on Aiven.)

@@ -12,11 +12,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { approveCoveragePlan, restorePrimaryCoverage, configureCoverage } from '@/lib/coverage/actions'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 import {
-import { closeDbPool, dbClientFor, serviceDbClient } from '@/lib/db/client'
   acknowledgeResponsibility,
   listAcknowledgementsForRep,
   reportAccessIssue,
 } from '@/lib/responsibility/load'
+import { closeDbPool, dbClientFor, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 // Aneeb · LinkedIn. This profile is used because its PRIMARY is the same rep
