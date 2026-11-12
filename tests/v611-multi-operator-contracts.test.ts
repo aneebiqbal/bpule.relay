@@ -6,8 +6,8 @@
  * acceptance criteria for §13; they run against the real database.
  */
 import { afterAll, describe, expect, it } from 'vitest'
-import { closeNeonPool, neonServiceDbClient } from '@/lib/db/neon'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const PROFILE = '6e92e611-dd09-464e-8b07-b82ef009e813' // Fizza · Upwork
@@ -21,11 +21,11 @@ const TODAY = new Date().toISOString().slice(0, 10)
 const liveDb = Boolean(process.env.SERVICE_DATABASE_URL ?? process.env.DATABASE_URL)
 const describeLive = liveDb ? describe : describe.skip
 
-afterAll(async () => { await closeNeonPool() })
+afterAll(async () => { await closeDbPool() })
 
 describeLive('MULTI_OPERATOR_DATA_INTEGRITY', () => {
   it('no profile carries more than one active PRIMARY seat', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<{ profile_id: string; n: number }>(
       `select profile_id, count(*)::int as n from profile_coverage
        where organization_id = $1 and active and role = 'PRIMARY'
@@ -37,7 +37,7 @@ describeLive('MULTI_OPERATOR_DATA_INTEGRITY', () => {
   }, 60_000)
 
   it('every active PRIMARY seat has eligibility', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<{ rep_id: string }>(
       `select pc.rep_id from profile_coverage pc
        where pc.organization_id = $1 and pc.active and pc.role = 'PRIMARY'
@@ -54,7 +54,7 @@ describeLive('MULTI_OPERATOR_DATA_INTEGRITY', () => {
   }, 60_000)
 
   it('every active OPERATOR seat has eligibility', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<{ rep_id: string }>(
       `select pc.rep_id from profile_coverage pc
        where pc.organization_id = $1 and pc.active and pc.role = 'OPERATOR'
@@ -71,7 +71,7 @@ describeLive('MULTI_OPERATOR_DATA_INTEGRITY', () => {
   }, 60_000)
 
   it('no OPERATOR seat crosses organizations', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<{ n: number }>(
       `select count(*)::int as n from profile_coverage pc
        join reps r on r.id = pc.rep_id
@@ -85,7 +85,7 @@ describeLive('MULTI_OPERATOR_DATA_INTEGRITY', () => {
   }, 60_000)
 
   it('no identity has two active plans for the same activity', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<{ identity_id: string; activity_type: string }>(
       `select revenue_identity_id as identity_id, activity_type from daily_target_plans
        where organization_id = $1 and active
@@ -97,7 +97,7 @@ describeLive('MULTI_OPERATOR_DATA_INTEGRITY', () => {
   }, 60_000)
 
   it('a backup-only rep never executes the profile', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     // Madiha is a configured BACKUP on Fizza · Upwork and holds no other seat.
     const { data: seat } = await client.raw<{ role: string }>(
       `select role from profile_coverage
@@ -112,7 +112,7 @@ describeLive('MULTI_OPERATOR_DATA_INTEGRITY', () => {
   }, 60_000)
 
   it('an OPERATOR seat is executable; a BACKUP seat is not', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data: seats } = await client.raw<{ rep_id: string; role: string }>(
       `select rep_id, role from profile_coverage
        where organization_id = $1 and profile_id = $2 and active
@@ -129,7 +129,7 @@ describeLive('MULTI_OPERATOR_DATA_INTEGRITY', () => {
 
 describeLive('MULTI_OPERATOR_SHARED_PLAN', () => {
   it('the plan is one requirement per channel lane, not one per operator', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data: plans, error } = await client.raw<{ activity_type: string; target_count: number }>(
       `select activity_type, target_count from daily_target_plans
        where organization_id = $1 and revenue_identity_id = $2 and active
@@ -144,7 +144,7 @@ describeLive('MULTI_OPERATOR_SHARED_PLAN', () => {
   }, 60_000)
 
   it('the primary and the operator share that single requirement', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data: rows, error } = await client.raw<{ rep_id: string; completed: number }>(
       `select rep_id, sum(completed_count)::int as completed from daily_accountability
        where organization_id = $1 and revenue_identity_id = $2 and target_date = $3

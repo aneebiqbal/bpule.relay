@@ -9,7 +9,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runOperationalScheduler } from '@/lib/scheduler/run'
-import { neonServiceDbClient, closeNeonPool } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const RUN = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -18,13 +18,13 @@ const SEARCH_NAME = `V632 live ${RUN}`
 const isLive = Boolean(process.env.PROSPEO_API_KEY)
 const live = isLive ? describe : describe.skip
 
-let client: ReturnType<typeof neonServiceDbClient>
+let client: ReturnType<typeof serviceDbClient>
 let searchId = ''
 let quotaAvailable = false
 
 beforeAll(async () => {
   if (!isLive) return
-  client = neonServiceDbClient()
+  client = serviceDbClient()
 
   // Probe the provider's daily search quota without spending a credit when the
   // plan is exhausted (a 429 costs nothing).
@@ -70,7 +70,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!isLive) return
-  const c = neonServiceDbClient()
+  const c = serviceDbClient()
   if (searchId) {
     await c.from('captured_prospects').delete().eq('organization_id', ORG).eq('search_id', searchId)
     await c.from('provider_search_runs').delete().eq('organization_id', ORG).eq('search_id', searchId)
@@ -80,7 +80,7 @@ afterAll(async () => {
   await c.from('provider_config').delete().eq('organization_id', ORG).eq('provider', 'prospeo')
   await c.from('provider_telemetry').delete().eq('organization_id', ORG).eq('provider', 'prospeo')
   await c.from('contact_points').delete().eq('organization_id', ORG).like('person_id', 'prospeo:%')
-  await closeNeonPool()
+  await closeDbPool()
 })
 
 /** Insert a pending DISCOVER_PROSPECTS job with an old next_attempt_at so the

@@ -7,8 +7,8 @@
  * duplicated per operator.
  */
 import { describe, expect, it } from 'vitest'
-import { neonServiceDbClient } from '@/lib/db/neon'
 import {
+import { serviceDbClient } from '@/lib/db/client'
   computeTeamPlanTotalFromProgress,
   loadDailyPlanProgress,
 } from '@/lib/targets/load-plan-progress'
@@ -18,7 +18,7 @@ const TODAY = new Date().toISOString().slice(0, 10)
 
 describe('PLAN_PROGRESS_PROJECTION', () => {
   it('the profile completed total equals the sum of its operator contributions', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const progress = await loadDailyPlanProgress(client, { orgId: ORG, businessDate: TODAY })
     expect(progress.length).toBeGreaterThan(0)
     for (const row of progress) {
@@ -28,7 +28,7 @@ describe('PLAN_PROGRESS_PROJECTION', () => {
   }, 60_000)
 
   it('the team total counts every unique targetable channel lane exactly once', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const progress = await loadDailyPlanProgress(client, { orgId: ORG, businessDate: TODAY })
     const { data: plans, error } = await client
       .from('daily_target_plans')
@@ -43,7 +43,7 @@ describe('PLAN_PROGRESS_PROJECTION', () => {
 
   it('a plan-less channel reports no_plan, never a fake zero', async () => {
     const progress = await loadDailyPlanProgress(
-      neonServiceDbClient(),
+      serviceDbClient(),
       { orgId: ORG, businessDate: TODAY },
     )
     for (const row of progress.filter((entry) => !entry.hasPlan)) {

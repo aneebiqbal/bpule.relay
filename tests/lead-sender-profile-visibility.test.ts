@@ -10,12 +10,12 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeNeonPool, neonServiceDbClient } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ROOT = process.cwd()
 const ORG = '11111111-1111-1111-1111-111111111111'
 
-afterAll(async () => { await closeNeonPool() })
+afterAll(async () => { await closeDbPool() })
 
 describe('LEAD_PAGE_RESOLVES_SENDER_PROFILE_ORG_SCOPED', () => {
   it('uses listProfilesByIds for the sender profile, never rep-scoped getProfile', () => {
@@ -42,7 +42,7 @@ describe('LEAD_PAGE_RESOLVES_SENDER_PROFILE_ORG_SCOPED', () => {
   })
 
   it('the scenario is real: leads exist whose sender profile belongs to another rep', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<{ n: number }>(
       `select count(*)::int as n
          from leads l

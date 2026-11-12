@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { neonServiceDbClient } from '@/lib/db/neon'
+import { serviceDbClient } from '@/lib/db/client'
 
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations')
 
@@ -41,7 +41,7 @@ describe('MIGRATION_VERSION_UNIQUE', () => {
   })
 
   it('no migration file reuses a version already recorded in schema_migrations', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data: recorded, error } = await client.raw<{ version: string }>(
       'select version from supabase_migrations.schema_migrations limit 1000',
     )

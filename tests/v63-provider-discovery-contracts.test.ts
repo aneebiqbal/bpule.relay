@@ -9,12 +9,12 @@ import { QUALIFICATION_BANDS } from '@/lib/scoring/qualification'
 import { isQualified, scoreProviderPerson } from '@/lib/enrichment/candidate-match'
 import { getProviderAdapter } from '@/lib/enrichment/provider-registry'
 import { ProviderError } from '@/lib/enrichment/providers/provider-http'
-import { closeNeonPool, neonServiceDbClient } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const TODAY = new Date().toISOString().slice(0, 10)
 
-afterAll(async () => { await closeNeonPool() })
+afterAll(async () => { await closeDbPool() })
 
 describe('DISCOVERY_SCORING_IS_CANONICAL', () => {
   it('a candidate qualifies only on the canonical bands — no local cutoff', () => {
@@ -73,7 +73,7 @@ describe('PROVIDER_BOUNDARY', () => {
 
 describe('PROVIDER_DEDUPE', () => {
   it('one provider person maps to exactly one candidate (unique index exists)', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<{ indexname: string; indexdef: string }>(
       `select indexname, indexdef from pg_indexes where tablename = 'captured_prospects' and indexname = 'cp_provider_person_uniq'`,
       [],
@@ -85,7 +85,7 @@ describe('PROVIDER_DEDUPE', () => {
   }, 60_000)
 
   it('the enriched email lives in the ONE contact authority, keyed by provider person', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<{ indexname: string }>(
       `select indexname from pg_indexes where tablename = 'contact_points' and indexname = 'cp_candidate_email_uniq'`,
       [],
@@ -97,7 +97,7 @@ describe('PROVIDER_DEDUPE', () => {
 
 describe('PROVIDER_RLS', () => {
   it('a rep sees only their own organization configuration and runs', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data: crossOrg, error } = await client.raw<{ n: number }>(
       `select count(*)::int as n from provider_saved_searches where organization_id <> $1`,
       [ORG],
@@ -114,7 +114,7 @@ describe('PROVIDER_RLS', () => {
   }, 60_000)
 
   it('the candidate email index is scoped to the provider-person path', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<{ indexdef: string }>(
       `select indexdef from pg_indexes where tablename = 'contact_points' and indexname = 'cp_candidate_email_uniq'`,
       [],
@@ -126,7 +126,7 @@ describe('PROVIDER_RLS', () => {
 
 describe('PROVIDER_BUDGET', () => {
   it('an org with no budget row is unlimited; a 0 budget stops discovery', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { providerBudgetRemaining } = await import('@/lib/enrichment/enrichment-service')
     // No provider_config row for a random provider/org ⇒ unlimited.
     const unlimited = await providerBudgetRemaining(client, ORG, 'prospeo', TODAY)

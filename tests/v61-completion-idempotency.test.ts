@@ -5,14 +5,14 @@
  * click or a duplicate callback must never increment the same real action twice.
  */
 import { afterAll, describe, expect, it } from 'vitest'
-import { closeNeonPool, neonServiceDbClient } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const REP = 'aaaaaaaa-0000-0000-0000-000000000004' // Ahmad
 const IDENTITY = 'ab50b6a7-0b85-44c2-b8c9-52816f8adf93' // Zaira · Upwork
 const TODAY = new Date().toISOString().slice(0, 10)
 
-afterAll(async () => { await closeNeonPool() })
+afterAll(async () => { await closeDbPool() })
 
 /** The Neon client returns the function row; the Supabase client the scalar. */
 function unwrap(data: unknown): Record<string, unknown> {
@@ -26,7 +26,7 @@ function unwrap(data: unknown): Record<string, unknown> {
 
 describe('COMPLETION_IDEMPOTENT', () => {
   it('the same source event credits exactly once', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const sourceEventId = `idempotency-test:${Date.now()}`
     const where = {
       rep_id: REP,

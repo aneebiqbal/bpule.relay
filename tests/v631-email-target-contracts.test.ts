@@ -12,18 +12,18 @@ import { canonicalActionFor } from '@/lib/performance/activity-model'
 import { activityKeyForEventType } from '@/lib/responsibility/activity-registry'
 import { CONNECTION_EVENTS, SENT_MESSAGE_EVENTS, isExecutedSend } from '@/lib/sales/send-truth'
 import { emitAction } from '@/lib/action-ledger'
-import { closeNeonPool, neonServiceDbClient } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const RUN = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
 afterAll(async () => {
-  await neonServiceDbClient()
+  await serviceDbClient()
     .from('action_events')
     .delete()
     .eq('organization_id', ORG)
     .like('idempotency_key', `email-contract:%`)
-  await closeNeonPool()
+  await closeDbPool()
 })
 
 describe('EMAIL_DRAFT_NOT_EXECUTED', () => {
@@ -59,7 +59,7 @@ describe('EMAIL_SENT_COUNTS_ONCE', () => {
 
 describe('EMAIL_REPLAY_COUNTS_ONCE', () => {
   it('the same idempotency key emits exactly one EMAIL_SENT row', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const key = `email-contract:send:${RUN}`
     const first = await emitAction({
       client,

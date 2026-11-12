@@ -10,13 +10,13 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+import { serviceDbClient } from '@/lib/db/client'
   getBackupEligibleProfilesForRep,
   getExecutableProfilesForRep,
   getPrimaryProfilesForRep,
   type CanonicalAssignmentSet,
   type CanonicalProfileAssignment,
 } from '@/lib/profiles/canonical'
-import { neonServiceDbClient } from '@/lib/db/neon'
 
 const ROOT = process.cwd()
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8')
@@ -129,7 +129,7 @@ describe('PROFILE_EXECUTION_GLOBAL_PARITY', () => {
   })
 
   it('production: every active primary holds eligibility (execution requires assignment)', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const [{ data: assignments }, { data: coverage }, { data: identities }] = await Promise.all([
       client.from('identity_assignments').select('rep_id, revenue_identity_id').eq('organization_id', ORG).limit(500),
       client

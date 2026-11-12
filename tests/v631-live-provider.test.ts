@@ -12,7 +12,7 @@ import { getProviderAdapter } from '@/lib/enrichment/provider-registry'
 import { classifyProviderError, ProviderError } from '@/lib/enrichment/providers/provider-http'
 import { ProspeoAdapter } from '@/lib/enrichment/providers/prospeo'
 import { runSavedSearch } from '@/lib/enrichment/search-service'
-import { neonServiceDbClient, closeNeonPool } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const TODAY = new Date().toISOString().slice(0, 10)
@@ -39,7 +39,7 @@ let person: {
 
 beforeAll(async () => {
   if (!isLive) return
-  const client = neonServiceDbClient()
+  const client = serviceDbClient()
   const { data, error } = await client
     .from('provider_saved_searches')
     .insert({
@@ -64,7 +64,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!isLive) return
-  const client = neonServiceDbClient()
+  const client = serviceDbClient()
   if (searchId) {
     await client.from('captured_prospects').delete().eq('organization_id', ORG).eq('search_id', searchId)
     await client.from('provider_search_runs').delete().eq('organization_id', ORG).eq('search_id', searchId)
@@ -74,7 +74,7 @@ afterAll(async () => {
   await client.from('provider_config').delete().eq('organization_id', ORG).eq('provider', 'snov')
   await client.from('provider_telemetry').delete().eq('organization_id', ORG).eq('provider', 'prospeo')
   await client.from('provider_telemetry').delete().eq('organization_id', ORG).eq('provider', 'snov')
-  await closeNeonPool()
+  await closeDbPool()
 })
 
 live('PROSPEO LIVE SEARCH (§2)', () => {
@@ -110,7 +110,7 @@ live('PROSPEO LIVE SEARCH (§2)', () => {
     expect(first.linkedinUrl).toBeTruthy()
     person = first
 
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data: telemetry } = await client
       .from('provider_telemetry')
       .select('operation, status, credits')
@@ -167,7 +167,7 @@ live('SNOV LIVE FALLBACK (§5)', () => {
 live('DAILY SEARCH LIVE (§9, §10)', () => {
   it('runs through runSavedSearch and creates candidates', async () => {
     if (!prospeoSearchAvailable) return
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const runId = await runSavedSearch({ client, organizationId: ORG, searchId, businessDate: TODAY })
     const { data: run } = await client
       .from('provider_search_runs')
@@ -187,7 +187,7 @@ live('DAILY SEARCH LIVE (§9, §10)', () => {
 
   it('re-running dedupes: cursor advances and existing people are skipped', async () => {
     if (!prospeoSearchAvailable) return
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const runId = await runSavedSearch({ client, organizationId: ORG, searchId, businessDate: TODAY })
     const { data: run } = await client
       .from('provider_search_runs')

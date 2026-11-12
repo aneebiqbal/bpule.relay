@@ -14,7 +14,7 @@ import { isCoverageActiveOn } from '@/lib/coverage/access'
 import { getExecutableProfilesForRep, type CanonicalAssignmentSet } from '@/lib/profiles/canonical'
 import { buildWhoWorksWhat } from '@/lib/team/who-works-what'
 import type { CoveragePlan, CoverageProfileResult } from '@/lib/coverage/engine'
-import { neonServiceDbClient } from '@/lib/db/neon'
+import { serviceDbClient } from '@/lib/db/client'
 
 const ROOT = process.cwd()
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8')
@@ -25,7 +25,7 @@ const ORG = '11111111-1111-1111-1111-111111111111'
  * actively mutating coverage, skip the assertion instead of failing on a moving
  * target — the audit runs for real once the writer stops.
  */
-async function dataIsBeingMutated(client: ReturnType<typeof neonServiceDbClient>): Promise<boolean> {
+async function dataIsBeingMutated(client: ReturnType<typeof serviceDbClient>): Promise<boolean> {
   const { data } = await client
     .from('profile_coverage')
     .select('updated_at')
@@ -359,7 +359,7 @@ describe('RESPONSIBILITY_STATUS_COMPONENT', () => {
 
 describe('BACKUP_ONLY_HAS_NO_ACTIVE_EXECUTION_TARGET', () => {
   it('production: no active plan sits on a profile without an active PRIMARY', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     if (await dataIsBeingMutated(client)) {
       console.warn('[audit] coverage changed in the last 10m — skipping live audit while a writer is active')
       return
@@ -387,7 +387,7 @@ describe('ELIGIBILITY_DOES_NOT_GRANT_EXECUTION', () => {
   })
 
   it('production: every active plan belongs to a profile with exactly one active PRIMARY', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     if (await dataIsBeingMutated(client)) {
       console.warn('[audit] coverage changed in the last 10m — skipping live audit while a writer is active')
       return

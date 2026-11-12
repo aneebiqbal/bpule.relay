@@ -6,22 +6,22 @@
  */
 import { afterAll, describe, expect, it } from 'vitest'
 import { reapStaleRunningJobs } from '@/lib/scheduler/run'
-import { closeNeonPool, neonServiceDbClient } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const RUN = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
 afterAll(async () => {
-  await neonServiceDbClient()
+  await serviceDbClient()
     .from('operational_jobs')
     .delete()
     .eq('organization_id', ORG)
     .like('dedupe_key', `stale-reaper:${RUN}%`)
-  await closeNeonPool()
+  await closeDbPool()
 })
 
 async function insertRunningJob(attempt: number, lockedAt: Date): Promise<string> {
-  const client = neonServiceDbClient()
+  const client = serviceDbClient()
   const { data: job, error } = await client
     .from('operational_jobs')
     .insert({
@@ -43,7 +43,7 @@ async function insertRunningJob(attempt: number, lockedAt: Date): Promise<string
 }
 
 async function stateOf(id: string): Promise<string | null> {
-  const { data } = await neonServiceDbClient().from('operational_jobs').select('state').eq('id', id).maybeSingle()
+  const { data } = await serviceDbClient().from('operational_jobs').select('state').eq('id', id).maybeSingle()
   return (data?.state as string | null) ?? null
 }
 
@@ -51,7 +51,7 @@ describe('STALE_JOB_REAPER', () => {
   it('resets an orphaned running job to pending for retry', async () => {
     const now = new Date()
     const jobId = await insertRunningJob(1, new Date(now.getTime() - 30 * 60_000))
-    const result = await reapStaleRunningJobs(neonServiceDbClient(), now)
+    const result = await reapStaleRunningJobs(serviceDbClient(), now)
     expect(result.reaped).toBe(1)
     expect(result.deadLettered).toBe(0)
     expect(await stateOf(jobId)).toBe('pending')
@@ -60,7 +60,7 @@ describe('STALE_JOB_REAPER', () => {
   it('dead-letters an orphaned running job past max attempts', async () => {
     const now = new Date()
     const jobId = await insertRunningJob(5, new Date(now.getTime() - 30 * 60_000))
-    const result = await reapStaleRunningJobs(neonServiceDbClient(), now)
+    const result = await reapStaleRunningJobs(serviceDbClient(), now)
     expect(result.deadLettered).toBe(1)
     expect(result.reaped).toBe(0)
     expect(await stateOf(jobId)).toBe('dead')
@@ -69,7 +69,7 @@ describe('STALE_JOB_REAPER', () => {
   it('leaves a fresh running job alone', async () => {
     const now = new Date()
     const jobId = await insertRunningJob(1, now)
-    const result = await reapStaleRunningJobs(neonServiceDbClient(), now)
+    const result = await reapStaleRunningJobs(serviceDbClient(), now)
     expect(result.reaped).toBe(0)
     expect(result.deadLettered).toBe(0)
     expect(await stateOf(jobId)).toBe('running')

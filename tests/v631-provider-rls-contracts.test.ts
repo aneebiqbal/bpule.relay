@@ -6,9 +6,9 @@
  */
 import { afterAll, describe, expect, it } from 'vitest'
 import { execSync } from 'node:child_process'
-import { closeNeonPool, neonServiceDbClient } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
-afterAll(async () => { await closeNeonPool() })
+afterAll(async () => { await closeDbPool() })
 
 interface PolicyRow {
   tablename: string
@@ -20,7 +20,7 @@ interface PolicyRow {
 
 describe('PROVIDER_RLS', () => {
   it('every policy on the four provider tables is org-scoped', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<PolicyRow>(
       `select tablename, policyname, cmd, qual, with_check
        from pg_policies
@@ -38,7 +38,7 @@ describe('PROVIDER_RLS', () => {
   }, 60_000)
 
   it('provider configuration writes require is_org_admin', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<PolicyRow>(
       `select tablename, policyname, cmd, qual, with_check
        from pg_policies
@@ -57,7 +57,7 @@ describe('PROVIDER_RLS', () => {
   }, 60_000)
 
   it('provider runs and telemetry are read-only for org members', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data, error } = await client.raw<PolicyRow>(
       `select tablename, policyname, cmd, qual, with_check
        from pg_policies

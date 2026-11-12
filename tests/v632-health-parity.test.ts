@@ -7,15 +7,15 @@
  */
 import { afterAll, describe, expect, it } from 'vitest'
 import { computeHealth } from '@/lib/admin/health'
-import { neonServiceDbClient, closeNeonPool } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 
-afterAll(async () => { await closeNeonPool() })
+afterAll(async () => { await closeDbPool() })
 
 describe('HEALTH_PARITY', () => {
   it('health status is derived from provider_config, not a separate truth', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const report = await computeHealth(client, ORG)
     const { data: configs } = await client
       .from('provider_config')

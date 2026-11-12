@@ -9,10 +9,10 @@
  * suite leaves nothing behind.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { closeNeonPool, neonDbClient, neonServiceDbClient } from '@/lib/db/neon'
 import { approveCoveragePlan, restorePrimaryCoverage, configureCoverage } from '@/lib/coverage/actions'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 import {
+import { closeDbPool, dbClientFor, serviceDbClient } from '@/lib/db/client'
   acknowledgeResponsibility,
   listAcknowledgementsForRep,
   reportAccessIssue,
@@ -34,14 +34,14 @@ const AUTH_USER = '4803f9c8-48ef-4f9f-9ef3-c0a59c6414c6' // Aneeb
 const TODAY = new Date().toISOString().slice(0, 10)
 
 /** One client for the whole suite: the pooler drops connections under churn. */
-let client: ReturnType<typeof neonDbClient>
-let admin: ReturnType<typeof neonServiceDbClient>
+let client: ReturnType<typeof dbClientFor>
+let admin: ReturnType<typeof serviceDbClient>
 beforeAll(() => {
-  client = neonDbClient(AUTH_USER)
-  admin = neonServiceDbClient()
+  client = dbClientFor(AUTH_USER)
+  admin = serviceDbClient()
 })
 
-function scope(client: ReturnType<typeof neonDbClient>, repId: string) {
+function scope(client: ReturnType<typeof dbClientFor>, repId: string) {
   return listExecutableIdentitiesForRep(client, ORG, repId, TODAY)
 }
 
@@ -49,7 +49,7 @@ function ids(rows: Array<{ id: string }>) {
   return rows.map((row) => row.id)
 }
 
-async function cover(client: ReturnType<typeof neonDbClient>, mode: 'SHARED' | 'REPLACE') {
+async function cover(client: ReturnType<typeof dbClientFor>, mode: 'SHARED' | 'REPLACE') {
   return approveCoveragePlan({
     organizationId: ORG,
     items: [
@@ -69,7 +69,7 @@ async function cover(client: ReturnType<typeof neonDbClient>, mode: 'SHARED' | '
   })
 }
 
-async function restore(client: ReturnType<typeof neonDbClient>) {
+async function restore(client: ReturnType<typeof dbClientFor>) {
   return restorePrimaryCoverage({
     organizationId: ORG,
     profileId: PROFILE,
@@ -130,8 +130,8 @@ let originalReadiness: Array<{ rep_id: string }> = []
 let captured = false
 
 beforeAll(() => {
-  client = neonDbClient(AUTH_USER)
-  admin = neonServiceDbClient()
+  client = dbClientFor(AUTH_USER)
+  admin = serviceDbClient()
 })
 
 beforeEach(async () => {
@@ -227,7 +227,7 @@ afterAll(async () => {
       )
     }
   } finally {
-    await closeNeonPool()
+    await closeDbPool()
   }
 })
 
@@ -292,7 +292,7 @@ describe('V6 acknowledgement and readiness separation', () => {
       await cover(client, 'SHARED')
       const now = new Date().toISOString()
 
-      const admin = neonServiceDbClient()
+      const admin = serviceDbClient()
       const { data: assignments } = await admin
         .from('coverage_assignments')
         .select('id, coverage_mode')
@@ -359,7 +359,7 @@ describe('V6 acknowledgement and readiness separation', () => {
       })
       expect(result.ok).toBe(true)
 
-      const admin = neonServiceDbClient()
+      const admin = serviceDbClient()
       const { data: rows } = await admin
         .from('responsibility_acknowledgements')
         .select('acknowledged_at, access_issue, coverage_assignment_id')

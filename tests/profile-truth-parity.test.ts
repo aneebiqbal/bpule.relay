@@ -24,7 +24,7 @@ import {
 } from '@/lib/profiles/canonical'
 import { normalizeExternalUrl, profileNeedsReview, remainingOf } from '@/lib/profiles/display'
 import { resolveAvailability, type AvailabilityState } from '@/lib/coverage/engine'
-import { neonServiceDbClient } from '@/lib/db/neon'
+import { serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 
@@ -182,7 +182,7 @@ describe('PROFILE_ASSIGNMENT_GLOBAL_PARITY', () => {
   })
 
   it('production data resolves a primary for every assigned profile', async () => {
-    const set = await loadCanonicalProfileAssignments(ORG, { client: neonServiceDbClient() })
+    const set = await loadCanonicalProfileAssignments(ORG, { client: serviceDbClient() })
     const assigned = set.profiles.filter((profile) => profile.assignedReps.length > 0)
     expect(assigned.length).toBeGreaterThan(0)
     // The backfill plus the Admin's explicit assignment covered every profile;

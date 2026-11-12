@@ -15,7 +15,6 @@
  * The suite restores the fixture exactly and removes every row it created.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { closeNeonPool, neonServiceDbClient } from '@/lib/db/neon'
 import { addOperatorResponsibility, removeOperatorResponsibility } from '@/lib/profiles/assignment'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 import { loadRepOperatingPlan } from '@/lib/operations/rep-operating-plan'
@@ -23,6 +22,7 @@ import { loadRepCoverage } from '@/lib/coverage/load'
 import { setRepAvailability } from '@/lib/coverage/actions'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const PROFILE = '6e92e611-dd09-464e-8b07-b82ef009e813' // Fizza · Upwork
@@ -37,7 +37,7 @@ let TODAY = new Date().toISOString().slice(0, 10)
 const liveDb = Boolean(process.env.SERVICE_DATABASE_URL ?? process.env.DATABASE_URL)
 const describeLive = liveDb ? describe : describe.skip
 
-let client: ReturnType<typeof neonServiceDbClient>
+let client: ReturnType<typeof serviceDbClient>
 
 interface CoverageSnapshot {
   id: string
@@ -61,14 +61,14 @@ function rpcRecorded(result: { data: unknown }): boolean {
 }
 
 beforeAll(async () => {
-  client = neonServiceDbClient()
+  client = serviceDbClient()
   // The org's business date, not the UTC date: the whole app (and
   // loadRepOperatingPlan) reads the org clock.
   const policy = await loadOperatingPolicy(ORG, client)
   TODAY = orgDate(currentInstant(), policy.timezone)
 })
 
-afterAll(async () => { await closeNeonPool() })
+afterAll(async () => { await closeDbPool() })
 
 async function snapshot() {
   const { data: coverage } = await client.raw<CoverageSnapshot>(

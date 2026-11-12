@@ -10,7 +10,7 @@
  *   §27     discovery stores a real revenue identity, never a raw profile id
  */
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { neonServiceDbClient, closeNeonPool } from '@/lib/db/neon'
+import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const TODAY = new Date().toISOString().slice(0, 10)
@@ -63,7 +63,7 @@ const PERSON = {
 }
 
 async function cleanup() {
-  const client = neonServiceDbClient()
+  const client = serviceDbClient()
   // Only this run's rows. Never a broad delete over the shared test org.
   await client.from('action_events').delete().eq('organization_id', ORG).like('idempotency_key', '%test-v63-%')
   if (createdCandidateIds.length > 0) {
@@ -86,13 +86,13 @@ async function cleanup() {
 
 afterAll(async () => {
   await cleanup()
-  await closeNeonPool()
+  await closeDbPool()
 })
 
 describe('V63_DISCOVERY_IDEMPOTENT_REPLAY', () => {
   it('a second run creates zero duplicate candidates and zero duplicate events', async () => {
     await cleanup()
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data: search } = await client
       .from('provider_saved_searches')
       .insert({
@@ -187,7 +187,7 @@ describe('V63_DISCOVERY_IDEMPOTENT_REPLAY', () => {
 describe('V63_PROVIDER_FAILURE_POLICY', () => {
   it('a disabled provider stops the run and records the reason', async () => {
     await cleanup()
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     await client.from('provider_config').upsert({
       organization_id: ORG,
       provider: 'snov',
@@ -223,7 +223,7 @@ describe('V63_PROVIDER_FAILURE_POLICY', () => {
 
   it('an exhausted daily budget stops discovery before any provider call', async () => {
     await cleanup()
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     await client.from('provider_config').upsert({
       organization_id: ORG,
       provider: 'snov',
@@ -302,7 +302,7 @@ describe('V63_MANUAL_PATH_ENRICHMENT', () => {
 
 describe('V63_STALE_EMAIL_REVERIFY', () => {
   it('reverifies an old verified address before send and blocks an invalid one', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const old = new Date(Date.now() - 120 * 86_400_000).toISOString()
     const { data: contact, error } = await client
       .from('contact_points')
@@ -356,7 +356,7 @@ describe('V63_STALE_EMAIL_REVERIFY', () => {
   }, 60_000)
 
   it('fails closed when the verifier is unavailable (§6)', async () => {
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const old = new Date(Date.now() - 120 * 86_400_000).toISOString()
     const { data: contact, error } = await client
       .from('contact_points')
@@ -400,7 +400,7 @@ describe('V63_STALE_EMAIL_REVERIFY', () => {
 describe('V63_SNV_FALLBACK_IS_REACHABLE', () => {
   it('rebuilds the provider person from stored intelligence so Snov can fire', async () => {
     await cleanup()
-    const client = neonServiceDbClient()
+    const client = serviceDbClient()
     const { data: candidate } = await client
       .from('captured_prospects')
       .insert({

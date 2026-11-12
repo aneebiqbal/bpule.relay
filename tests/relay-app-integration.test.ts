@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { neonDbClient } from '@/lib/db/neon'
 import { loadChatQueue } from '@/lib/operations/chat-queue'
+import { dbClientFor } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const REP = 'ec4f844d-24ca-4fb5-ae4f-4138244abace'
@@ -8,7 +8,7 @@ const AUTH_USER = '02b2d1bc-346c-469c-86cd-a200e6b74a43'
 
 describe('relay_app integration', () => {
   it('loads the canonical queue as relay_app', async () => {
-    const client = neonDbClient(AUTH_USER)
+    const client = dbClientFor(AUTH_USER)
     const queue = await loadChatQueue(client, {
       orgId: ORG,
       repIds: [REP],
