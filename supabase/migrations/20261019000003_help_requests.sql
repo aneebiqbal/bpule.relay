@@ -22,14 +22,15 @@ create table if not exists help_requests (
   completed_at timestamptz
 );
 
-create index help_requests_lead_idx on help_requests (lead_id);
-create index help_requests_to_rep_idx on help_requests (to_rep_id) where status = 'HELP_REQUESTED';
-create index help_requests_from_rep_idx on help_requests (from_rep_id);
-create index help_requests_org_status_idx on help_requests (org_id, status);
+create index if not exists help_requests_lead_idx on help_requests (lead_id);
+create index if not exists help_requests_to_rep_idx on help_requests (to_rep_id) where status = 'HELP_REQUESTED';
+create index if not exists help_requests_from_rep_idx on help_requests (from_rep_id);
+create index if not exists help_requests_org_status_idx on help_requests (org_id, status);
 
 -- RLS: org members can read requests they're part of
 alter table help_requests enable row level security;
 
+drop policy if exists help_requests_select on help_requests;
 create policy help_requests_select on help_requests for select
   to authenticated using (
     exists (
@@ -39,6 +40,7 @@ create policy help_requests_select on help_requests for select
     )
   );
 
+drop policy if exists help_requests_insert on help_requests;
 create policy help_requests_insert on help_requests for insert
   to authenticated with check (
     from_rep_id = current_rep_id()
@@ -49,6 +51,7 @@ create policy help_requests_insert on help_requests for insert
     )
   );
 
+drop policy if exists help_requests_update on help_requests;
 create policy help_requests_update on help_requests for update
   to authenticated using (
     to_rep_id = current_rep_id()

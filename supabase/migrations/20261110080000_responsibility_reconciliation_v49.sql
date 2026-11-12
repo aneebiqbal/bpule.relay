@@ -62,9 +62,12 @@ update profile_coverage set active = false, updated_at = now()
    and (rep_id = 'aaaaaaaa-0000-0000-0000-000000000003' or role = 'PRIMARY');
 
 insert into identity_assignments (organization_id, revenue_identity_id, rep_id, assigned_by, created_at)
-values
+select v.organization_id::uuid, v.revenue_identity_id::uuid, v.rep_id::uuid, v.assigned_by::uuid, v.created_at
+from (values
   ('11111111-1111-1111-1111-111111111111', 'ab50b6a7-0b85-44c2-b8c9-52816f8adf93', 'aaaaaaaa-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', now()),
   ('11111111-1111-1111-1111-111111111111', '41431c1f-bc48-4dde-99af-9973c87d81a9', 'aaaaaaaa-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001', now())
+) as v(organization_id, revenue_identity_id, rep_id, assigned_by, created_at)
+where exists (select 1 from revenue_identities ri where ri.id = v.revenue_identity_id::uuid)
 on conflict (revenue_identity_id, rep_id) do nothing;
 
 insert into profile_coverage (organization_id, profile_id, rep_id, role, priority, active, created_by, created_at, updated_at)

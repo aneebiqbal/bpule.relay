@@ -23,11 +23,19 @@ update profile_coverage set active = false, updated_at = now()
    and (rep_id = 'aaaaaaaa-0000-0000-0000-000000000001' or role = 'PRIMARY');
 
 insert into identity_assignments (organization_id, revenue_identity_id, rep_id, assigned_by, created_at)
-values ('11111111-1111-1111-1111-111111111111', 'e57519a5-bc62-4bfe-b29d-2be809e8d9af', 'aaaaaaaa-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', now())
+select v.organization_id::uuid, v.revenue_identity_id::uuid, v.rep_id::uuid, v.assigned_by::uuid, v.created_at
+from (values
+  ('11111111-1111-1111-1111-111111111111', 'e57519a5-bc62-4bfe-b29d-2be809e8d9af', 'aaaaaaaa-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', now())
+) as v(organization_id, revenue_identity_id, rep_id, assigned_by, created_at)
+where exists (select 1 from revenue_identities ri where ri.id = v.revenue_identity_id::uuid)
 on conflict (revenue_identity_id, rep_id) do nothing;
 
 insert into profile_coverage (organization_id, profile_id, rep_id, role, priority, active, created_by, created_at, updated_at)
-values ('11111111-1111-1111-1111-111111111111', '87c10cd5-58e3-4742-910d-4de549d522c7', 'aaaaaaaa-0000-0000-0000-000000000001', 'PRIMARY', 1, true, 'aaaaaaaa-0000-0000-0000-000000000001', now(), now());
+select v.organization_id::uuid, v.profile_id::uuid, v.rep_id::uuid, v.role, v.priority, v.active, v.created_by::uuid, v.created_at, v.updated_at
+from (values
+  ('11111111-1111-1111-1111-111111111111', '87c10cd5-58e3-4742-910d-4de549d522c7', 'aaaaaaaa-0000-0000-0000-000000000001', 'PRIMARY', 1, true, 'aaaaaaaa-0000-0000-0000-000000000001', now(), now())
+) as v(organization_id, profile_id, rep_id, role, priority, active, created_by, created_at, updated_at)
+where exists (select 1 from profiles p where p.id = v.profile_id::uuid);
 
 -- Ahmad's duplicate pack (Aneeb already holds the canonical pack).
 update daily_targets set active = false, updated_at = now()
@@ -52,9 +60,17 @@ update daily_targets set active = false, updated_at = now()
 
 -- 3. Audit trail.
 insert into coverage_events (organization_id, profile_id, event_type, primary_rep_id, reason, actor_rep_id)
-values ('11111111-1111-1111-1111-111111111111', '87c10cd5-58e3-4742-910d-4de549d522c7', 'COVERAGE_TRANSFERRED', 'aaaaaaaa-0000-0000-0000-000000000001', 'Restored from aaaaaaaa-0000-0000-0000-000000000004 per V5.0 acceptance matrix', 'aaaaaaaa-0000-0000-0000-000000000001');
+select v.organization_id::uuid, v.profile_id::uuid, v.event_type, v.primary_rep_id::uuid, v.reason, v.actor_rep_id::uuid
+from (values
+  ('11111111-1111-1111-1111-111111111111', '87c10cd5-58e3-4742-910d-4de549d522c7', 'COVERAGE_TRANSFERRED', 'aaaaaaaa-0000-0000-0000-000000000001', 'Restored from aaaaaaaa-0000-0000-0000-000000000004 per V5.0 acceptance matrix', 'aaaaaaaa-0000-0000-0000-000000000001')
+) as v(organization_id, profile_id, event_type, primary_rep_id, reason, actor_rep_id)
+where exists (select 1 from profiles p where p.id = v.profile_id::uuid);
 
 insert into accountability_audit_log (organization_id, rep_id, revenue_identity_id, event_type, detail)
-values ('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', 'e57519a5-bc62-4bfe-b29d-2be809e8d9af', 'identity_transferred', '{"from_rep_id":"aaaaaaaa-0000-0000-0000-000000000004","to_rep_id":"aaaaaaaa-0000-0000-0000-000000000001","reason":"v5.0 acceptance matrix restoration"}'::jsonb);
+select v.organization_id::uuid, v.rep_id::uuid, v.revenue_identity_id::uuid, v.event_type, v.detail
+from (values
+  ('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', 'e57519a5-bc62-4bfe-b29d-2be809e8d9af', 'identity_transferred', '{"from_rep_id":"aaaaaaaa-0000-0000-0000-000000000004","to_rep_id":"aaaaaaaa-0000-0000-0000-000000000001","reason":"v5.0 acceptance matrix restoration"}'::jsonb)
+) as v(organization_id, rep_id, revenue_identity_id, event_type, detail)
+where exists (select 1 from revenue_identities ri where ri.id = v.revenue_identity_id::uuid);
 
 commit;

@@ -68,7 +68,8 @@ alter table accountability_audit_log add column if not exists previous_value jso
 alter table accountability_audit_log add column if not exists target_id uuid;
 alter table accountability_audit_log add column if not exists target_table text;
 
-alter table eval_runs add column if not exists selfcheck_pass_rate integer;
+-- eval_runs: the canonical column is self_check_pass_rate (renamed by
+-- 20261104000000; the older Supabase snapshot still has selfcheck_pass_rate).
 
 alter table notifications add column if not exists message text;
 alter table notifications add column if not exists metadata jsonb;
@@ -80,10 +81,13 @@ alter table relay_runs add column if not exists error_message text;
 alter table relay_runs add column if not exists result_snapshot jsonb;
 alter table relay_runs add column if not exists strategy_snapshot jsonb;
 
-alter table upwork_applications add column if not exists cover_letter text;
-alter table upwork_applications add column if not exists owner_rep_id uuid references reps(id) on delete set null;
-alter table upwork_applications add column if not exists profile_id uuid references profiles(id) on delete set null;
-alter table upwork_applications add column if not exists question_answers jsonb;
+-- upwork_applications: the legacy cover_letter / owner_rep_id / profile_id /
+-- question_answers columns are intentionally dropped by the V5.1 contract
+-- (20261110120000); the canonical columns hold the data.
+
+-- upwork_messages.direction: written by the V5.1 reply backfill; added
+-- out-of-band on Neon.
+alter table upwork_messages add column if not exists direction text default 'outbound';
 
 -- close_anon_exposure helpers (that migration rolled back on a later statement).
 create or replace function public.request_is_service_role() returns boolean
