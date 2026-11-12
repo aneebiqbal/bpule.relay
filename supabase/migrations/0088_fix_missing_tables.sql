@@ -79,17 +79,21 @@ create index if not exists dt_identity_idx on daily_targets(revenue_identity_id)
 
 alter table daily_targets enable row level security;
 
+drop policy if exists "dt_select" on daily_targets;
 create policy "dt_select" on daily_targets
   for select to authenticated using (organization_id = current_org_id());
 
+drop policy if exists "dt_insert" on daily_targets;
 create policy "dt_insert" on daily_targets
   for insert to authenticated with check (organization_id = current_org_id() and is_org_admin());
 
+drop policy if exists "dt_update" on daily_targets;
 create policy "dt_update" on daily_targets
   for update to authenticated
   using (organization_id = current_org_id() and is_org_admin())
   with check (organization_id = current_org_id() and is_org_admin());
 
+drop policy if exists "dt_delete" on daily_targets;
 create policy "dt_delete" on daily_targets
   for delete to authenticated
   using (organization_id = current_org_id() and is_org_admin());
@@ -117,12 +121,15 @@ create index if not exists da_date_idx on daily_accountability(target_date);
 
 alter table daily_accountability enable row level security;
 
+drop policy if exists "da_select" on daily_accountability;
 create policy "da_select" on daily_accountability
   for select to authenticated using (organization_id = current_org_id());
 
+drop policy if exists "da_insert" on daily_accountability;
 create policy "da_insert" on daily_accountability
   for insert to authenticated with check (organization_id = current_org_id() and is_org_admin());
 
+drop policy if exists "da_update" on daily_accountability;
 create policy "da_update" on daily_accountability
   for update to authenticated
   using (organization_id = current_org_id() and is_org_admin())

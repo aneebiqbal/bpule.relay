@@ -198,11 +198,11 @@ create policy "rco_select" on relay_content_opportunities for select
   to authenticated using (organization_id = current_org_id() and is_org_admin());
 
 drop policy if exists "rco_insert" on relay_content_opportunities;
-create policy if not exists "rco_insert" on relay_content_opportunities for insert
+create policy "rco_insert" on relay_content_opportunities for insert
   to authenticated with check (organization_id = current_org_id() and is_org_admin());
 
 drop policy if exists "rco_update" on relay_content_opportunities;
-create policy if not exists "rco_update" on relay_content_opportunities for update
+create policy "rco_update" on relay_content_opportunities for update
   to authenticated using (organization_id = current_org_id() and is_org_admin())
   with check (organization_id = current_org_id() and is_org_admin());
 

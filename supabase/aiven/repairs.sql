@@ -46,6 +46,45 @@ create index if not exists upv_job_idx on upwork_proposal_versions (job_id);
 -- upwork_jobs.revenue_identity_id: the V5.1 submit RPC writes it.
 alter table upwork_jobs add column if not exists revenue_identity_id uuid references revenue_identities(id) on delete set null;
 
+-- relay_events.actor_rep_id: the close_anon_exposure policy references it; the
+-- column was added out-of-band on Neon.
+alter table relay_events add column if not exists actor_rep_id uuid references reps(id) on delete set null;
+
+-- upwork_applications.first_reply_at: the V5.1 reply backfill writes it.
+alter table upwork_applications add column if not exists first_reply_at timestamptz;
+alter table upwork_applications add column if not exists latest_reply_at timestamptz;
+
+-- accountability_audit_log.actor_id: the close_anon_exposure policy references
+-- it (the table carries rep_id).
+alter table accountability_audit_log add column if not exists actor_id uuid references reps(id) on delete set null;
+
+-- ---------------------------------------------------------------------------
+-- Out-of-band columns the consolidated catch-up predates (live Neon/Supabase
+-- schema, verified against the Supabase OpenAPI definition).
+-- ---------------------------------------------------------------------------
+alter table accountability_audit_log add column if not exists action text;
+alter table accountability_audit_log add column if not exists new_value jsonb;
+alter table accountability_audit_log add column if not exists previous_value jsonb;
+alter table accountability_audit_log add column if not exists target_id uuid;
+alter table accountability_audit_log add column if not exists target_table text;
+
+alter table eval_runs add column if not exists selfcheck_pass_rate integer;
+
+alter table notifications add column if not exists message text;
+alter table notifications add column if not exists metadata jsonb;
+alter table notifications add column if not exists rep_id uuid references reps(id) on delete set null;
+alter table notifications add column if not exists type text;
+
+alter table relay_runs add column if not exists current_phase text;
+alter table relay_runs add column if not exists error_message text;
+alter table relay_runs add column if not exists result_snapshot jsonb;
+alter table relay_runs add column if not exists strategy_snapshot jsonb;
+
+alter table upwork_applications add column if not exists cover_letter text;
+alter table upwork_applications add column if not exists owner_rep_id uuid references reps(id) on delete set null;
+alter table upwork_applications add column if not exists profile_id uuid references profiles(id) on delete set null;
+alter table upwork_applications add column if not exists question_answers jsonb;
+
 -- close_anon_exposure helpers (that migration rolled back on a later statement).
 create or replace function public.request_is_service_role() returns boolean
 language sql stable set search_path = public as
