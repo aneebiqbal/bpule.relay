@@ -471,7 +471,7 @@ const SOURCE_LABEL: Record<OpsSource, string> = { linkedin: 'LinkedIn', upwork: 
  * so a broken aggregate degrades to the old behaviour rather than to zeros.
  */
 async function loadPerformanceAggregate(client: DbClient, query: PerformanceQuery): Promise<PerformanceData | null> {
-  if (client.provider !== 'neon' || !client.raw) return null
+  if (!client.raw) return null
 
   const scope: PerformanceAggregateScope = {
     orgId: query.orgId,

@@ -15,7 +15,7 @@ export interface TeamTrendPoint {
 }
 
 export async function loadTeamTrend(client: DbClient, scope: TeamTrendScope): Promise<TeamTrendPoint[] | null> {
-  if (client.provider !== 'neon' || !client.raw) return null
+  if (!client.raw) return null
 
   const trend = teamTrendSql(scope)
   const tasks = teamTasksTrendSql(scope)

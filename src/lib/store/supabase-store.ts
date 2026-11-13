@@ -639,7 +639,7 @@ export class SupabaseStore implements ScoutStore {
    */
   private async getRateGroups(): Promise<RateGroup[]> {
     if (this._rateGroupsCache) return this._rateGroupsCache
-    if (this.client.provider === 'neon' && this.client.raw) {
+    if (this.client.raw) {
       const { data, error } = await this.client.raw<RateGroup>(RATE_GROUP_SQL, [
         this.orgId,
         this.orgId,
@@ -686,7 +686,7 @@ export class SupabaseStore implements ScoutStore {
    * falls back to `loadBoardData` + the JS authority.
    */
   async getPipelineStageSummary(scope: PipelineStageScope): Promise<PipelineStageCounts | null> {
-    if (this.client.provider !== 'neon' || !this.client.raw) return null
+    if (!this.client.raw) return null
     const nowIso = new Date().toISOString()
     const { data, error } = await this.client.raw<Partial<PipelineStageCounts>>(
       pipelineStageSql(pipelineScopeClause(scope)),
@@ -701,7 +701,7 @@ export class SupabaseStore implements ScoutStore {
 
   /** Bounded card ids in board order (stage priority, then last activity). */
   async getPipelineCardIds(scope: PipelineStageScope, limit: number): Promise<string[] | null> {
-    if (this.client.provider !== 'neon' || !this.client.raw) return null
+    if (!this.client.raw) return null
     const nowIso = new Date().toISOString()
     const { data, error } = await this.client.raw<{ id: string }>(
       pipelineCardIdsSql(pipelineScopeClause(scope)),

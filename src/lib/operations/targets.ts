@@ -240,7 +240,7 @@ async function loadTargetEvents(
   input: { orgId: string; window: { start: string; end: string } },
   repIds: string[],
 ): Promise<TargetEventRead> {
-  if (client.provider === 'neon' && client.raw) {
+  if (client.raw) {
     const { sql, params } = targetProgressSql({
       orgId: input.orgId,
       repIds,

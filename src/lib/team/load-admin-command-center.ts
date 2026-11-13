@@ -460,7 +460,7 @@ async function loadTaskCompletionCounts(
   end: string,
 ): Promise<Map<string, number>> {
   const supabase = await createServerSupabase()
-  if (supabase.provider !== 'neon' || !supabase.raw) return new Map()
+  if (!supabase.raw) return new Map()
   const { sql, params } = taskCompletionCountsSql({ orgId, repIds: null, start, end })
   const res = await supabase.raw<{ key: string | null; n: number }[]>(sql, params)
   if (res.error || !Array.isArray(res.data)) return new Map()

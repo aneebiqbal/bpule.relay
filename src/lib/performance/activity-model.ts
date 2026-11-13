@@ -266,7 +266,7 @@ async function loadDailyCounts(params: {
   supabase: DbClient
 }): Promise<DailyCountsResult | null> {
   const { repId, orgId, startDate, endDate, timezone, supabase } = params
-  if (supabase.provider !== 'neon' || !supabase.raw) return null
+  if (!supabase.raw) return null
 
   const daily = activityDailySql({ orgId, repId, start: startDate.toISOString(), end: endDate.toISOString(), timezone })
   const coverage = activityCoverageSql({ orgId, repId, start: startDate.toISOString(), end: endDate.toISOString() })
@@ -299,7 +299,7 @@ async function loadDayEvents(params: {
 }): Promise<Map<string, DailyActivity['events']>> {
   const { repId, orgId, date, timezone, supabase } = params
   if (!isDateString(date)) return new Map()
-  if (supabase.provider !== 'neon' || !supabase.raw) return new Map()
+  if (!supabase.raw) return new Map()
   const { start, end } = businessDateRange(date, timezone)
   const { sql, params: args } = activityDayEventsSql({ orgId, repId, start, end, timezone })
   const { data, error } = await supabase.raw<{
