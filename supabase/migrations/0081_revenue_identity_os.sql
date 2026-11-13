@@ -1,4 +1,4 @@
--- 0043: Revenue Identity OS — schema + seed from upwork.pdf master data
+-- 0043: Revenue Identity OS — schema + seed from historical Upwork master data
 --
 -- Fully idempotent. Handles partial application, pre-existing Aneeb records,
 -- and re-runs safely. All DDL uses IF NOT EXISTS; all inserts use
