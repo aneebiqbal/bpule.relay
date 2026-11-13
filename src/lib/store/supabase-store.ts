@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { StorageClient } from '@/lib/storage/postgres-storage'
 import type { DbClient } from '@/lib/db/types'
 import { currentInstant, orgDate, orgTodayRange, type OperatingPolicy } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
@@ -530,8 +530,8 @@ export class SupabaseStore implements ScoutStore {
     private readonly rep: Rep,
     private readonly client: DbClient,
     private readonly organization: Organization,
-    /** Raw Supabase client, used only for Storage (not part of the adapter). */
-    private readonly storageClient: SupabaseClient | null = null,
+    /** Object storage client (Aiven Postgres), not part of the DB adapter. */
+    private readonly storageClient: StorageClient | null = null,
   ) {}
 
   get organizationId(): string {
@@ -2419,7 +2419,7 @@ export class SupabaseStore implements ScoutStore {
     if (profile?.cvPath) {
       // Storage is not part of the canonical adapter — it stays on Supabase
       // until Neon Object Storage is migrated.
-      await this.storageClient?.storage.from('proof-cvs').remove([profile.cvPath])
+      await this.storageClient?.from('proof-cvs').remove([profile.cvPath])
     }
     const { error } = await this.client
       .from('profiles')
@@ -2499,7 +2499,7 @@ export class SupabaseStore implements ScoutStore {
       .maybeSingle()
     const cvPath = (data as Row | null)?.cv_path as string | undefined
     if (cvPath) {
-      await this.storageClient?.storage.from('proof-cvs').remove([cvPath])
+      await this.storageClient?.from('proof-cvs').remove([cvPath])
     }
     const { error } = await this.client.from('profiles').delete().eq('id', id)
     if (error) throw error

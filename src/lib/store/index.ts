@@ -1,4 +1,6 @@
 import { getSupabaseAuthClient } from '@/lib/supabase/server'
+import { createSupabaseStorage } from '@/lib/storage/supabase-storage'
+import { createPostgresStorage } from '@/lib/storage/postgres-storage'
 import { cache } from 'react'
 import type { ScoutStore } from '@/lib/store/types'
 import { SupabaseStore } from '@/lib/store/supabase-store'
@@ -33,8 +35,11 @@ export const createScoutStore = cache(async (): Promise<ScoutStore> => {
     user.rep,
     client,
     user.organization,
-    // Object storage stays on Supabase until Neon Storage lands.
-    provider === 'neon' ? null : await getSupabaseAuthClient(),
+    // Object storage follows the database provider: Supabase for the rollback
+    // path, Aiven Postgres otherwise.
+    provider === 'supabase'
+      ? createSupabaseStorage((await getSupabaseAuthClient()).storage)
+      : createPostgresStorage(client),
   )
 })
 

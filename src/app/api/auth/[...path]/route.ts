@@ -25,7 +25,7 @@ function getHandler() {
 }
 
 /** Outbound: make a `__Secure-` cookie storable on plain HTTP. */
-function forwardResponse(response: Response, secureContext: boolean): Response {
+export function forwardResponse(response: Response, secureContext: boolean): Response {
   if (secureContext || process.env.NODE_ENV === 'production') return response
   const cookies = response.headers.getSetCookie()
   if (cookies.length === 0 || !cookies.some((c) => /;\s*Secure/i.test(c))) return response

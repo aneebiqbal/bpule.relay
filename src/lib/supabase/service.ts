@@ -4,6 +4,7 @@ import { neonServiceDbClient } from '@/lib/db/neon'
 import { postgresServiceDbClient } from '@/lib/db/postgres'
 import { resolveDbProvider } from '@/lib/db/types'
 import type { DbClient } from '@/lib/db/types'
+import { createPostgresStorage, type StorageClient } from '@/lib/storage/postgres-storage'
 
 /**
  * Service-role Supabase client. Bypasses RLS entirely — never expose this to
@@ -64,12 +65,13 @@ export function createServiceSupabaseAuth(): SupabaseClient {
  * Supabase Storage until Neon Storage lands.
  */
 export type ProfileClient = DbClient
-export type ProfileStorageClient = DbClient & { storage: SupabaseClient['storage'] }
+export type ProfileStorageClient = DbClient & { storage: StorageClient }
 
 export function createProfileClient(): ProfileStorageClient {
   const db = createServiceSupabase()
-  const raw = createServiceSupabaseAuth()
-  return Object.assign(Object.create(Object.getPrototypeOf(db)), db, { storage: raw.storage })
+  return Object.assign(Object.create(Object.getPrototypeOf(db)), db, {
+    storage: createPostgresStorage(db),
+  })
 }
 
 /**

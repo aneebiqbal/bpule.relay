@@ -104,6 +104,7 @@ describe('NEON_AUTH_PROVIDER_NO_SUPABASE_CALL', () => {
 describe('NEON_AUTH_SIGNOUT_CLEARS_SESSION', () => {
   it('forwards DELETE to the auth proxy so the session cookies are cleared', () => {
     const source = read('src/app/api/auth/[...path]/route.ts')
-    expect(source).toContain("handler('DELETE'")
+    expect(source).toContain('export function DELETE')
+    expect(source).toContain('handler[method]')
   })
 })
