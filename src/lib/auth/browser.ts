@@ -22,7 +22,10 @@ export function currentBrowserAuthProvider(): AuthProviderName {
  * sign-out and password reset only.
  */
 export async function getBrowserAuth(): Promise<BrowserAuthProvider> {
-  if (resolveAuthProvider() === 'neon') {
+  // `neon` and `aiven` both use the origin-agnostic Better Auth browser client
+  // (it calls /api/auth/*, which the app serves). Only `supabase` talks to
+  // Supabase directly.
+  if (resolveAuthProvider() !== 'supabase') {
     if (!neonBrowser) {
       const { neonBrowserAuth } = await import('./neon')
       neonBrowser = neonBrowserAuth()
