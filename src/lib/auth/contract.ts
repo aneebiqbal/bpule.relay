@@ -6,6 +6,7 @@
  *
  *   - `supabase` — the existing Supabase Auth client (rollback path)
  *   - `neon`     — Neon Auth, the managed Better Auth service on the Neon branch
+ *   - `aiven`    — Better Auth running in-app against the `neon_auth` schema on Aiven
  *
  * `RELAY_AUTH_PROVIDER` selects one. It defaults to `supabase` so a deployment
  * that has not opted in behaves exactly as it did before.
@@ -15,7 +16,7 @@
  * metadata, which the browser could otherwise influence.
  */
 
-export type AuthProviderName = 'supabase' | 'neon'
+export type AuthProviderName = 'supabase' | 'neon' | 'aiven'
 
 /**
  * The provider the server rendered into the page. See `resolveAuthProvider`.
@@ -44,7 +45,9 @@ export function resolveAuthProvider(env: NodeJS.ProcessEnv = process.env): AuthP
   )
     ?.trim()
     .toLowerCase()
-  return value === 'neon' ? 'neon' : 'supabase'
+  if (value === 'neon') return 'neon'
+  if (value === 'aiven' || value === 'better-auth') return 'aiven'
+  return 'supabase'
 }
 
 export interface AuthUser {

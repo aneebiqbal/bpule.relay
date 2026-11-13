@@ -40,6 +40,12 @@ grant execute on all functions in schema public to relay_app, relay_service;
 grant usage on schema supabase_migrations to relay_app, relay_service;
 grant select on all tables in schema supabase_migrations to relay_app, relay_service;
 
+-- The auth store (Better Auth tables) lives in its own schema; the service
+-- role runs the auth engine against it.
+grant usage on schema neon_auth to relay_service;
+grant select, insert, update, delete on all tables in schema neon_auth to relay_service;
+grant usage, select on all sequences in schema neon_auth to relay_service;
+
 -- The auth/extensions schemas stay owner-only; the app never writes them
 -- through the runtime connection. (Supabase-only schemas such as `storage`
 -- are absent on Neon and therefore on Aiven.)

@@ -21,6 +21,7 @@ import { supabaseBrowserAuth } from './supabase'
 import { supabaseServerAuth } from './supabase-server'
 
 let neonServer: AuthProvider | null = null
+let aivenServer: AuthProvider | null = null
 
 /** The provider this process is running. */
 export function currentAuthProvider(): AuthProviderName {
@@ -40,13 +41,24 @@ function supabaseProvider(): AuthProvider {
  * The canonical authentication provider for server code.
  */
 export async function getAuthProvider(): Promise<AuthProvider> {
-  if (resolveAuthProvider() === 'neon') {
+  const provider = resolveAuthProvider()
+  if (provider === 'neon') {
     if (!neonServer) {
       const { neonBrowserAuth } = await import('./neon')
       const { neonServerAuth } = await import('./neon-server')
       neonServer = { ...neonBrowserAuth(), ...neonServerAuth() }
     }
     return neonServer
+  }
+  if (provider === 'aiven') {
+    if (!aivenServer) {
+      const { neonBrowserAuth } = await import('./neon')
+      const { betterAuthServerAuth } = await import('./better-auth-server')
+      // The browser client is origin-agnostic: it calls `/api/auth/*`, which the
+      // auth route serves from our own Better Auth handler.
+      aivenServer = { ...neonBrowserAuth(), ...betterAuthServerAuth(), name: 'aiven' }
+    }
+    return aivenServer
   }
   return supabaseProvider()
 }

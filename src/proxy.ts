@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { isDemoMode } from "@/lib/ai/config";
 import { getAuthProvider } from "@/lib/auth/provider";
+import { resolveAuthProvider } from "@/lib/auth/contract";
 
 const PROTECTED_PREFIXES = [
   "/onboarding",
@@ -46,6 +47,9 @@ const PROTECTED_PREFIXES = [
  * Production (HTTPS) is untouched: the prefix is present end to end.
  */
 function restoreSecureCookiePrefix(request: NextRequest): NextRequest {
+  // Only the hosted Neon proxy used a hard-coded `__Secure-` name; the Aiven
+  // Better Auth instance already picks the right name for the context.
+  if (resolveAuthProvider() === 'aiven') return request;
   if (request.nextUrl.protocol === 'https:') return request;
   if (process.env.NODE_ENV === 'production') return request;
   const cookies = request.headers.get('cookie');
