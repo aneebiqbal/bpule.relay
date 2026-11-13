@@ -49,9 +49,15 @@ export function getPostgresPool(): Pool {
   if (!url) throw new Error('DATABASE_URL is not configured for the postgres provider')
   pool = new Pool({
     connectionString: url,
+    // Keep this small: Vercel runs many concurrent instances, and every one
+    // holds its own pool. On a 100-connection Aiven plan, a pool of 12 across a
+    // dozen warm instances exhausts the service during a traffic burst.
     max: Number(process.env.DATABASE_POOL_MAX ?? 3),
     types: { getTypeParser: (id, format) => pgTypeParser(id, format) },
     ssl: sslConfig(),
+    // Fail fast when the service is at capacity instead of queueing forever.
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 30_000,
   })
   pool.on('error', (err) => {
     // A failing idle client must never become an uncaughtException.
@@ -70,6 +76,8 @@ export function getPostgresServicePool(): Pool {
     max: Number(process.env.SERVICE_DATABASE_POOL_MAX ?? 1),
     types: { getTypeParser: (id, format) => pgTypeParser(id, format) },
     ssl: sslConfig(),
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 30_000,
   })
   servicePool.on('error', (err) => {
     console.error('[db] postgres service client error (degraded):', String(err instanceof Error ? err.message : err))

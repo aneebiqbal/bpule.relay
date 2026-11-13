@@ -28,8 +28,12 @@ function createAuth() {
 
   const pool = new Pool({
     connectionString: url,
-    max: Number(process.env.AUTH_DATABASE_POOL_MAX ?? 4),
+    // One shared pool per process: Vercel runs many concurrent instances and
+    // every one holds its own. Keep it small and fail fast at capacity.
+    max: Number(process.env.AUTH_DATABASE_POOL_MAX ?? 2),
     ssl: process.env.DATABASE_SSL === 'false' ? undefined : { rejectUnauthorized: false },
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 30_000,
   })
   const kysely = new Kysely<Record<string, never>>({
     dialect: new PostgresDialect({ pool }),
