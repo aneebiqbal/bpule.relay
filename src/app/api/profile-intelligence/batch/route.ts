@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
-import { createServiceSupabase, createServiceSupabaseAuth } from '@/lib/supabase/service'
+import { createProfileClient, createServiceSupabase, type ProfileStorageClient } from '@/lib/supabase/service'
 import type { ProfileImportBatch } from '@/lib/domain/types'
 import { profileAccess } from '@/lib/profile-intelligence/access'
 import { contentHash, resolveMimeType, sanitizeFilename } from '@/lib/profile-intelligence/parse-document'
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   }
 
   const client = createServiceSupabase()
-  const storageClient = createServiceSupabaseAuth()
+  const storageClient = createProfileClient()
   const orgId = authCtx.orgId
   const uploadedBy = authCtx.repId
 
@@ -191,7 +191,7 @@ export async function POST(request: Request) {
  * upload retried once. Returns an error message, or null on success.
  */
 async function uploadWithBucketCheck(
-  client: ReturnType<typeof createServiceSupabaseAuth>,
+  client: ProfileStorageClient,
   path: string,
   buffer: ArrayBuffer,
   contentType: string,

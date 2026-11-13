@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
-import { getSupabaseAuthClient } from '@/lib/supabase/server'
+import { createServiceSupabase } from '@/lib/supabase/service'
+import { createPostgresStorage } from '@/lib/storage/postgres-storage'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const ALLOWED: Record<string, string> = {
@@ -21,6 +22,15 @@ async function loadProfileForRequest(
     return profiles.find((p) => p.id === id) ?? null
   }
   return store.getProfile(id)
+}
+
+/**
+ * Objects live in Aiven Postgres. The "signed URL" is a same-origin link back to
+ * this access-checked route, so authorization is enforced on every download
+ * rather than delegated to a time-limited storage signature.
+ */
+function objectUrl(id: string, admin: boolean): string {
+  return `/api/profiles/${id}/cv?raw=1${admin ? '&admin=1' : ''}`
 }
 
 export async function GET(
@@ -59,11 +69,27 @@ export async function GET(
     return NextResponse.json({ signedUrl: null })
   }
 
-  const client = await getSupabaseAuthClient()
-  const { data: signed } = await client.storage
-    .from('proof-cvs')
-    .createSignedUrl(profile.cvPath, 60 * 60)
-  return NextResponse.json({ signedUrl: signed?.signedUrl ?? null })
+  // Raw download: the profile access check above already authorized the caller.
+  if (url.searchParams.get('raw') === '1') {
+    const storage = createPostgresStorage(createServiceSupabase())
+    const { data, error } = await storage.from('proof-cvs').download(profile.cvPath)
+    if (!data) {
+      return NextResponse.json(
+        { error: error?.message ?? 'CV not found.' },
+        { status: 404 },
+      )
+    }
+    const filename = profile.cvPath.split('/').pop() ?? 'cv'
+    return new NextResponse(data, {
+      status: 200,
+      headers: {
+        'content-type': data.type || 'application/octet-stream',
+        'content-disposition': `inline; filename="${filename}"`,
+      },
+    })
+  }
+
+  return NextResponse.json({ signedUrl: objectUrl(id, admin) })
 }
 
 export async function POST(
@@ -129,12 +155,15 @@ export async function POST(
     )
   }
 
-  const client = await getSupabaseAuthClient()
   const path = `${profile.repId}/${crypto.randomUUID()}.${ext}`
-
-  const { error: uploadError } = await client.storage
+  const storage = createPostgresStorage(createServiceSupabase())
+  const { error: uploadError } = await storage
     .from('proof-cvs')
-    .upload(path, file, { cacheControl: '3600', upsert: false })
+    .upload(path, new Uint8Array(await file.arrayBuffer()), {
+      contentType: file.type,
+      cacheControl: '3600',
+      upsert: false,
+    })
   if (uploadError) {
     return safeErrorResponse(uploadError, 500, 'Upload failed. Please try again.', 'profiles/[id]/cv')
   }
@@ -158,10 +187,5 @@ export async function POST(
         cvPath: path,
       })
 
-  const { data: signed } = await client.storage
-    .from('proof-cvs')
-    .createSignedUrl(path, 60 * 60)
-  const signedUrl = signed?.signedUrl ?? null
-
-  return NextResponse.json({ profile: updated, signedUrl })
+  return NextResponse.json({ profile: updated, signedUrl: objectUrl(id, admin) })
 }

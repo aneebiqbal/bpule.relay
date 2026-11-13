@@ -10,6 +10,14 @@ type SupabaseStorage = import('@supabase/supabase-js').SupabaseClient['storage']
 
 export function createSupabaseStorage(storage: SupabaseStorage): StorageClient {
   return {
+    async createBucket(name, opts) {
+      const { error } = await storage.createBucket(name, {
+        public: opts?.public ?? false,
+        fileSizeLimit: opts?.fileSizeLimit,
+        allowedMimeTypes: opts?.allowedMimeTypes,
+      })
+      return { error: error ? { message: error.message } : null }
+    },
     from(bucket: string): StorageBucket {
       const ref = storage.from(bucket)
       return {
@@ -27,14 +35,6 @@ export function createSupabaseStorage(storage: SupabaseStorage): StorageClient {
         },
         async remove(paths) {
           const { error } = await ref.remove(paths)
-          return { error: error ? { message: error.message } : null }
-        },
-        async createBucket(name, opts) {
-          const { error } = await storage.createBucket(name, {
-            public: opts?.public ?? false,
-            fileSizeLimit: opts?.fileSizeLimit,
-            allowedMimeTypes: opts?.allowedMimeTypes,
-          })
           return { error: error ? { message: error.message } : null }
         },
       }

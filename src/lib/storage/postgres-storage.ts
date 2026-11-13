@@ -24,11 +24,11 @@ export interface StorageBucket {
   upload: (path: string, data: Uint8Array | ArrayBuffer | { bytes: Uint8Array }, opts?: StorageUploadOptions) => Promise<{ error: StorageError | null }>
   download: (path: string) => Promise<{ data: Blob | null; error: StorageError | null }>
   remove: (paths: string[]) => Promise<{ error: StorageError | null }>
-  createBucket: (name: string, opts?: { public?: boolean; fileSizeLimit?: number; allowedMimeTypes?: string[] }) => Promise<{ error: StorageError | null }>
 }
 
 export interface StorageClient {
   from: (bucket: string) => StorageBucket
+  createBucket: (name: string, opts?: { public?: boolean; fileSizeLimit?: number; allowedMimeTypes?: string[] }) => Promise<{ error: StorageError | null }>
 }
 
 function toBytes(data: Uint8Array | ArrayBuffer | { bytes: Uint8Array }): Buffer {
@@ -44,6 +44,10 @@ export function createPostgresStorage(client: DbClient): StorageClient {
   const raw = client.raw.bind(client)
 
   return {
+    async createBucket() {
+      // Buckets are implicit in this adapter.
+      return { error: null }
+    },
     from(bucket: string): StorageBucket {
       return {
         async upload(path, data, opts) {
@@ -98,10 +102,6 @@ export function createPostgresStorage(client: DbClient): StorageClient {
           }
         },
 
-        async createBucket() {
-          // Buckets are implicit in this adapter.
-          return { error: null }
-        },
       }
     },
   }
