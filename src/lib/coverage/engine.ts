@@ -1,5 +1,13 @@
 import type { RevenueIdentityChannel } from '@/lib/domain/types'
 import type { CoverageExecutionMode } from './access'
+import {
+  computeCoverageGaps,
+  resolveCurrentOperators,
+  resolveNextOperator,
+  type ActiveShift,
+  type CoverageGap,
+  type ScheduleInput,
+} from '@/lib/schedules/model'
 
 /**
  * The daily coverage engine — one deterministic derivation, no AI.
@@ -123,6 +131,10 @@ export interface ProfileWorkInput {
 export interface CoverageEngineInput {
   businessDate: string
   isWorkingDay: boolean
+  /** The instant "now" for schedule resolution, ISO. Defaults to the wall clock. */
+  now?: string
+  /** Organization timezone for shift windows. */
+  timezone?: string
   coveragePolicy: CoverageMode
   maxProfilesPerRep: number
   profiles: CoverageProfileInput[]
@@ -132,6 +144,8 @@ export interface CoverageEngineInput {
   workloads: RepWorkloadInput[]
   activeCoverage: ActiveCoverageInput[]
   readiness: Array<{ profileId: string; repId: string }>
+  /** Operator shift windows — the time-aware responsibility authority. */
+  schedules?: ScheduleInput[]
   /** Optional per-profile open work package (canonical Inbox + assigned tasks). */
   profileWork?: Record<string, ProfileWorkInput>
 }
@@ -190,6 +204,12 @@ export interface CoverageProfileResult {
   coverageExpiring: boolean
   /** The primary rep has confirmed operational readiness for this profile. */
   primaryReady: boolean
+  /** Operators whose shift is open at `now`, sorted by shift start. */
+  currentOperators: ActiveShift[]
+  /** The next shift to open today, when the profile is not fully covered. */
+  nextOperator: ActiveShift | null
+  /** Uncovered minutes in the business day — the 24-hour coverage gate. */
+  coverageGaps: CoverageGap[]
   work: ProfileWorkInput
 }
 
@@ -355,6 +375,11 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
     activeByProfile.set(row.profileId, list)
   }
   const readyPairs = new Set(input.readiness.map((row) => `${row.profileId}:${row.repId}`))
+  // Schedules are optional so existing callers (and tests) keep working; with
+  // no shift rows every profile simply has no time-aware operator.
+  const schedules = input.schedules ?? []
+  const now = new Date(input.now ?? Date.now())
+  const timezone = input.timezone ?? 'UTC'
 
   const profiles: CoverageProfileResult[] = []
   const requiresApproval: CoverageApprovalItem[] = []
@@ -447,6 +472,31 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
     let ineligibleReason: string | null = null
     const coverageExpiring = activeList.some((row) => row.effectiveUntil === input.businessDate)
     const primaryReady = primary ? readyPairs.has(`${profile.profileId}:${primary.repId}`) : false
+
+    // Time-aware responsibility: who is executable right now, and who is next.
+    // A shift only counts when the rep is actually available — a scheduled
+    // operator on leave is not executable, and the fallback stays visible.
+    const availableNow = new Set(
+      input.availability
+        .filter((row) => row.state === 'AVAILABLE' || row.state === 'WORKING')
+        .map((row) => row.repId),
+    )
+    const currentOperators = resolveCurrentOperators(schedules, profile.profileId, now)
+      .filter((shift) => availableNow.has(shift.repId))
+      .map((shift) => ({
+        ...shift,
+        repName: workloadByRep.get(shift.repId)?.name ?? shift.repId,
+      }))
+    const nextOperatorRaw = resolveNextOperator(schedules, profile.profileId, now)
+    const nextOperator = nextOperatorRaw
+      ? {
+          ...nextOperatorRaw,
+          repName: workloadByRep.get(nextOperatorRaw.repId)?.name ?? nextOperatorRaw.repId,
+        }
+      : null
+    const coverageGaps = computeCoverageGaps(schedules, profile.profileId, input.businessDate, {
+      timezone,
+    })
 
     if (!primary) {
       status = 'UNCOVERED'
@@ -573,6 +623,9 @@ export function evaluateDailyCoverage(input: CoverageEngineInput): CoveragePlan 
       ineligibleReason,
       coverageExpiring,
       primaryReady,
+      currentOperators,
+      nextOperator,
+      coverageGaps,
       work,
     })
   }

@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { loadProfileOperatingModel } from '@/lib/profiles/operating-model'
 import { loadCoveragePlan } from '@/lib/coverage/load'
+import { listSchedulesForProfile } from '@/lib/schedules/load'
 import { TeamProfileDetailView } from '@/components/team/team-profile-detail'
 
 export const dynamic = 'force-dynamic'
@@ -83,6 +84,48 @@ export default async function TeamProfileDetailPage({
     .filter((profile) => profile.activeCoveringRepId)
     .map((profile) => profile.profileId)
 
+  // Operator schedules are per channel profile. The person may span several.
+  const profileIds = [...new Set(model.channels.map((channel) => channel.profileId).filter(Boolean))]
+  const scheduleRows = profileIds.length > 0
+    ? await Promise.all(profileIds.map((id) => listSchedulesForProfile(supabase, ctx.orgId, id)))
+    : []
+  const schedules = scheduleRows.flat()
+  // A person's channel profiles may not be the same rows the coverage plan
+  // grouped by person, so the operator status is keyed by profile id.
+  const operatorStatus: Record<
+    string,
+    {
+      current: Array<{ repId: string; repName: string | null; startMinutes: number; endMinutes: number; crossesMidnight: boolean }>
+      next: { repId: string; repName: string | null; startMinutes: number; endMinutes: number } | null
+      gaps: Array<{ start: string; end: string; minutes: number }>
+    }
+  > = {}
+  for (const profile of coverage?.profiles ?? []) {
+    if (!profileIds.includes(profile.profileId)) continue
+    operatorStatus[profile.profileId] = {
+      current: profile.currentOperators.map((row) => ({
+        repId: row.repId,
+        repName: row.repName ?? null,
+        startMinutes: row.startMinutes,
+        endMinutes: row.endMinutes,
+        crossesMidnight: row.crossesMidnight,
+      })),
+      next: profile.nextOperator
+        ? {
+            repId: profile.nextOperator.repId,
+            repName: profile.nextOperator.repName ?? null,
+            startMinutes: profile.nextOperator.startMinutes,
+            endMinutes: profile.nextOperator.endMinutes,
+          }
+        : null,
+      gaps: profile.coverageGaps.map((gap) => ({
+        start: gap.start,
+        end: gap.end,
+        minutes: gap.minutes,
+      })),
+    }
+  }
+
   return (
     <TeamProfileDetailView
       model={model}
@@ -90,6 +133,8 @@ export default async function TeamProfileDetailPage({
       reps={(repRows ?? []).map((rep) => ({ id: rep.id, name: rep.name }))}
       coveragePending={coveragePending}
       activeCoverage={activeCoverage}
+      schedules={schedules}
+      operatorStatus={operatorStatus}
     />
   )
 }

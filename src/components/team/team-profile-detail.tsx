@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { V4Chip, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import { CoverageActions, type CoveragePending } from '@/components/coverage/coverage-actions'
 import { ManagePeopleDialog } from '@/components/coverage/manage-people-dialog'
+import { ScheduleTab, type OperatorStatus } from '@/components/team/schedule-tab'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { RequestUpdateButton } from '@/components/operations/request-update-button'
 import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
@@ -26,11 +27,12 @@ import { channelLabel, normalizeChannel } from '@/lib/profiles/channel'
 import type { ActivityType } from '@/lib/domain/types'
 import type { ProfileOperatingModel, ProfileChannelModel } from '@/lib/profiles/operating-model'
 
-type Tab = 'overview' | 'channels' | 'knowledge' | 'execution' | 'history'
+type Tab = 'overview' | 'channels' | 'schedule' | 'knowledge' | 'execution' | 'history'
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'channels', label: 'Channels' },
+  { id: 'schedule', label: 'Schedule' },
   { id: 'knowledge', label: 'Knowledge' },
   { id: 'execution', label: 'Execution' },
   { id: 'history', label: 'History' },
@@ -58,6 +60,8 @@ export function TeamProfileDetailView({
   reps,
   coveragePending = {},
   activeCoverage = [],
+  schedules = [],
+  operatorStatus = {},
 }: {
   model: ProfileOperatingModel
   canManage: boolean
@@ -66,6 +70,10 @@ export function TeamProfileDetailView({
   coveragePending?: Record<string, CoveragePending>
   /** Channels with active temporary cover. */
   activeCoverage?: string[]
+  /** Operator shift windows for this person's channel profiles. */
+  schedules?: import('@/lib/schedules/model').ScheduleInput[]
+  /** Time-aware operator status per channel profile. */
+  operatorStatus?: Record<string, OperatorStatus>
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('overview')
@@ -133,6 +141,15 @@ export function TeamProfileDetailView({
           reps={reps}
           coveragePending={coveragePending}
           activeCoverage={activeCoverage}
+        />
+      )}
+      {tab === 'schedule' && (
+        <ScheduleTab
+          model={model}
+          canManage={canManage}
+          reps={reps}
+          schedules={schedules}
+          operatorStatus={operatorStatus}
         />
       )}
       {tab === 'knowledge' && <KnowledgeTab model={model} />}

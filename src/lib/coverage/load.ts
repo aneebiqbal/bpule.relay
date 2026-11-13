@@ -9,6 +9,7 @@ import { isCoverageActiveOn } from '@/lib/coverage/access'
 import { listAcknowledgementsForRep, type ResponsibilityAcknowledgementView } from '@/lib/responsibility/load'
 import { emitDueAcknowledgementNotifications, listAdminRepIds } from '@/lib/responsibility/notify'
 import { personNameFromProfile } from '@/lib/profiles/person-name'
+import type { ScheduleInput } from '@/lib/schedules/model'
 import { deriveConversationRow } from '@/lib/operations/conversations'
 import {
   buildCoverageStatusSummary,
@@ -45,6 +46,9 @@ export interface CoverageRepRow {
 export interface CoverageFacts {
   businessDate: string
   isWorkingDay: boolean
+  /** The instant schedules were resolved at, ISO. */
+  now: string
+  timezone: string
   coveragePolicy: 'AUTO_COVER' | 'APPROVAL_REQUIRED' | 'MANUAL_ONLY'
   maxProfilesPerRep: number
   reps: CoverageRepRow[]
@@ -56,6 +60,7 @@ export interface CoverageFacts {
   readiness: Array<{ profileId: string; repId: string }>
   workloads: RepWorkloadInput[]
   profileWork: Record<string, ProfileWorkInput>
+  schedules: ScheduleInput[]
 }
 
 const OPEN_LEAD_STATUSES = ['new', 'contacted', 'followed_up', 'replied', 'meeting', 'proposal']
@@ -81,7 +86,7 @@ export async function loadCoverageFacts(
   const businessDate = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : today
   const isWorkingDay = isOrgWorkingDay(policy, businessDate)
 
-  const [repsRes, profilesRes, identitiesRes, assignmentsRes, coverageRes, availabilityRes, dayRes, activeCoverageRes, readinessRes, leadsRes, tasksRes, policyRes] =
+  const [repsRes, profilesRes, identitiesRes, assignmentsRes, coverageRes, availabilityRes, dayRes, activeCoverageRes, readinessRes, leadsRes, tasksRes, policyRes, schedulesRes] =
     await Promise.all([
       supabase.from('reps').select('id, name').eq('organization_id', orgId).limit(2000),
       supabase.from('profiles').select('id, display_name, full_name, label, person_id').eq('organization_id', orgId).limit(2000),
@@ -95,6 +100,7 @@ export async function loadCoverageFacts(
       supabase.from('leads').select('id, owner_rep_id, revenue_identity_id, status').eq('organization_id', orgId).eq('archived', false).in('status', [...OPEN_LEAD_STATUSES]).limit(5000),
       supabase.from('assigned_tasks').select('assignee_rep_id, profile_id, status, due_at').eq('organization_id', orgId).in('status', ['OPEN', 'IN_PROGRESS', 'WAITING']).limit(5000),
       supabase.from('organization_operating_policy').select('timezone, coverage_policy, coverage_limits').eq('organization_id', orgId).maybeSingle(),
+      supabase.from('responsibility_schedules').select('id, profile_id, rep_id, start_time, end_time, days_of_week, timezone, effective_from, effective_until, active').eq('organization_id', orgId).eq('active', true).limit(4000),
     ])
 
   if (repsRes.error && !isMissing(repsRes.error)) throw repsRes.error
@@ -344,9 +350,39 @@ export async function loadCoverageFacts(
   const maxProfilesPerRep =
     policyRow?.coverage_limits?.maxProfilesPerRep ?? DEFAULT_MAX_PROFILES_PER_REP
 
+  // Operator shifts. A missing table (pre-migration) is treated as "no shifts"
+  // rather than an error, so the coverage page still renders.
+  const schedules: ScheduleInput[] = isMissing(schedulesRes.error)
+    ? []
+    : ((schedulesRes.data ?? []) as Array<{
+        id: string
+        profile_id: string
+        rep_id: string
+        start_time: string
+        end_time: string
+        days_of_week: number[]
+        timezone: string
+        effective_from: string
+        effective_until: string | null
+        active: boolean
+      }>).map((row) => ({
+        id: row.id,
+        profileId: row.profile_id,
+        repId: row.rep_id,
+        startTime: row.start_time,
+        endTime: row.end_time,
+        daysOfWeek: Array.isArray(row.days_of_week) ? row.days_of_week : [0, 1, 2, 3, 4, 5, 6],
+        timezone: row.timezone || policy.timezone,
+        effectiveFrom: row.effective_from,
+        effectiveUntil: row.effective_until,
+        active: row.active,
+      }))
+
   return {
     businessDate,
     isWorkingDay,
+    now: now.toISOString(),
+    timezone: policy.timezone,
     coveragePolicy,
     maxProfilesPerRep,
     reps,
@@ -370,6 +406,7 @@ export async function loadCoverageFacts(
     readiness,
     workloads,
     profileWork,
+    schedules,
   }
 }
 
@@ -384,6 +421,8 @@ export async function loadCoveragePlan(
   const input: CoverageEngineInput = {
     businessDate: resolved.businessDate,
     isWorkingDay: resolved.isWorkingDay,
+    now: resolved.now,
+    timezone: resolved.timezone,
     coveragePolicy: resolved.coveragePolicy,
     maxProfilesPerRep: resolved.maxProfilesPerRep,
     profiles: resolved.profiles,
@@ -393,6 +432,7 @@ export async function loadCoveragePlan(
     workloads: resolved.workloads,
     activeCoverage: resolved.activeCoverage,
     readiness: resolved.readiness,
+    schedules: resolved.schedules,
     profileWork: resolved.profileWork,
   }
   return evaluateDailyCoverage(input)
@@ -564,6 +604,8 @@ export async function loadRepCoverage(
   const plan = evaluateDailyCoverage({
     businessDate: facts.businessDate,
     isWorkingDay: facts.isWorkingDay,
+    now: facts.now,
+    timezone: facts.timezone,
     coveragePolicy: facts.coveragePolicy,
     maxProfilesPerRep: facts.maxProfilesPerRep,
     profiles: facts.profiles,
@@ -573,6 +615,7 @@ export async function loadRepCoverage(
     workloads: facts.workloads,
     activeCoverage: facts.activeCoverage,
     readiness: facts.readiness,
+    schedules: facts.schedules,
     profileWork: facts.profileWork,
   })
 
