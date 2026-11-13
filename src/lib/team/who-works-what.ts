@@ -19,6 +19,12 @@ export interface WhoWorksWhatPerson {
   profileId: string
   name: string
   channels: WhoWorksWhatChannel[]
+  /** Operator whose shift is open now — the time-aware responsibility truth. */
+  workingNow: Array<{ repId: string; repName: string | null }>
+  /** The next shift to open today, when the profile is not fully covered. */
+  nextShift: { repId: string; repName: string | null } | null
+  /** Uncovered minutes in the business day — the 24-hour coverage gate. */
+  coverageGapMinutes: number
 }
 
 export interface WhoWorksWhatRep {
@@ -40,9 +46,24 @@ function addChannel(
   }
   let person = byPerson.get(profile.profileId)
   if (!person) {
-    person = { profileId: profile.profileId, name: profile.name, channels: [] }
+    person = {
+      profileId: profile.profileId,
+      name: profile.name,
+      channels: [],
+      workingNow: [],
+      nextShift: null,
+      coverageGapMinutes: 0,
+    }
     byPerson.set(profile.profileId, person)
   }
+  person.workingNow = (profile.currentOperators ?? []).map((row) => ({
+    repId: row.repId,
+    repName: row.repName ?? null,
+  }))
+  person.nextShift = profile.nextOperator
+    ? { repId: profile.nextOperator.repId, repName: profile.nextOperator.repName ?? null }
+    : null
+  person.coverageGapMinutes = (profile.coverageGaps ?? []).reduce((sum, gap) => sum + gap.minutes, 0)
   // A person can be both primary and covering on different channels; keep the
   // execution role (temporary) when it exists.
   const existing = person.channels.find((row) => row.channel === entry.channel)

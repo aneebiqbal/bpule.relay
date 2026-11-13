@@ -247,7 +247,6 @@ export function computeCoverageGaps(
     const end = parseClock(schedule.endTime)
     if (start == null || end == null) continue
     const days = schedule.daysOfWeek.length > 0 ? schedule.daysOfWeek : [0, 1, 2, 3, 4, 5, 6]
-    const crosses = shiftCrossesMidnight(start, end)
     const duration = shiftDurationMinutes(start, end)
 
     // A shift can open on the business date, or spill over from the previous

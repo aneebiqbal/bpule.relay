@@ -444,6 +444,29 @@ function WhoWorksWhat({ plan }: { plan: CoveragePlan }) {
                           </span>
                         ))}
                       </span>
+                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone">
+                        <span>
+                          Working now:{' '}
+                          <span className="text-ink">
+                            {person.workingNow.length > 0
+                              ? person.workingNow.map((row) => row.repName ?? 'Unknown').join(', ')
+                              : '—'}
+                          </span>
+                        </span>
+                        {person.nextShift && (
+                          <span>
+                            Next:{' '}
+                            <span className="text-ink">
+                              {person.nextShift.repName ?? 'Unknown'}
+                            </span>
+                          </span>
+                        )}
+                        {person.coverageGapMinutes > 0 && (
+                          <span className="text-warning">
+                            Gap {Math.round(person.coverageGapMinutes / 60)}h
+                          </span>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>
