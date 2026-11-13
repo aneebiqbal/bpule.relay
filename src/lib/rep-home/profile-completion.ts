@@ -21,6 +21,8 @@ export interface ProfileTodayTarget {
   label: string
   targetCount: number
   completedCount: number
+  /** This rep's allocated share of the lane; 0 when SHARED. */
+  allocatedTarget: number
   /** The profile's total for this lane across EVERY operator. */
   profileCompletedCount: number
   remaining: number
@@ -37,6 +39,8 @@ export interface ProfileToday {
   /** The profile's total across EVERY operator, not just this rep. */
   profileCompletedCount: number
   remaining: number
+  /** This rep's expected share when the lane is ALLOCATED; 0 when SHARED. */
+  allocatedTarget: number
   status: ProfileCompletionStatus | null
   targets: ProfileTodayTarget[]
   /** Earliest responsibility start for the person — the NEW signal. */
@@ -151,6 +155,8 @@ export function buildProfilesToday(
   profileTotals?: Map<string, number>,
   /** `${identityId}:${activityType}` → every operator's combined completion. */
   profileTotalsByActivity?: Map<string, number>,
+  /** `${identityId}:${activityType}` → this rep's allocated share. */
+  allocationsByRep?: Map<string, number>,
 ): ProfileToday[] {
   // Group by the canonical person, not the sender account: a person who sells
   // on two channels must see one card whose total is the sum of both lanes.
@@ -174,6 +180,7 @@ export function buildProfilesToday(
         completedCount: 0,
         profileCompletedCount: 0,
         remaining: 0,
+        allocatedTarget: 0,
         status: null,
         targets: [],
         assignedAt: null,
@@ -194,11 +201,14 @@ export function buildProfilesToday(
       ?? row.targets.reduce((sum, t) => sum + t.completedCount, 0)
     for (const target of row.targets) {
       const activityType = target.activityType as ActivityType
+      const allocated = allocationsByRep?.get(`${row.revenueIdentityId}:${target.activityType}`) ?? 0
+      entry.allocatedTarget += allocated
       entry.targets.push({
         activityType,
         label: activityLabel(activityType),
         targetCount: target.targetCount,
         completedCount: target.completedCount,
+        allocatedTarget: allocated,
         profileCompletedCount:
           profileTotalsByActivity?.get(`${row.revenueIdentityId}:${activityType}`)
           ?? profileTotals?.get(row.revenueIdentityId)

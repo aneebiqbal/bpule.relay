@@ -5,6 +5,7 @@ import {
   computeProfileProgress,
   type PlanLane,
   type ProfilePlanProgress,
+  type RepAllocation,
   type RepContribution,
 } from './plan-model'
 
@@ -56,6 +57,12 @@ interface AccountabilityRow {
   completed_count: number
 }
 
+interface AllocationRow {
+  plan_id: string
+  rep_id: string
+  target_count: number
+}
+
 interface IdentityRow {
   id: string
   identity_name: string
@@ -77,7 +84,7 @@ export async function loadDailyPlanProgress(
   client: DbClient,
   query: PlanProgressQuery,
 ): Promise<IdentityPlanProgress[]> {
-  const [planRes, accountabilityRes] = await Promise.all([
+  const [planRes, accountabilityRes, allocationRes] = await Promise.all([
     client
       .from('daily_target_plans')
       .select('id, revenue_identity_id, activity_type, target_count, targetable, effective_from, effective_until, active')
@@ -90,6 +97,12 @@ export async function loadDailyPlanProgress(
       .eq('organization_id', query.orgId)
       .eq('target_date', query.businessDate)
       .limit(5000),
+    client
+      .from('daily_plan_allocations')
+      .select('plan_id, rep_id, target_count')
+      .eq('organization_id', query.orgId)
+      .eq('active', true)
+      .limit(4000),
   ])
 
   const plans = ((planRes.data ?? []) as Array<PlanRow & { active: boolean }>).filter((row) =>
@@ -105,6 +118,21 @@ export async function loadDailyPlanProgress(
 
   const accountability = (accountabilityRes.data ?? []) as AccountabilityRow[]
   const identityIds = [...new Set(plans.map((row) => row.revenue_identity_id))]
+
+  // Optional per-operator shares. A missing table (pre-migration) means every
+  // lane is SHARED, which is the V6.1 behaviour.
+  const allocationsByLane: Record<string, RepAllocation[]> = {}
+  if (!allocationRes.error) {
+    const planById = new Map(plans.map((row) => [row.id, row]))
+    for (const row of (allocationRes.data ?? []) as AllocationRow[]) {
+      const plan = planById.get(row.plan_id)
+      if (!plan) continue
+      const key = `${plan.revenue_identity_id}:${plan.activity_type}`
+      const list = allocationsByLane[key] ?? []
+      list.push({ repId: row.rep_id, targetCount: row.target_count })
+      allocationsByLane[key] = list
+    }
+  }
 
   if (identityIds.length === 0) return []
 
@@ -184,6 +212,12 @@ export async function loadDailyPlanProgress(
         lanes.reduce<Record<string, number>>((acc, lane) => {
           acc[lane.activityType] =
             completedByLane.get(`${identity.id}:${lane.activityType}`) ?? 0
+          return acc
+        }, {}),
+      allocationsByLane:
+        lanes.reduce<Record<string, RepAllocation[]>>((acc, lane) => {
+          const rows = allocationsByLane[`${identity.id}:${lane.activityType}`]
+          if (rows) acc[lane.activityType] = rows
           return acc
         }, {}),
     })

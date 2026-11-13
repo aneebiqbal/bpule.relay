@@ -352,6 +352,14 @@ function ProfileCard({ card, newSince }: { card: ProfileCardModel; newSince: str
               style={{ width: `${percent}%` }}
             />
           </div>
+          {(progress?.allocatedTarget ?? 0) > 0 && (
+            <p className="mt-1.5 text-[11px] text-stone">
+              Your target{' '}
+              <span className="font-semibold tabular-nums text-ink">{progress?.allocatedTarget}</span>
+              {' · your contribution '}
+              <span className="font-semibold tabular-nums text-ink">{done}</span>
+            </p>
+          )}
         </div>
       ) : (
         <p className="mt-3 text-[12px] text-stone">No daily plan</p>

@@ -24,12 +24,20 @@ export interface RepContribution {
   completedCount: number
 }
 
+/** One operator's expected share of a shared lane. Never a second requirement. */
+export interface RepAllocation {
+  repId: string
+  targetCount: number
+}
+
 export interface LaneProgress {
   activityType: string
   targetCount: number
   completedCount: number
   remaining: number
   targetable: boolean
+  /** Empty when the lane is SHARED. */
+  allocations: RepAllocation[]
 }
 
 export interface ProfilePlanProgress {
@@ -40,6 +48,10 @@ export interface ProfilePlanProgress {
   remaining: number
   lanes: LaneProgress[]
   contributions: RepContribution[]
+  /** Aggregated expected share per operator across targetable lanes. */
+  allocations: RepAllocation[]
+  /** True when any targetable lane carries an allocation. */
+  allocated: boolean
   /** True when there is no targetable lane at all. */
   hasPlan: boolean
 }
@@ -60,8 +72,11 @@ export function computeProfileProgress(input: {
   contributions: RepContribution[]
   /** Completed per lane; falls back to 0 when a lane has no completion row. */
   completedByLane?: Record<string, number>
+  /** Expected share per lane; empty/undefined means a SHARED lane. */
+  allocationsByLane?: Record<string, RepAllocation[]>
 }): ProfilePlanProgress {
   const completedByLane = input.completedByLane ?? {}
+  const allocationsByLane = input.allocationsByLane ?? {}
   const lanes: LaneProgress[] = input.lanes.map((lane) => {
     const completed = Math.max(0, completedByLane[lane.activityType] ?? 0)
     return {
@@ -70,11 +85,22 @@ export function computeProfileProgress(input: {
       completedCount: completed,
       remaining: Math.max(0, lane.targetCount - completed),
       targetable: lane.targetable,
+      allocations: allocationsByLane[lane.activityType] ?? [],
     }
   })
 
   const target = planRequirement(input.lanes)
   const completed = profileCompleted(input.contributions)
+
+  // Aggregate the per-operator share across targetable lanes. A rep with no
+  // allocation simply does not appear — SHARED lanes stay unallocated.
+  const allocationByRep = new Map<string, number>()
+  for (const lane of lanes) {
+    if (!lane.targetable) continue
+    for (const row of lane.allocations) {
+      allocationByRep.set(row.repId, (allocationByRep.get(row.repId) ?? 0) + row.targetCount)
+    }
+  }
 
   return {
     identityId: input.identityId,
@@ -83,8 +109,34 @@ export function computeProfileProgress(input: {
     remaining: Math.max(0, target - completed),
     lanes,
     contributions: input.contributions,
+    allocations: [...allocationByRep.entries()]
+      .map(([repId, targetCount]) => ({ repId, targetCount }))
+      .sort((a, b) => a.repId.localeCompare(b.repId)),
+    allocated: allocationByRep.size > 0,
     hasPlan: input.lanes.some((lane) => lane.targetable),
   }
+}
+
+/**
+ * The ONE validation for an ALLOCATED plan: the sum of operator shares on a lane
+ * may never exceed the shared requirement. Returns the offending lanes.
+ */
+export function findOverAllocatedLanes(input: {
+  lanes: PlanLane[]
+  allocationsByLane: Record<string, RepAllocation[]>
+}): Array<{ activityType: string; allocated: number; targetCount: number }> {
+  const problems: Array<{ activityType: string; allocated: number; targetCount: number }> = []
+  for (const lane of input.lanes) {
+    if (!lane.targetable) continue
+    const allocated = (input.allocationsByLane[lane.activityType] ?? []).reduce(
+      (sum, row) => sum + row.targetCount,
+      0,
+    )
+    if (allocated > lane.targetCount) {
+      problems.push({ activityType: lane.activityType, allocated, targetCount: lane.targetCount })
+    }
+  }
+  return problems
 }
 
 /**

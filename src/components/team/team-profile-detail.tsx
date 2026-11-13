@@ -7,7 +7,7 @@
  * operationally separate (identity, primary, backups, readiness, targets, today,
  * coverage); knowledge is shared across all of them.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
@@ -522,11 +522,71 @@ function ChannelTargetsEditor({
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Contribution splits (V7): SHARED by default, ALLOCATED when the admin has
+  // assigned per-operator shares. Allocations are a child of the shared lane —
+  // they never change the requirement, only who is expected to deliver it.
+  const operators = [
+    ...(channel.primaryRepId
+      ? [{ repId: channel.primaryRepId, repName: channel.primaryRepName ?? 'Primary' }]
+      : []),
+    ...channel.operators,
+  ]
+  const [mode, setMode] = useState<'shared' | 'allocated'>('shared')
+  const [allocations, setAllocations] = useState<Record<string, Record<string, number>>>({})
+  const [loadedAllocations, setLoadedAllocations] = useState(false)
+
+  useEffect(() => {
+    if (loadedAllocations) return
+    const ids = rows.flatMap((row) => (row.targetId ? [row.targetId] : []))
+    if (ids.length === 0 || operators.length < 2) {
+      setLoadedAllocations(true)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const result: Record<string, Record<string, number>> = {}
+      let any = false
+      for (const targetId of ids) {
+        const res = await fetch(`/api/admin/targets/${targetId}/allocations`).catch(() => null)
+        if (!res?.ok) continue
+        const body = (await res.json().catch(() => ({}))) as {
+          allocations?: Array<{ rep_id?: string; target_count?: number }>
+        }
+        const list = (body.allocations ?? []).filter((row) => row.rep_id && row.target_count)
+        if (list.length === 0) continue
+        any = true
+        const lane = rows.find((row) => row.targetId === targetId)?.activityType
+        if (!lane) continue
+        result[lane] = Object.fromEntries(list.map((row) => [row.rep_id as string, row.target_count as number]))
+      }
+      if (cancelled) return
+      if (any) {
+        setAllocations(result)
+        setMode('allocated')
+      }
+      setLoadedAllocations(true)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [loadedAllocations, operators.length, rows])
+
   function update(activityType: string, value: string) {
     const parsed = Number(value)
     setCounts((current) => ({
       ...current,
       [activityType]: Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0,
+    }))
+  }
+
+  function updateAllocation(activityType: string, repId: string, value: string) {
+    const parsed = Number(value)
+    setAllocations((current) => ({
+      ...current,
+      [activityType]: {
+        ...(current[activityType] ?? {}),
+        [repId]: Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0,
+      },
     }))
   }
 
@@ -539,6 +599,20 @@ function ChannelTargetsEditor({
     setError(null)
     setMessage(null)
     try {
+      // Validate allocations before writing anything.
+      if (mode === 'allocated') {
+        for (const row of rows) {
+          const shares = Object.values(allocations[row.activityType] ?? {}).filter((value) => value > 0)
+          const total = shares.reduce((sum, value) => sum + value, 0)
+          const target = counts[row.activityType] ?? row.count
+          if (shares.length > 0 && total > target) {
+            throw new Error(
+              `${activityLabel(row.activityType as ActivityType)} allocations total ${total}, above the target of ${target}.`,
+            )
+          }
+        }
+      }
+
       for (const row of rows) {
         const targetCount = counts[row.activityType] ?? row.count
         if (targetCount <= 0) continue
@@ -560,6 +634,20 @@ function ChannelTargetsEditor({
             })
         const body = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(body.error ?? `Could not save ${activityLabel(row.activityType as ActivityType)}.`)
+
+        // Write the allocation set for this lane only when the lane exists.
+        if (row.targetId) {
+          const shares = Object.entries(allocations[row.activityType] ?? {})
+            .filter(([, value]) => value > 0)
+            .map(([repIdValue, value]) => ({ repId: repIdValue, targetCount: value }))
+          const allocRes = await fetch(`/api/admin/targets/${row.targetId}/allocations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode, allocations: shares }),
+          })
+          const allocBody = await allocRes.json().catch(() => ({}))
+          if (!allocRes.ok) throw new Error(allocBody.error ?? 'Could not save allocations.')
+        }
       }
       setMessage('Targets saved.')
       router.refresh()
@@ -589,6 +677,68 @@ function ChannelTargetsEditor({
           </label>
         ))}
       </div>
+
+      {operators.length > 1 && (
+        <div className="mt-3 border-t border-line/70 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">
+              Contribution split
+            </p>
+            <div className="flex rounded-lg border border-line bg-bone-raised p-0.5">
+              {(['shared', 'allocated'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={mode === option}
+                  onClick={() => setMode(option)}
+                  className={cn(
+                    'rounded-md px-2.5 py-1 text-[11px] transition-colors',
+                    mode === option ? 'bg-bone font-medium text-ink shadow-sm' : 'text-graphite hover:text-ink',
+                  )}
+                >
+                  {option === 'shared' ? 'Shared plan' : 'Allocated plan'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {mode === 'allocated' && (
+            <div className="mt-2 space-y-2">
+              {rows.map((row) => {
+                const target = counts[row.activityType] ?? row.count
+                const shares = allocations[row.activityType] ?? {}
+                const total = Object.values(shares).reduce((sum, value) => sum + value, 0)
+                return (
+                  <div key={row.activityType}>
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-stone">
+                      {activityLabel(row.activityType as ActivityType)} · {total} / {target} allocated
+                    </p>
+                    <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {operators.map((operator) => (
+                        <label key={operator.repId} className="block">
+                          <span className="text-[10px] text-stone">{operator.repName}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={shares[operator.repId] ?? 0}
+                            onChange={(event) => updateAllocation(row.activityType, operator.repId, event.target.value)}
+                            className="mt-0.5 h-8 w-full rounded-md border border-line bg-bone-raised px-2 text-[13px] tabular-nums text-ink"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-stone">
+            {mode === 'shared'
+              ? 'Every operator contributes toward one shared requirement.'
+              : 'The sum of shares may never exceed the lane target.'}
+          </p>
+        </div>
+      )}
+
       <div className="mt-2.5 flex items-center justify-between gap-3">
         <p className="text-[11px] text-stone">Daily expectation for this channel.</p>
         <button

@@ -237,28 +237,72 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
   const identityRows = sliceTargetSummaryForWorkspace(workspace.targetSummary.byIdentity, null)
   // Every operator's combined completion for the same identities, so a shared
   // plan reads as the profile's progress rather than one rep's private target.
+  // Also loads this rep's allocated share, when the admin set one.
   const profileTotalsByIdentity = await (async () => {
     try {
       const identityIds = identityRows.map((row) => row.revenueIdentityId)
-      if (identityIds.length === 0) return { byIdentity: new Map<string, number>(), byActivity: new Map<string, number>() }
-      const { data } = await store
-        .getSupabaseClient()
-        .from('daily_accountability')
-        .select('revenue_identity_id, activity_type, completed_count')
-        .eq('organization_id', user.organization.id)
-        .eq('target_date', workspace.businessDate)
-        .in('revenue_identity_id', identityIds)
-        .limit(2000)
+      if (identityIds.length === 0) {
+        return {
+          byIdentity: new Map<string, number>(),
+          byActivity: new Map<string, number>(),
+          allocations: new Map<string, number>(),
+        }
+      }
+      const planKeyById = new Map<string, { identityId: string; activityType: string }>()
+      for (const row of identityRows) {
+        for (const target of row.targets) {
+          if (target.targetId) {
+            planKeyById.set(target.targetId, {
+              identityId: row.revenueIdentityId,
+              activityType: target.activityType,
+            })
+          }
+        }
+      }
+      const [accountabilityRes, allocationRes] = await Promise.all([
+        store
+          .getSupabaseClient()
+          .from('daily_accountability')
+          .select('revenue_identity_id, activity_type, completed_count')
+          .eq('organization_id', user.organization.id)
+          .eq('target_date', workspace.businessDate)
+          .in('revenue_identity_id', identityIds)
+          .limit(2000),
+        planKeyById.size > 0
+          ? store
+              .getSupabaseClient()
+              .from('daily_plan_allocations')
+              .select('plan_id, target_count')
+              .eq('organization_id', user.organization.id)
+              .eq('rep_id', user.rep.id)
+              .eq('active', true)
+              .in('plan_id', [...planKeyById.keys()])
+              .limit(500)
+          : Promise.resolve({ data: [], error: null }),
+      ])
       const byIdentity = new Map<string, number>()
       const byActivity = new Map<string, number>()
-      for (const row of (data ?? []) as Array<{ revenue_identity_id: string; activity_type: string; completed_count: number }>) {
+      for (const row of (accountabilityRes.data ?? []) as Array<{ revenue_identity_id: string; activity_type: string; completed_count: number }>) {
         byIdentity.set(row.revenue_identity_id, (byIdentity.get(row.revenue_identity_id) ?? 0) + row.completed_count)
         const key = `${row.revenue_identity_id}:${row.activity_type}`
         byActivity.set(key, (byActivity.get(key) ?? 0) + row.completed_count)
       }
-      return { byIdentity, byActivity }
+      const allocations = new Map<string, number>()
+      if (!allocationRes.error) {
+        for (const row of (allocationRes.data ?? []) as Array<{ plan_id: string; target_count: number }>) {
+          const key = planKeyById.get(row.plan_id)
+          if (!key) continue
+          const laneKey = `${key.identityId}:${key.activityType}`
+          allocations.set(laneKey, (allocations.get(laneKey) ?? 0) + row.target_count)
+        }
+      }
+      return { byIdentity, byActivity, allocations }
     } catch {
-      return { byIdentity: new Map<string, number>(), byActivity: new Map<string, number>() }
+      return {
+        byIdentity: new Map<string, number>(),
+        byActivity: new Map<string, number>(),
+        allocations: new Map<string, number>(),
+      }
     }
   })()
   const scopedTargets = sumTargets(identityRows)
@@ -470,6 +514,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       workspace.policy.warningThresholds,
       profileTotalsByIdentity.byIdentity,
       profileTotalsByIdentity.byActivity,
+      profileTotalsByIdentity.allocations,
     ),
     targetSummary: {
       ...workspace.targetSummary,
