@@ -14,6 +14,8 @@ import { InlineError, RepStatusBadge, TimelineTable } from '@/components/operati
 import { ChannelBadge } from '@/components/ui/channel-badge'
 import { ResponsibilityStatus } from '@/components/ui/responsibility-status'
 import { buildWhoWorksWhat } from '@/lib/team/who-works-what'
+import { loadTeamHeatmap } from '@/lib/performance/team-heatmap'
+import { TeamHeatmap } from '@/components/team/team-heatmap'
 
 /**
  * Team → Today — the one operating page for managers and admins.
@@ -41,6 +43,16 @@ export async function TeamToday() {
     start: todayWindow.start,
     end: todayWindow.end,
     limit: 20,
+  }).catch(() => null)
+
+  // Admin team heatmap — reps × hour of executed work. A read failure must
+  // never take down the operating page, so it degrades to absent.
+  const heatmap = await loadTeamHeatmap({
+    orgId: ctx.auth.orgId,
+    businessDate: team.businessDate,
+    timezone: team.timezone,
+    client: ctx.client,
+    repIds: effectiveRepIds(ctx.scope, {}),
   }).catch(() => null)
 
   const attention = buildTeamAttentionFromPeople(directory.rows)
@@ -237,6 +249,8 @@ export async function TeamToday() {
           )}
         </div>
       </V4Panel>
+
+      {heatmap && <TeamHeatmap data={heatmap} />}
 
       <WhoWorksWhat plan={plan} />
 

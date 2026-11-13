@@ -410,3 +410,42 @@ ORDER BY occurred_at ASC`,
       : [scope.orgId, scope.start, scope.end],
   }
 }
+
+export interface TeamHourlyScope {
+  orgId: string
+  start: string
+  end: string
+  timezone: string
+  /** Restrict to a set of reps (a manager's team). */
+  repIds?: string[]
+}
+
+/**
+ * Reps × hour execution counts for one business date — the admin team heatmap.
+ *
+ * Intensity is executed weighted actions, never logins or page views: only the
+ * canonical activity types count, and failed executions are excluded. Hours are
+ * rendered in the organization's zone, so a 23:30 UTC send is 04:30 in Karachi.
+ */
+export function teamHourlyActivitySql(scope: TeamHourlyScope): { sql: string; params: unknown[] } {
+  const repFilter = scope.repIds && scope.repIds.length > 0
+    ? `AND actor_id IN (${scope.repIds.map(() => '?').join(', ')})`
+    : ''
+  return {
+    sql: `SELECT actor_id,
+       EXTRACT(HOUR FROM (occurred_at AT TIME ZONE ?))::int AS hour,
+       COUNT(*) AS n
+FROM action_events
+WHERE organization_id = ?
+  ${repFilter}
+  AND actor_id IS NOT NULL
+  AND occurred_at >= ?
+  AND occurred_at < ?
+  AND execution_status IS DISTINCT FROM 'failed'
+  AND action_type IN (${quoteList(ACTIVITY_EVENT_TYPES)})
+GROUP BY 1, 2`,
+    params: scope.repIds && scope.repIds.length > 0
+      ? [scope.timezone, scope.orgId, ...scope.repIds, scope.start, scope.end]
+      : [scope.timezone, scope.orgId, scope.start, scope.end],
+  }
+}
