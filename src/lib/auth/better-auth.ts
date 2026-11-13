@@ -35,6 +35,15 @@ function createAuth() {
     dialect: new PostgresDialect({ pool }),
   }).withSchema(SCHEMA)
 
+  // The app is served from its own origin (e.g. a custom domain in front of
+  // Vercel), so the trusted set must include the origin the request actually
+  // arrived on — not just the Vercel deployment URL. The Origin header is still
+  // checked against this list, so a cross-site request is still rejected.
+  const extraOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+
   return betterAuth({
     database: kyselyAdapter(kysely),
     advanced: {
@@ -49,6 +58,10 @@ function createAuth() {
     },
     secret,
     emailAndPassword: { enabled: true },
+    trustedOrigins: async (request) => [
+      request ? new URL(request.url).origin : '',
+      ...extraOrigins,
+    ].filter(Boolean),
     // User administration (create / remove / revoke) for the admin console.
     plugins: [admin()],
     // Links in verification / reset emails point back at the app.
