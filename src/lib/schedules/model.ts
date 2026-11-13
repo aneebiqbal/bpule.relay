@@ -64,7 +64,8 @@ const MINUTES_PER_DAY = 1440
 /** 'HH:MM' → minutes since local midnight. Null when malformed. */
 export function parseClock(value: string | null | undefined): number | null {
   if (!value) return null
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim())
+  // `pg` returns `time` columns as 'HH:MM:SS'; the API sends 'HH:MM'.
+  const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(value.trim())
   if (!match) return null
   const hours = Number(match[1])
   const minutes = Number(match[2])

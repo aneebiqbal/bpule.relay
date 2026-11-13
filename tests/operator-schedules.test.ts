@@ -35,6 +35,9 @@ describe('parseClock', () => {
     expect(parseClock('08:00')).toBe(480)
     expect(parseClock('00:00')).toBe(0)
     expect(parseClock('23:59')).toBe(1439)
+    // `pg` returns `time` columns with seconds.
+    expect(parseClock('08:00:00')).toBe(480)
+    expect(parseClock('16:00:00')).toBe(960)
     expect(parseClock('24:00')).toBeNull()
     expect(parseClock('8:5')).toBeNull()
     expect(parseClock(null)).toBeNull()
