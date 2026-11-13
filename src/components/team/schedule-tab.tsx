@@ -64,6 +64,14 @@ export function ScheduleTab({ model, canManage, reps, schedules, operatorStatus 
       <p className="text-[12px] text-stone">
         One shared plan per channel. Shifts decide who is executable at a given time — they never change ownership.
       </p>
+      {model.channels.length === 0 && (
+        <V4Panel>
+          <V4PanelHeader eyebrow="Schedule" title="No channels yet" />
+          <p className="mt-3 text-[12px] text-stone">
+            Schedules are per channel. Add a channel to make this person time-aware.
+          </p>
+        </V4Panel>
+      )}
       {model.channels.map((channel) => {
         const status = operatorStatus[channel.profileId]
         const rows = byProfile.get(channel.profileId) ?? []
