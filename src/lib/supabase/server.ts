@@ -66,7 +66,6 @@ export const getSupabaseAuthClient = cachedClient
  * the Neon provider there is no Supabase session to read.
  */
 export const createServerSupabase = cache(async (): Promise<DbClient> => {
-  const supabase = await cachedClient()
   const provider = resolveDbProvider()
   if (provider === 'neon' || provider === 'postgres') {
     const { getAuthProvider } = await import('@/lib/auth/provider')
@@ -74,5 +73,7 @@ export const createServerSupabase = cache(async (): Promise<DbClient> => {
     if (!user?.id) throw new Error(`No signed-in user id for the ${provider} database provider`)
     return provider === 'postgres' ? postgresDbClient(user.id) : neonDbClient(user.id)
   }
-  return supabaseDbClient(supabase)
+  // Only the Supabase provider builds a Supabase client; the Aiven/Neon
+  // providers must run with no Supabase env vars at all.
+  return supabaseDbClient(await cachedClient())
 })
