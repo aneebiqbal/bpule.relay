@@ -570,6 +570,12 @@ export class SupabaseStore implements ScoutStore {
 
   async getOrgSettings(): Promise<Record<string, unknown>> {
     if (this._orgSettingsCache !== undefined) return this._orgSettingsCache
+    // The org row already carries settings (loaded by getCurrentUser); only a
+    // store built without them falls back to a read.
+    if (this.organization.settings !== undefined) {
+      this._orgSettingsCache = this.organization.settings
+      return this._orgSettingsCache
+    }
     const { data } = await this.client
       .from('organizations')
       .select('settings')
@@ -1460,6 +1466,19 @@ export class SupabaseStore implements ScoutStore {
     const queue = owned.filter((l) => l.status === 'new' || l.status === 'contacted')
     const replies = owned.filter((l) => l.status === 'replied')
     return { todaySends, dailyLimit: effective.budgets.dmFollowup.limit, queue, replies }
+  }
+
+  /**
+   * The send counter only needs today's count and the effective DM/follow-up
+   * ceiling. Unlike `getQueue()`, this never loads the rep's lead rows — the
+   * rail polls it on every navigation, so it must stay cheap.
+   */
+  async getSendSummary(): Promise<{ todaySends: number; dailyLimit: number }> {
+    const [todaySends, effective] = await Promise.all([
+      this.countTodaysSends(),
+      this.getEffectivePolicy(),
+    ])
+    return { todaySends, dailyLimit: effective.budgets.dmFollowup.limit }
   }
 
   /**

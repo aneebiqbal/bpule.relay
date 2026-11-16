@@ -14,6 +14,8 @@ export interface Organization {
   workingDays: number[]
   holidays: Array<{ date: string; label?: string }>
   createdAt: string
+  /** Loaded with the org row so the store does not re-read it for settings. */
+  settings?: Record<string, unknown>
 }
 
 export interface SignalDefinition {

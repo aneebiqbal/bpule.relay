@@ -4,6 +4,7 @@ import { isDemoMode } from '@/lib/ai/config'
 import { getAuthProvider } from '@/lib/auth/provider'
 import { getDbClient } from '@/lib/db/provider'
 import { getDemoStore } from '@/lib/store/demo-registry'
+import { perfTrace } from '@/lib/perf-trace'
 
 export interface CurrentUser {
   rep: Rep
@@ -51,6 +52,7 @@ type EmbeddedOrgRow = {
   working_days: number[] | null
   holidays: Array<{ date: string; label?: string }> | null
   created_at: string
+  settings: Record<string, unknown> | null
 }
 
 type EmbeddedVoiceProfileRow = {
@@ -84,8 +86,8 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
     const authStartedAt = PERF_LOG ? performance.now() : 0
     // The provider resolves the session for the active backend; the user id is
     // the only thing the database lookup needs.
-    const auth = await getAuthProvider()
-    const { user } = await auth.getSession()
+    const auth = await perfTrace('auth.session', () => getAuthProvider())
+    const { user } = await perfTrace('auth.session.read', () => auth.getSession())
     const userId = user?.id ?? null
     const userEmail = user?.email ?? null
     if (PERF_LOG) {
@@ -102,12 +104,14 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
     // The Neon adapter needs the identity in scope so RLS can derive the
     // organization; the Supabase adapter takes it from the request cookies.
     const db = await getDbClient(userId)
-    const { data: repRows, error: repError } = await db
-      .from('reps')
-      .select('id, name, role, organization_id, created_at, timezone')
-      .eq('auth_user_id', userId)
-      .order('created_at', { ascending: true })
-      .limit(2)
+    const { data: repRows, error: repError } = await perfTrace('db.reps', () =>
+      db
+        .from('reps')
+        .select('id, name, role, organization_id, created_at, timezone')
+        .eq('auth_user_id', userId)
+        .order('created_at', { ascending: true })
+        .limit(2),
+    )
 
     if (repError) {
       console.warn('[auth/current] rep lookup failed', {
@@ -135,18 +139,20 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
       return null
     }
 
-    const [orgResult, profileResult] = await Promise.all([
-      db
-        .from('organizations')
-        .select('id, name, plan, billing_customer_id, timezone, working_days, holidays, created_at')
-        .eq('id', repRow.organization_id)
-        .maybeSingle(),
-      db
-        .from('voice_profiles')
-        .select('id, rep_id, organization_id, style_card, sample_source, calibrated_at')
-        .eq('rep_id', repRow.id)
-        .maybeSingle(),
-    ])
+    const [orgResult, profileResult] = await perfTrace('db.org+voice', () =>
+      Promise.all([
+        db
+          .from('organizations')
+          .select('id, name, plan, billing_customer_id, timezone, working_days, holidays, created_at, settings')
+          .eq('id', repRow.organization_id)
+          .maybeSingle(),
+        db
+          .from('voice_profiles')
+          .select('id, rep_id, organization_id, style_card, sample_source, calibrated_at')
+          .eq('rep_id', repRow.id)
+          .maybeSingle(),
+      ]),
+    )
 
     const orgRow = orgResult.data as EmbeddedOrgRow | null
 
@@ -177,6 +183,7 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
       workingDays: Array.isArray(orgRow.working_days) ? (orgRow.working_days as number[]) : [1, 2, 3, 4, 5],
       holidays: Array.isArray(orgRow.holidays) ? (orgRow.holidays as Array<{ date: string; label?: string }>) : [],
       createdAt: orgRow.created_at,
+      settings: (orgRow.settings as Record<string, unknown> | null) ?? {},
     }
 
     const vp = profileResult.data as EmbeddedVoiceProfileRow | null

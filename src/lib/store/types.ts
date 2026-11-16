@@ -441,6 +441,8 @@ export interface ScoutStore {
    */
   listLeadsPage(input?: LeadsPageInput): Promise<LeadsPageResult>
   getQueue(): Promise<QueueData>
+  /** Cheap send-counter pair for the rail; never loads lead rows. */
+  getSendSummary(): Promise<{ todaySends: number; dailyLimit: number }>
   // messages
   saveDraft(input: SaveDraftInput): Promise<Message>
   listMessages(leadId: string): Promise<Message[]>

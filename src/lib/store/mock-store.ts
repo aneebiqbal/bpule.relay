@@ -1086,6 +1086,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       return { todaySends, dailyLimit: (await this.getEffectivePolicy()).budgets.dmFollowup.limit, queue, replies }
     },
+    async getSendSummary(): Promise<{ todaySends: number; dailyLimit: number }> {
+      const queue = await this.getQueue()
+      return { todaySends: queue.todaySends, dailyLimit: queue.dailyLimit }
+    },
     async saveDraft(input: SaveDraftInput) {
       const msg: Message = {
         id: nextId('msg'),

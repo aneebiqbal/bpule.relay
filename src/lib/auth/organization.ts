@@ -2,6 +2,7 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { cache } from 'react'
 import { getCurrentUser } from './current'
 import { isDemoMode } from '@/lib/ai/config'
+import { perfTrace } from '@/lib/perf-trace'
 
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER'
 export type TeamRole = 'MANAGER' | 'MEMBER'
@@ -59,19 +60,23 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
 
   // Org role and team memberships are independent; run them together. The
   // capability set depends on the role, so it is the only second wave.
-  const [{ data: orgRoleRow }, { data: membershipRows }] = await Promise.all([
-    supabase
-      .from('organization_roles')
-      .select('role')
-      .eq('organization_id', user.organization.id)
-      .eq('person_id', user.rep.id)
-      .maybeSingle(),
-    supabase
-      .from('team_memberships')
-      .select('team_id, membership_role, active')
-      .eq('person_id', user.rep.id)
-      .eq('active', true),
-  ])
+  const [{ data: orgRoleRow }, { data: membershipRows }] = await perfTrace(
+    'auth.orgRole+memberships',
+    () =>
+      Promise.all([
+        supabase
+          .from('organization_roles')
+          .select('role')
+          .eq('organization_id', user.organization.id)
+          .eq('person_id', user.rep.id)
+          .maybeSingle(),
+        supabase
+          .from('team_memberships')
+          .select('team_id, membership_role, active')
+          .eq('person_id', user.rep.id)
+          .eq('active', true),
+      ]),
+  )
 
   // organization_roles is the canonical source of truth for org-level access.
   // reps.role is used only as a bootstrap fallback when no org role row exists
@@ -87,10 +92,12 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
   const teamIds = (membershipRows ?? []).map((m: { team_id: string }) => m.team_id)
   const teamNameById = new Map<string, string>()
   if (teamIds.length > 0) {
-    const { data: teamRows } = await supabase
-      .from('teams')
-      .select('id, name')
-      .in('id', teamIds)
+    const { data: teamRows } = await perfTrace('auth.teams', () =>
+      supabase
+        .from('teams')
+        .select('id, name')
+        .in('id', teamIds),
+    )
     for (const row of teamRows ?? []) {
       teamNameById.set(row.id, row.name)
     }
@@ -111,12 +118,14 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
     .filter((m) => m.role === 'MEMBER')
     .map((m) => m.teamId)
 
-  const { data: capabilityRows } = await supabase
-    .from('capabilities')
-    .select('capability')
-    .eq('organization_id', user.organization.id)
-    .eq('role', organizationRole)
-    .eq('granted', true)
+  const { data: capabilityRows } = await perfTrace('auth.capabilities', () =>
+    supabase
+      .from('capabilities')
+      .select('capability')
+      .eq('organization_id', user.organization.id)
+      .eq('role', organizationRole)
+      .eq('granted', true),
+  )
 
   const capabilities = new Set((capabilityRows ?? []).map((c) => c.capability))
 
