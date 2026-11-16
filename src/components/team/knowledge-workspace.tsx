@@ -41,13 +41,25 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
       title: row.title ?? '', role: row.role ?? '', description: row.description ?? '', clientCompany: row.clientCompany ?? '',
     })),
   )
+  const [claims, setClaims] = useState<Array<{ id?: string; key: string; value: string }>>(() =>
+    knowledge.claims.map((row) => ({ id: row.id ?? undefined, key: row.key, value: row.value })),
+  )
+  // Knowledge rows are stored per profile. The canonical person profile is the
+  // shared default; a channel account (a child profile) can carry its own.
+  // Retrieval already aggregates every profile of the person, so an override is
+  // additive and never duplicates or destroys shared rows.
+  const accountOptions = model.channels
+    .map((channel) => ({ profileId: channel.profileId, label: `${channel.identityName} · ${channel.channel}` }))
+    .filter((option): option is { profileId: string; label: string } => Boolean(option.profileId))
+  const [scope, setScope] = useState<string>(model.personId)
+  const scopeIsShared = scope === model.personId
 
   async function run(operations: unknown[], success: string, reason?: string) {
     setBusy(true)
     setError(null)
     setMessage(null)
     try {
-      const res = await fetch(`/api/team/profiles/${model.personId}/knowledge`, {
+      const res = await fetch(`/api/team/profiles/${scope}/knowledge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operations, reason }),
@@ -68,7 +80,7 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
     setError(null)
     setMessage(null)
     try {
-      const res = await fetch(`/api/profile-intelligence/profiles/${model.personId}`, {
+      const res = await fetch(`/api/profile-intelligence/profiles/${scope}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -96,7 +108,7 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
     try {
       const form = new FormData()
       form.append('file', file)
-      const res = await fetch(`/api/profiles/${model.personId}/cv?admin=1`, { method: 'POST', body: form })
+      const res = await fetch(`/api/profiles/${scope}/cv?admin=1`, { method: 'POST', body: form })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? 'Could not upload the CV.')
       setMessage('CV uploaded. It will be parsed into knowledge.')
@@ -145,6 +157,26 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
     void run(operations, 'Projects saved.')
   }
 
+  function saveClaims() {
+    const operations = claims.flatMap((row) => {
+      const data = { claim_key: row.key, claim_value: row.value }
+      if (row.id) return [{ entity: 'claim', action: 'update', id: row.id, data }]
+      return [{ entity: 'claim', action: 'create', data }]
+    })
+    void run(operations, 'Claims saved (human-verified).')
+  }
+
+  function removeClaim(index: number) {
+    const row = claims[index]
+    if (!row) return
+    if (row.id) {
+      // Removal is audited and leaves proof cards and earlier audit rows intact.
+      void run([{ entity: 'claim', action: 'delete', id: row.id }], 'Claim removed.')
+      return
+    }
+    setClaims((current) => current.filter((_, i) => i !== index))
+  }
+
   const readiness = [
     { label: 'CV / source', ready: knowledge.sources.length > 0, value: knowledge.sources.length > 0 ? `${knowledge.sources.length}` : 'Missing' },
     { label: 'Experience', ready: knowledge.experience.length > 0, value: knowledge.experience.length > 0 ? `${knowledge.experience.length}` : 'Missing' },
@@ -167,6 +199,32 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
           ))}
         </dl>
       </V4Panel>
+
+      {canManage && accountOptions.length > 0 && (
+        <V4Panel>
+          <V4PanelHeader
+            eyebrow="Knowledge"
+            title="Knowledge scope"
+            hint={scopeIsShared ? 'Shared across every account' : 'Account-specific override'}
+          />
+          <select
+            value={scope}
+            onChange={(event) => setScope(event.target.value)}
+            className="mt-3 h-9 w-full rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
+            aria-label="Knowledge scope"
+          >
+            <option value={model.personId}>Shared · all accounts</option>
+            {accountOptions.map((option) => (
+              <option key={option.profileId} value={option.profileId}>Account · {option.label}</option>
+            ))}
+          </select>
+          <p className="mt-2 text-[11px] text-stone">
+            {scopeIsShared
+              ? 'Edits apply to the person and are the default for every account.'
+              : 'Edits apply only to this account. Shared knowledge is never overwritten or duplicated.'}
+          </p>
+        </V4Panel>
+      )}
 
       {canManage && (
         <V4Panel>
@@ -272,13 +330,60 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
       <V4Panel>
         <V4PanelHeader eyebrow="Knowledge" title="Claims and proof" hint="Manually edited claims are human-verified." />
         <div className="mt-3 space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            {knowledge.claims.map((claim) => (
-              <span key={`${claim.key}-${claim.value}`} className="rounded-full bg-bone px-2.5 py-1 text-[11px] text-graphite ring-1 ring-line">
-                {claim.key}: {claim.value}
-              </span>
-            ))}
-            {knowledge.claims.length === 0 && <span className="text-[11px] text-stone">No claims extracted yet.</span>}
+          <div className="space-y-2">
+            {canManage ? (
+              <>
+                <div className="space-y-1.5">
+                  {claims.map((claim, index) => (
+                    <div key={index} className="flex items-center gap-1.5">
+                      <input
+                        value={claim.key}
+                        onChange={(event) => setClaims((current) => current.map((row, i) => i === index ? { ...row, key: event.target.value } : row))}
+                        placeholder="Claim"
+                        className="h-8 w-32 rounded-md border border-line bg-bone px-2 text-[12px] text-ink"
+                      />
+                      <input
+                        value={claim.value}
+                        onChange={(event) => setClaims((current) => current.map((row, i) => i === index ? { ...row, value: event.target.value } : row))}
+                        placeholder="Value"
+                        className="h-8 flex-1 rounded-md border border-line bg-bone px-2 text-[12px] text-ink"
+                      />
+                      <button type="button" onClick={() => removeClaim(index)} className="rounded-md border border-line px-2 py-1 text-[11px] text-graphite hover:text-ink">
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  {claims.length === 0 && <span className="text-[11px] text-stone">No claims yet.</span>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setClaims((current) => [...current, { key: '', value: '' }])} className="rounded-md border border-line px-2.5 py-1 text-[11px] text-graphite hover:text-ink">
+                    Add claim
+                  </button>
+                  <button type="button" onClick={saveClaims} disabled={busy} className="rounded-md bg-bone px-2.5 py-1 text-[11px] font-medium text-ink ring-1 ring-line disabled:opacity-50">
+                    Save claims
+                  </button>
+                </div>
+                <p className="text-[11px] text-stone">Manual claims are recorded as human-verified; they never become machine evidence.</p>
+              </>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {knowledge.claims.map((claim) => (
+                  <span key={`${claim.key}-${claim.value}`} className="rounded-full bg-bone px-2.5 py-1 text-[11px] text-graphite ring-1 ring-line">
+                    {claim.key}: {claim.value}
+                  </span>
+                ))}
+                {knowledge.claims.length === 0 && <span className="text-[11px] text-stone">No claims extracted yet.</span>}
+              </div>
+            )}
+            {canManage && (
+              <div className="flex flex-wrap gap-1.5">
+                {knowledge.claims.map((claim) => (
+                  <span key={`meta-${claim.key}-${claim.value}`} className="rounded-full bg-bone-raised px-2 py-0.5 text-[10px] text-stone ring-1 ring-line">
+                    {claim.key} · {claim.evidenceType ?? 'unknown'}{claim.authority ? ` · ${claim.authority}` : ''}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             {knowledge.proof.map((row, index) => (

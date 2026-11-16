@@ -163,6 +163,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pro
       }
     }
 
+    // A manual claim is human-verified: it is active, attributed to the editor,
+    // and never treated as machine evidence. Edits to an existing claim keep the
+    // human-verified authority rather than silently becoming verified proof.
+    if (entity === 'claim') {
+      row.authority = 'human_verified'
+      row.user_corrected = true
+      row.extraction_version = 'human'
+      if (!row.evidence_type) row.evidence_type = 'fact'
+      if (action === 'create') row.claim_status = 'active'
+      if (action === 'delete') row.user_rejected = true
+    }
+
     let previous: Record<string, unknown> | null = null
     if (action === 'delete') {
       if (!targetId) throw new Error('Operation: delete requires an id')

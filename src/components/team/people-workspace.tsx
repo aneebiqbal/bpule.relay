@@ -173,7 +173,7 @@ export function PeopleWorkspace({
                         <Link href={`/team/performance?rep=${row.repId}`} className="rounded-md border border-line px-2.5 py-1 text-[11px] font-medium text-graphite hover:text-ink">
                           Performance
                         </Link>
-                        <Link href={`/workspace/${row.repId}`} className="rounded-md border border-line px-2.5 py-1 text-[11px] font-medium text-graphite hover:text-ink">
+                        <Link href="/dashboard" className="rounded-md border border-line px-2.5 py-1 text-[11px] font-medium text-graphite hover:text-ink">
                           Open workspace
                         </Link>
                         {canAssign && <AssignTaskButton reps={reps} defaultAssigneeId={row.repId} />}

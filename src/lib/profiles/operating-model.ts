@@ -68,7 +68,15 @@ export interface ProfileKnowledgeModel {
   }>
   proof: Array<{ capability: string | null; claim: string | null; reference: string | null; verified: boolean }>
   reviews: Array<{ text: string | null; reviewer: string | null; company: string | null }>
-  claims: Array<{ key: string; value: string }>
+  claims: Array<{
+    id: string | null
+    key: string
+    value: string
+    evidenceType: string | null
+    authority: string | null
+    userCorrected: boolean | null
+    userRejected: boolean | null
+  }>
   sources: Array<{ filename: string | null; uploadedAt: string | null }>
   voice: Record<string, unknown> | null
 }
@@ -238,7 +246,7 @@ export async function loadProfileOperatingModel(
       .limit(100),
     supabase
       .from('profile_claims')
-      .select('profile_id, claim_key, claim_value')
+      .select('id, profile_id, claim_key, claim_value, evidence_type, authority, user_corrected, user_rejected')
       .eq('organization_id', orgId)
       .in('profile_id', profileIds)
       .limit(200),
@@ -494,8 +502,13 @@ export async function loadProfileOperatingModel(
       company: (row.reviewer_company as string | null) ?? null,
     })),
     claims: ((claimRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      id: (row.id as string | null) ?? null,
       key: row.claim_key as string,
       value: row.claim_value as string,
+      evidenceType: (row.evidence_type as string | null) ?? null,
+      authority: (row.authority as string | null) ?? null,
+      userCorrected: (row.user_corrected as boolean | null) ?? null,
+      userRejected: (row.user_rejected as boolean | null) ?? null,
     })),
     sources: ((sourceRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
       filename: (row.original_filename as string | null) ?? null,
