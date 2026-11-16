@@ -1,3 +1,4 @@
+
 name: Deploy Relay
 
 on:
@@ -12,22 +13,105 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
-      - name: Deploy to InterServer
-        uses: appleboy/ssh-action@v1
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: deploy
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script_stop: true
-          command_timeout: 30m
-          script: |
-            set -e
-            cd /home/deploy/apps/relay
-            git fetch origin main
-            git checkout main
-            git pull --ff-only origin main
-            pnpm install --frozen-lockfile
-            pnpm build
-            pm2 restart relay --update-env
-            pm2 save
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Retrieve build environment
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          scp deploy@"$VPS_HOST":/home/deploy/apps/relay/.env.production .env.production
+          chmod 600 .env.production
+
+      - name: Install and build on GitHub
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          test -f .next/standalone/server.js
+
+      - name: Package application
+        run: |
+          mkdir -p .next/standalone/.next
+          cp -a .next/static .next/standalone/.next/
+          cp -a public .next/standalone/
+
+          # Never ship the copied build environment
+          find .next/standalone -name '.env*' -type f -delete
+
+          tar -czf /tmp/relay-release.tar.gz \
+            -C .next/standalone .
+
+          rm -f .env.production
+
+      - name: Upload release
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          ssh deploy@"$VPS_HOST" \
+            "mkdir -p /home/deploy/apps/relay-releases/$GITHUB_SHA"
+
+          scp /tmp/relay-release.tar.gz \
+            deploy@"$VPS_HOST":/home/deploy/apps/relay-releases/"$GITHUB_SHA"/release.tar.gz
+
+      - name: Activate release
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          ssh deploy@"$VPS_HOST" bash -s -- "$GITHUB_SHA" <<'REMOTE'
+          set -euo pipefail
+
+          SHA="$1"
+          BASE=/home/deploy/apps
+          RELEASE="$BASE/relay-releases/$SHA"
+          CURRENT="$BASE/relay-current"
+
+          cd "$RELEASE"
+          tar -xzf release.tar.gz
+          rm release.tar.gz
+
+          ln -s "$BASE/relay/.env.production" \
+            "$RELEASE/.env.production"
+
+          ln -sfn "$RELEASE" "$BASE/relay-next"
+          mv -Tf "$BASE/relay-next" "$CURRENT"
+
+          pm2 delete relay || true
+
+          cd "$CURRENT"
+          HOSTNAME=127.0.0.1 PORT=3000 \
+            pm2 start server.js --name relay
+
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:3000/login \
+                -o /dev/null; then
+              pm2 save
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Relay health check failed"
+          exit 1
+          REMOTE
