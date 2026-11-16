@@ -87,6 +87,13 @@ export interface ProfileHistoryEntry {
   detail: string
 }
 
+export interface AccountKnowledge {
+  profileId: string
+  channel: string
+  identityName: string
+  knowledge: ProfileKnowledgeModel
+}
+
 export interface ProfileOperatingModel {
   personId: string
   personName: string
@@ -95,6 +102,8 @@ export interface ProfileOperatingModel {
   skills: string[]
   channels: ProfileChannelModel[]
   knowledge: ProfileKnowledgeModel
+  /** Knowledge stored on a specific channel account (child profile). */
+  accountKnowledge: AccountKnowledge[]
   history: ProfileHistoryEntry[]
   businessDate: string
   /** Chain reps who have not confirmed access — the only readiness surface. */
@@ -468,54 +477,79 @@ export async function loadProfileOperatingModel(
     }
   })
 
-  const knowledge: ProfileKnowledgeModel = {
-    headline: canonical.headline,
-    summary: canonical.professional_summary,
-    currentRole: canonical.current_role,
-    skills: stringArray(canonical.primary_skills),
-    technologies: stringArray(canonical.technologies),
-    industries: stringArray(canonical.industries),
-    experience: ((experienceRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      role: (row.role as string | null) ?? null,
-      company: (row.company as string | null) ?? null,
-      startDate: (row.start_date as string | null) ?? null,
-      endDate: (row.end_date as string | null) ?? null,
-      current: Boolean(row.is_current),
-    })),
-    projects: ((projectRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      title: (row.project_title as string | null) ?? null,
-      role: (row.my_role as string | null) ?? null,
-      description: (row.description as string | null) ?? null,
-      skills: stringArray(row.skills),
-      technologies: stringArray(row.technologies),
-      clientCompany: (row.client_company as string | null) ?? null,
-    })),
-    proof: ((proofRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      capability: (row.capability as string | null) ?? null,
-      claim: (row.safe_claim as string | null) ?? null,
-      reference: (row.source_reference as string | null) ?? null,
-      verified: Boolean(row.verified),
-    })),
-    reviews: ((reviewRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      text: (row.review_text as string | null) ?? null,
-      reviewer: (row.reviewer_name as string | null) ?? null,
-      company: (row.reviewer_company as string | null) ?? null,
-    })),
-    claims: ((claimRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      id: (row.id as string | null) ?? null,
-      key: row.claim_key as string,
-      value: row.claim_value as string,
-      evidenceType: (row.evidence_type as string | null) ?? null,
-      authority: (row.authority as string | null) ?? null,
-      userCorrected: (row.user_corrected as boolean | null) ?? null,
-      userRejected: (row.user_rejected as boolean | null) ?? null,
-    })),
-    sources: ((sourceRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-      filename: (row.original_filename as string | null) ?? null,
-      uploadedAt: (row.uploaded_at as string | null) ?? null,
-    })),
-    voice: ((voiceRes.data ?? [])[0]?.style_card as Record<string, unknown> | null) ?? null,
+  const profileById = new Map(profiles.map((profile) => [profile.id, profile]))
+
+  // Knowledge is stored per profile. The canonical person profile is the shared
+  // default; a channel account (a child profile) carries its own. The shared
+  // view never merges account rows, so account-specific content cannot appear
+  // as shared knowledge.
+  const buildKnowledge = (profileId: string): ProfileKnowledgeModel => {
+    const own = profileById.get(profileId) ?? canonical
+    const rows = (res: Array<Record<string, unknown>> | null | undefined) =>
+      (res ?? []).filter((row) => row.profile_id === profileId)
+    return {
+      headline: own.headline,
+      summary: own.professional_summary,
+      currentRole: own.current_role,
+      skills: stringArray(own.primary_skills),
+      technologies: stringArray(own.technologies),
+      industries: stringArray(own.industries),
+      experience: rows(experienceRes.data).map((row) => ({
+        role: (row.role as string | null) ?? null,
+        company: (row.company as string | null) ?? null,
+        startDate: (row.start_date as string | null) ?? null,
+        endDate: (row.end_date as string | null) ?? null,
+        current: Boolean(row.is_current),
+      })),
+      projects: rows(projectRes.data).map((row) => ({
+        title: (row.project_title as string | null) ?? null,
+        role: (row.my_role as string | null) ?? null,
+        description: (row.description as string | null) ?? null,
+        skills: stringArray(row.skills),
+        technologies: stringArray(row.technologies),
+        clientCompany: (row.client_company as string | null) ?? null,
+      })),
+      proof: rows(proofRes.data).map((row) => ({
+        capability: (row.capability as string | null) ?? null,
+        claim: (row.safe_claim as string | null) ?? null,
+        reference: (row.source_reference as string | null) ?? null,
+        verified: Boolean(row.verified),
+      })),
+      reviews: rows(reviewRes.data).map((row) => ({
+        text: (row.review_text as string | null) ?? null,
+        reviewer: (row.reviewer_name as string | null) ?? null,
+        company: (row.reviewer_company as string | null) ?? null,
+      })),
+      claims: rows(claimRes.data).map((row) => ({
+        id: (row.id as string | null) ?? null,
+        key: row.claim_key as string,
+        value: row.claim_value as string,
+        evidenceType: (row.evidence_type as string | null) ?? null,
+        authority: (row.authority as string | null) ?? null,
+        userCorrected: (row.user_corrected as boolean | null) ?? null,
+        userRejected: (row.user_rejected as boolean | null) ?? null,
+      })),
+      sources: rows(sourceRes.data).map((row) => ({
+        filename: (row.original_filename as string | null) ?? null,
+        uploadedAt: (row.uploaded_at as string | null) ?? null,
+      })),
+      voice: (rows(voiceRes.data)[0]?.style_card as Record<string, unknown> | null) ?? null,
+    }
   }
+
+  const knowledge = buildKnowledge(canonical.id)
+  const accountKnowledge: AccountKnowledge[] = profiles
+    .filter((profile) => profile.person_id === canonical.id)
+    .flatMap((profile) => {
+      const channel = channels.find((row) => row.profileId === profile.id)
+      if (!channel) return []
+      return [{
+        profileId: profile.id,
+        channel: channel.channel,
+        identityName: channel.identityName,
+        knowledge: buildKnowledge(profile.id),
+      }]
+    })
 
   const history: ProfileHistoryEntry[] = [
     ...assignments.map((row) => ({
@@ -572,6 +606,7 @@ export async function loadProfileOperatingModel(
     skills: knowledge.skills,
     channels,
     knowledge,
+    accountKnowledge,
     history,
     businessDate,
     readinessExceptions,

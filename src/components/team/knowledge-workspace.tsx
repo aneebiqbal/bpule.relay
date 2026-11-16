@@ -9,7 +9,7 @@
  * endpoint, which writes the existing tables and appends an audit row. Nothing
  * is treated as verified evidence without its recorded authority.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { V4Panel, V4PanelHeader, V4Chip } from '@/components/v4/primitives'
 import { cn } from 'cn'
@@ -53,6 +53,32 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
     .filter((option): option is { profileId: string; label: string } => Boolean(option.profileId))
   const [scope, setScope] = useState<string>(model.personId)
   const scopeIsShared = scope === model.personId
+  const activeKnowledge = scopeIsShared
+    ? knowledge
+    : (model.accountKnowledge.find((account) => account.profileId === scope)?.knowledge ?? knowledge)
+
+  // Switching scope reloads the editors from that profile's rows. Shared rows
+  // are never merged into the account view, so an override can't be mistaken
+  // for shared knowledge.
+  useEffect(() => {
+    const k = scopeIsShared
+      ? knowledge
+      : (model.accountKnowledge.find((account) => account.profileId === scope)?.knowledge ?? knowledge)
+    setHeadline(k.headline ?? '')
+    setCurrentRole(k.currentRole ?? '')
+    setSummary(k.summary ?? '')
+    setSkills(k.skills)
+    setExperience(k.experience.map((row) => ({
+      role: row.role ?? '', company: row.company ?? '', startDate: row.startDate ?? '', endDate: row.endDate ?? '', current: row.current,
+    })))
+    setProjects(k.projects.map((row) => ({
+      title: row.title ?? '', role: row.role ?? '', description: row.description ?? '', clientCompany: row.clientCompany ?? '',
+    })))
+    setClaims(k.claims.map((row) => ({ id: row.id ?? undefined, key: row.key, value: row.value })))
+    setMessage(null)
+    setError(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope])
 
   async function run(operations: unknown[], success: string, reason?: string) {
     setBusy(true)
@@ -178,18 +204,18 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
   }
 
   const readiness = [
-    { label: 'CV / source', ready: knowledge.sources.length > 0, value: knowledge.sources.length > 0 ? `${knowledge.sources.length}` : 'Missing' },
-    { label: 'Experience', ready: knowledge.experience.length > 0, value: knowledge.experience.length > 0 ? `${knowledge.experience.length}` : 'Missing' },
-    { label: 'Skills', ready: knowledge.skills.length > 0, value: `${knowledge.skills.length}` },
-    { label: 'Projects', ready: knowledge.projects.length > 0, value: `${knowledge.projects.length}` },
-    { label: 'Proof', ready: knowledge.proof.length > 0, value: `${knowledge.proof.length}` },
-    { label: 'Claims', ready: knowledge.claims.length > 0, value: `${knowledge.claims.length}` },
+    { label: 'CV / source', ready: activeKnowledge.sources.length > 0, value: activeKnowledge.sources.length > 0 ? `${activeKnowledge.sources.length}` : 'Missing' },
+    { label: 'Experience', ready: activeKnowledge.experience.length > 0, value: activeKnowledge.experience.length > 0 ? `${activeKnowledge.experience.length}` : 'Missing' },
+    { label: 'Skills', ready: activeKnowledge.skills.length > 0, value: `${activeKnowledge.skills.length}` },
+    { label: 'Projects', ready: activeKnowledge.projects.length > 0, value: `${activeKnowledge.projects.length}` },
+    { label: 'Proof', ready: activeKnowledge.proof.length > 0, value: `${activeKnowledge.proof.length}` },
+    { label: 'Claims', ready: activeKnowledge.claims.length > 0, value: `${activeKnowledge.claims.length}` },
   ]
 
   return (
     <div className="space-y-4">
       <V4Panel>
-        <V4PanelHeader eyebrow="Knowledge" title="Match readiness" hint={knowledge.skills.length > 0 || knowledge.proof.length > 0 ? 'Complete' : 'Incomplete'} />
+        <V4PanelHeader eyebrow="Knowledge" title="Match readiness" hint={activeKnowledge.skills.length > 0 || activeKnowledge.proof.length > 0 ? 'Complete' : 'Incomplete'} />
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] sm:grid-cols-3">
           {readiness.map((row) => (
             <div key={row.label} className="flex items-baseline justify-between gap-2 border-b border-line/50 pb-1">
@@ -367,17 +393,17 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
               </>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {knowledge.claims.map((claim) => (
+                {activeKnowledge.claims.map((claim) => (
                   <span key={`${claim.key}-${claim.value}`} className="rounded-full bg-bone px-2.5 py-1 text-[11px] text-graphite ring-1 ring-line">
                     {claim.key}: {claim.value}
                   </span>
                 ))}
-                {knowledge.claims.length === 0 && <span className="text-[11px] text-stone">No claims extracted yet.</span>}
+                {activeKnowledge.claims.length === 0 && <span className="text-[11px] text-stone">No claims extracted yet.</span>}
               </div>
             )}
             {canManage && (
               <div className="flex flex-wrap gap-1.5">
-                {knowledge.claims.map((claim) => (
+                {activeKnowledge.claims.map((claim) => (
                   <span key={`meta-${claim.key}-${claim.value}`} className="rounded-full bg-bone-raised px-2 py-0.5 text-[10px] text-stone ring-1 ring-line">
                     {claim.key} · {claim.evidenceType ?? 'unknown'}{claim.authority ? ` · ${claim.authority}` : ''}
                   </span>
@@ -386,7 +412,7 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
             )}
           </div>
           <div className="space-y-2">
-            {knowledge.proof.map((row, index) => (
+            {activeKnowledge.proof.map((row, index) => (
               <div key={`${row.capability ?? 'proof'}-${index}`} className="rounded-lg border border-line/70 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[13px] font-medium text-ink">{row.capability ?? 'Capability'}</p>
@@ -396,11 +422,11 @@ export function KnowledgeWorkspace({ model, canManage }: { model: ProfileOperati
                 {row.reference && <p className="mt-0.5 text-[11px] text-stone">Source: {row.reference}</p>}
               </div>
             ))}
-            {knowledge.proof.length === 0 && <span className="text-[11px] text-stone">No proof cards.</span>}
+            {activeKnowledge.proof.length === 0 && <span className="text-[11px] text-stone">No proof cards.</span>}
           </div>
           <div className="text-[11px] text-stone">
-            {knowledge.sources.length > 0
-              ? `Sources: ${knowledge.sources.map((source) => source.filename ?? 'file').join(', ')}`
+            {activeKnowledge.sources.length > 0
+              ? `Sources: ${activeKnowledge.sources.map((source) => source.filename ?? 'file').join(', ')}`
               : 'No source documents uploaded.'}
           </div>
         </div>
