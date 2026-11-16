@@ -15,6 +15,7 @@ import { Kysely, PostgresDialect } from 'kysely'
 import { betterAuth } from 'better-auth'
 import { kyselyAdapter } from '@better-auth/kysely-adapter'
 import { admin } from 'better-auth/plugins/admin'
+import { resolvePgSslConfig } from '@/lib/db/ssl'
 
 const SCHEMA = 'neon_auth'
 
@@ -31,7 +32,7 @@ function createAuth() {
     // One shared pool per process: Vercel runs many concurrent instances and
     // every one holds its own. Keep it small and fail fast at capacity.
     max: Number(process.env.AUTH_DATABASE_POOL_MAX ?? 2),
-    ssl: process.env.DATABASE_SSL === 'false' ? undefined : { rejectUnauthorized: false },
+    ssl: resolvePgSslConfig(),
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
   })
