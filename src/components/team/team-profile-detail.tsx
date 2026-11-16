@@ -18,6 +18,8 @@ import { V4Chip, V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import { CoverageActions, type CoveragePending } from '@/components/coverage/coverage-actions'
 import { ManagePeopleDialog } from '@/components/coverage/manage-people-dialog'
 import { ScheduleTab, type OperatorStatus } from '@/components/team/schedule-tab'
+import { KnowledgeWorkspace } from '@/components/team/knowledge-workspace'
+import { HistoryTimeline } from '@/components/team/history-timeline'
 import { AssignTaskButton } from '@/components/operations/assign-task-button'
 import { RequestUpdateButton } from '@/components/operations/request-update-button'
 import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
@@ -155,7 +157,7 @@ export function TeamProfileDetailView({
           operatorStatus={operatorStatus}
         />
       )}
-      {tab === 'knowledge' && <KnowledgeTab model={model} />}
+      {tab === 'knowledge' && (canManage ? <KnowledgeWorkspace model={model} canManage={canManage} /> : <KnowledgeTab model={model} />)}
       {tab === 'execution' && (
         <ExecutionTab
           model={model}
@@ -163,7 +165,7 @@ export function TeamProfileDetailView({
           onConfigure={() => setTab('channels')}
         />
       )}
-      {tab === 'history' && <HistoryTab model={model} />}
+      {tab === 'history' && <HistoryTimeline profileId={model.personId} />}
 
       <AddChannelDialog
         open={addChannelOpen}
@@ -987,28 +989,6 @@ function ExecutionTab({ model, canManage, onConfigure }: { model: ProfileOperati
         </V4Panel>
       ))}
     </div>
-  )
-}
-
-function HistoryTab({ model }: { model: ProfileOperatingModel }) {
-  return (
-    <V4Panel>
-      <V4PanelHeader eyebrow="History" title="Operational timeline" hint={`${model.history.length} events`} />
-      {model.history.length === 0 ? (
-        <p className="mt-3 text-[12px] text-stone">No operational history recorded yet.</p>
-      ) : (
-        <ul className="mt-3 space-y-2 text-[13px]">
-          {model.history.map((entry, index) => (
-            <li key={`${entry.at}-${index}`} className="flex items-baseline justify-between gap-3">
-              <span className="text-ink">{entry.detail}</span>
-              <time className="shrink-0 text-[12px] text-stone">
-                {new Date(entry.at).toLocaleString()}
-              </time>
-            </li>
-          ))}
-        </ul>
-      )}
-    </V4Panel>
   )
 }
 

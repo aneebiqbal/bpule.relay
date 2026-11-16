@@ -42,7 +42,7 @@ describe('TEAM_TODAY_IS_OPERATIONAL_HOME', () => {
     expect(read('src/app/(app)/team/page.tsx')).toMatch(/TeamCommandCenter/)
     const source = read('src/components/team/team-command-center.tsx')
     expect(source).toMatch(/Action queue/)
-    expect(source).toMatch(/Who works what/)
+    expect(source).toMatch(/Responsibilities/)
     expect(source).toMatch(/Target progress/)
     expect(source).toMatch(/Coverage exceptions/)
     expect(source).toMatch(/Recent changes/)

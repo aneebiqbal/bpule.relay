@@ -73,30 +73,22 @@ beforeAll(async () => {
   if (identityError) throw identityError
   IDENTITY = identity.id as string
 
-  // Give the fixture a valid owner immediately, so a parallel test that scans
-  // the organization never observes a half-built profile. configureCoverage
-  // writes the PRIMARY seat and syncs eligibility together; the covering rep
-  // (eligibility only) is added afterwards.
-  const configured = await configureCoverage({
-    organizationId: ORG,
-    profileId: PROFILE,
-    primaryRepId: PRIMARY,
-    operators: [],
-    backups: [{ repId: BACKUP, priority: 1 }],
-    actorRepId: ACTOR,
-    client: admin,
-  })
-  if (!configured.ok) throw new Error(configured.error ?? 'fixture configure failed')
-
-  const { error: coveringError } = await admin
-    .from('identity_assignments')
-    .insert({
-      organization_id: ORG,
-      revenue_identity_id: IDENTITY,
-      rep_id: COVERING,
-      assigned_by: ACTOR,
-    })
-  if (coveringError) throw coveringError
+  // Create the eligibility seats and the PRIMARY/BACKUP chain in ONE statement,
+  // so a parallel production-parity scan can never observe the fixture with
+  // assignments but no owner. The covering rep is eligibility-only (no seat).
+  await admin.raw(
+    `with seats as (
+       insert into identity_assignments (organization_id, revenue_identity_id, rep_id, assigned_by, created_at)
+       values ($1,$2,$3,$4,now()),($1,$2,$5,$4,now()),($1,$2,$6,$4,now())
+       returning id
+     ), chain as (
+       insert into profile_coverage (organization_id, profile_id, rep_id, role, priority, active, created_by, created_at, updated_at)
+       values ($1,$7,$3,'PRIMARY',1,true,$4,now(),now()),($1,$7,$6,'BACKUP',1,true,$4,now(),now())
+       returning id
+     )
+     select (select count(*) from seats) + (select count(*) from chain) as written`,
+    [ORG, IDENTITY, PRIMARY, ACTOR, COVERING, BACKUP, PROFILE],
+  )
 })
 
 function scope(client: ReturnType<typeof dbClientFor>, repId: string) {

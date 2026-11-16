@@ -10,6 +10,7 @@
  */
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { cn } from 'cn'
 import { V4Panel, V4PanelHeader, V4StatStrip, V4Chip, V4Empty, V4PageHeader } from '@/components/v4/primitives'
 import { TimelineTable, InlineError } from '@/components/operations/ops-primitives'
 import type { CommandCenterData, CommandMatrixRow } from '@/lib/team/command-center'
@@ -36,6 +37,7 @@ export function TeamCommandCenter({
   const [role, setRole] = useState('')
   const [assignOpen, setAssignOpen] = useState(false)
   const [setupOpen, setSetupOpen] = useState(false)
+  const [respView, setRespView] = useState<'operators' | 'profiles'>('operators')
 
   const matrix = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -173,12 +175,62 @@ export function TeamCommandCenter({
       <V4Panel>
         <V4PanelHeader
           eyebrow="Operating"
-          title="Who works what"
-          hint="Every seat from the canonical assignment model. Operators share one channel plan; backups never execute."
+          title="Responsibilities"
+          hint="Executing operators first; backups are eligibility, never workload."
+          action={
+            <div className="flex rounded-lg border border-line bg-bone-raised p-0.5">
+              {(['operators', 'profiles'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={respView === option}
+                  onClick={() => setRespView(option)}
+                  className={cn(
+                    'rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+                    respView === option ? 'bg-bone text-ink shadow-sm' : 'text-graphite hover:text-ink',
+                  )}
+                >
+                  {option === 'operators' ? 'By operator' : 'By profile'}
+                </button>
+              ))}
+            </div>
+          }
         />
         <div className="mt-3">
           {matrix.length === 0 ? (
             <V4Empty title="No assignments in view" body="Adjust the filters or assign people to a profile." />
+          ) : respView === 'operators' ? (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {matrix.map((row) => (
+                <div key={row.repId} className="rounded-xl border border-line/70 bg-bone p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-[13px] font-medium text-ink">{row.repName}</p>
+                    <span className="text-[11px] text-stone">{row.roleLabel}</span>
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {row.assignments.map((assignment) => (
+                      <li key={`${assignment.profileId}:${assignment.role}`} className="flex items-center justify-between gap-2 rounded-lg bg-bone-raised px-2.5 py-1.5 ring-1 ring-line/70">
+                        <span className="min-w-0">
+                          <Link href={`/team/profiles/${assignment.profileId}`} className="truncate text-[12px] font-medium text-ink hover:underline">
+                            {assignment.profileName}
+                          </Link>
+                          <span className="block truncate text-[10px] text-stone">{assignment.channels.join(' · ') || '—'}</span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <V4Chip tone={assignment.role === 'PRIMARY' ? 'info' : assignment.role === 'OPERATOR' ? 'neutral' : 'neutral'}>
+                            {assignment.role === 'PRIMARY' ? 'Primary' : assignment.role === 'OPERATOR' ? 'Operator' : 'Backup'}
+                          </V4Chip>
+                          <span className="text-[11px] tabular-nums text-graphite">
+                            {assignment.contribution}
+                            {assignment.allocation ? <span className="text-stone"> / {assignment.allocation}</span> : null}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="contain-layout overflow-x-auto">
               <table className="w-full min-w-[720px] text-left">

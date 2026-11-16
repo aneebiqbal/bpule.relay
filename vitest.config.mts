@@ -12,6 +12,33 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // Live-DB tests run in the serial `test:live` gate; running them in
+    // parallel with the unit suite makes them race on the shared database.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'tests/lead-sender-profile-visibility.test.ts',
+      'tests/migration-version-contracts.test.ts',
+      'tests/neon-adapter-contracts.test.ts',
+      'tests/plan-progress-contracts.test.ts',
+      'tests/profile-ownership-contracts.test.ts',
+      'tests/profile-truth-parity.test.ts',
+      'tests/relay-app-integration.test.ts',
+      'tests/responsibility-coverage-contracts.test.ts',
+      'tests/runtime-request-paths.test.ts',
+      'tests/v6-live-coverage-acceptance.test.ts',
+      'tests/v61-completion-idempotency.test.ts',
+      'tests/v611-multi-operator-acceptance.test.ts',
+      'tests/v611-multi-operator-contracts.test.ts',
+      'tests/v63-enrichment-behavior.test.ts',
+      'tests/v63-provider-discovery-contracts.test.ts',
+      'tests/v631-email-target-contracts.test.ts',
+      'tests/v631-live-provider.test.ts',
+      'tests/v631-provider-rls-contracts.test.ts',
+      'tests/v631-stale-job-reaper.test.ts',
+      'tests/v632-health-parity.test.ts',
+      'tests/v632-live-discovery.test.ts',
+    ],
     testTimeout: 120_000,
     // Live-DB suites do several sequential writes in beforeEach/afterAll; the
     // 5s default hook timeout aborted them mid-fixture and leaked state.

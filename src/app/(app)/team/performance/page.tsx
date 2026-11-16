@@ -1,5 +1,5 @@
 import { PageHeader } from '@/components/ui/page-header'
-import { InlineError, MetricStrip, Section } from '@/components/operations/ops-primitives'
+import { InlineError, LinkTabs, MetricStrip, Section } from '@/components/operations/ops-primitives'
 import { OpsFilters } from '@/components/operations/ops-filters'
 import { SavedViewsMenu } from '@/components/operations/saved-views-menu'
 import {
@@ -34,22 +34,15 @@ export default async function TeamPerformancePage({
   const sp = await searchParams
   const filters = parseOpsFilters(sp, { range: '30d' })
 
-  // Target progress is a Performance view; the editor stays in Admin → Daily
-  // Targets and Profile → Channel.
+  // Performance is organised into views. Every view shares the same filters and
+  // the same source metrics, so the numbers never disagree between them.
+  const rawView = Array.isArray(sp.view) ? sp.view[0] : sp.view
+  const view = (['overview', 'people', 'profiles', 'channels', 'conversions', 'targets'].includes(rawView ?? '')
+    ? rawView
+    : 'overview') as 'overview' | 'people' | 'profiles' | 'channels' | 'conversions' | 'targets'
+
   const rawPeriod = Array.isArray(sp.period) ? sp.period[0] : sp.period
   const targetPeriod = (PERIODS.some((p) => p.value === rawPeriod) ? rawPeriod : 'DAY') as TargetPeriod
-  if (filters.view === 'targets') {
-    return (
-      <div className="space-y-5">
-        <PageHeader
-          eyebrow="Team"
-          title="Targets"
-          description="What each person set out to do, and what they actually executed. Progress counts executed events only."
-        />
-        <TeamTargetsReport period={targetPeriod} />
-      </div>
-    )
-  }
 
   const [reps, directory, profilesRes] = await Promise.all([
     assignableReps(ctx),
@@ -84,7 +77,11 @@ export default async function TeamPerformancePage({
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Team" title="Performance" description="What the team executed in this window, and how it converted." />
+      <PageHeader
+        eyebrow="Team"
+        title="Performance"
+        description="What the team executed, how it converted, and how it tracks against target."
+      />
       <OpsFilters
         basePath="/team/performance"
         current={current}
@@ -109,52 +106,83 @@ export default async function TeamPerformancePage({
         trailing={<SavedViewsMenu surface="team.performance" />}
       />
 
-      {!perf ? (
+      <LinkTabs
+        label="Performance view"
+        active={view}
+        tabs={[
+          { value: 'overview', label: 'Overview', href: opsHref('/team/performance', current, { view: null }) },
+          { value: 'people', label: 'People', href: opsHref('/team/performance', current, { view: 'people' }) },
+          { value: 'profiles', label: 'Profiles', href: opsHref('/team/performance', current, { view: 'profiles' }) },
+          { value: 'channels', label: 'Channels', href: opsHref('/team/performance', current, { view: 'channels' }) },
+          { value: 'conversions', label: 'Conversions', href: opsHref('/team/performance', current, { view: 'conversions' }) },
+          { value: 'targets', label: 'Targets', href: opsHref('/team/performance', current, { view: 'targets' }) },
+        ]}
+      />
+
+      {view === 'targets' ? (
+        <TeamTargetsReport period={targetPeriod} />
+      ) : !perf ? (
         <InlineError>Performance could not be loaded. Refresh to try again.</InlineError>
       ) : (
         <>
-          <MetricStrip metrics={metricsToStrip(perf.totals, activityHref)} />
-          {perf.truncated && (
-            <p className="text-[12px] text-status-warning">This window hit the read limit, so totals may be incomplete. Narrow the range.</p>
+          {view === 'overview' && (
+            <>
+              <MetricStrip metrics={metricsToStrip(perf.totals, activityHref)} />
+              {perf.truncated && (
+                <p className="text-[12px] text-status-warning">This window hit the read limit, so totals may be incomplete. Narrow the range.</p>
+              )}
+              <Section id="trend" title="Trend" description="Replies, meetings and completed tasks per day, from the aggregated analytics path.">
+                {trend ? (
+                  <TeamTrendChart data={trend} />
+                ) : (
+                  <p className="rounded-lg border border-dashed border-line px-3 py-4 text-[13px] text-graphite">
+                    Trend isn&apos;t available on this database connection.
+                  </p>
+                )}
+              </Section>
+              <Section title="Target versus actual" description="One shared requirement per channel lane, counted once. Edit targets from a profile or the Setup assistant.">
+                <TeamTargetsReport period={targetPeriod} />
+              </Section>
+            </>
           )}
 
-          <Section id="trend" title="Trend" description="Replies, meetings and completed tasks per day, from the aggregated analytics path.">
-            {trend ? (
-              <TeamTrendChart data={trend} />
-            ) : (
-              <p className="rounded-lg border border-dashed border-line px-3 py-4 text-[13px] text-graphite">
-                Trend isn&apos;t available on this database connection.
-              </p>
-            )}
-          </Section>
-
-          <Section id="conversion" title="Conversion" description="Leads created in this window, counted at their furthest known stage. Click a stage to inspect those leads.">
-            <FunnelTable
-              steps={perf.funnel}
-              inspectHref={(s) =>
-                s.key === 'reply'
-                  ? `/leads?view=needs_reply&scope=${ctx.leadScope}`
-                  : s.key === 'won'
-                    ? `/leads?view=won&scope=${ctx.leadScope}`
-                    : s.key === 'lead'
-                      ? `/leads?scope=${ctx.leadScope}`
-                      : null
-              }
-            />
-          </Section>
-
-          <Section title="Rep comparison" description="Counts side by side. Reply rate = replied leads ÷ contacted leads.">
-            <RepComparison rows={perf.byRep} rangeQuery={rangeQuery} />
-          </Section>
-
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <Section title="Profile comparison" description="Each sending identity's opportunities and results.">
-              <ProfileComparison rows={perf.byProfile} rangeQuery={rangeQuery} />
+          {view === 'conversions' && (
+            <Section id="conversion" title="Conversion" description="Leads created in this window, counted at their furthest known stage. Click a stage to inspect those leads.">
+              <FunnelTable
+                steps={perf.funnel}
+                inspectHref={(s) =>
+                  s.key === 'reply'
+                    ? `/leads?view=needs_reply&scope=${ctx.leadScope}`
+                    : s.key === 'won'
+                      ? `/leads?view=won&scope=${ctx.leadScope}`
+                      : s.key === 'lead'
+                        ? `/leads?scope=${ctx.leadScope}`
+                        : null
+                }
+              />
             </Section>
-            <Section title="Source comparison" description="Qualified = new leads in a strong or worth-pursuing band.">
-              <SourceComparison rows={perf.bySource} rangeQuery={rangeQuery} />
+          )}
+
+          {view === 'people' && (
+            <Section title="Rep comparison" description="Counts side by side. Reply rate = replied leads ÷ contacted leads.">
+              <RepComparison rows={perf.byRep} rangeQuery={rangeQuery} />
             </Section>
-          </div>
+          )}
+
+          {(view === 'profiles' || view === 'channels') && (
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              {view === 'profiles' && (
+                <Section title="Profile comparison" description="Each sending identity's opportunities and results.">
+                  <ProfileComparison rows={perf.byProfile} rangeQuery={rangeQuery} />
+                </Section>
+              )}
+              {view === 'channels' && (
+                <Section title="Source comparison" description="Qualified = new leads in a strong or worth-pursuing band.">
+                  <SourceComparison rows={perf.bySource} rangeQuery={rangeQuery} />
+                </Section>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
