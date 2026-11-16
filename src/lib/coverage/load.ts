@@ -80,7 +80,9 @@ export async function loadCoverageFacts(
   options: { date?: string; client?: DbClient } = {},
 ): Promise<CoverageFacts> {
   const supabase = options.client ?? (await createServerSupabase())
-  const policy = await loadOperatingPolicy(orgId)
+  // Forward the caller's client so a service/test caller never falls back to a
+  // request-scoped client (which throws outside a request once the TTL expires).
+  const policy = await loadOperatingPolicy(orgId, options.client)
   const now = currentInstant()
   const today = orgDate(now, policy.timezone)
   const businessDate = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : today
@@ -545,7 +547,7 @@ async function loadRecentReturningCoverage(
   options: { date?: string; client?: DbClient },
 ): Promise<RepReturningCoverage[]> {
   const supabase = options.client ?? (await createServerSupabase())
-  const policy = await loadOperatingPolicy(orgId)
+  const policy = await loadOperatingPolicy(orgId, options.client)
   const now = currentInstant()
   const today = orgDate(now, policy.timezone)
   const businessDate = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : today

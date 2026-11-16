@@ -1,7 +1,7 @@
-import { createServerSupabase } from '@/lib/supabase/server'
 import { cache } from 'react'
 import { getCurrentUser } from './current'
 import { isDemoMode } from '@/lib/ai/config'
+import { getDbClient } from '@/lib/db/provider'
 import { perfTrace } from '@/lib/perf-trace'
 
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER'
@@ -56,7 +56,9 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
     }
   }
 
-  const supabase = await createServerSupabase()
+  // Reuse the already-resolved auth user id instead of asking the auth provider
+  // for the session a second time (one less round trip on every request).
+  const supabase = await getDbClient(user.authUserId)
 
   // Org role and team memberships are independent; run them together. The
   // capability set depends on the role, so it is the only second wave.
