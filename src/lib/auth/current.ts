@@ -70,9 +70,25 @@ function firstEmbedded<T>(value: T | T[] | null | undefined): T | null {
 }
 
 /**
+ * A database failure during auth resolution. This must never be reported as
+ * "no workspace mapping": a timeout or a dropped connection is a 500, not a
+ * 409. Only a real absent row returns null from `getCurrentUser`.
+ */
+export class AuthDatabaseError extends Error {
+  constructor(message: string, readonly cause?: unknown) {
+    super(message)
+    this.name = 'AuthDatabaseError'
+  }
+}
+
+/**
  * Resolves the signed-in rep, organization and voice profile for the current
  * request. Wrapped in React `cache` so the layout, page and store all share a
  * single auth + profile lookup per request instead of re-querying Supabase.
+ *
+ * Returns null only when there is genuinely nothing to resolve (no session, or
+ * a session with no rep/org row). A database failure throws so the caller can
+ * return 500 instead of a false "no workspace" 409.
  */
 async function resolveCurrentUser(): Promise<CurrentUser | null> {
   if (isDemoMode()) {
@@ -119,7 +135,7 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
         email: userEmail,
         message: repError.message,
       })
-      return null
+      throw new AuthDatabaseError('rep lookup failed', repError)
     }
 
     const repRow = repRows?.[0] ?? null
@@ -153,6 +169,13 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
           .maybeSingle(),
       ]),
     )
+
+    if (orgResult.error) {
+      throw new AuthDatabaseError('organization lookup failed', orgResult.error)
+    }
+    if (profileResult.error) {
+      throw new AuthDatabaseError('voice profile lookup failed', profileResult.error)
+    }
 
     const orgRow = orgResult.data as EmbeddedOrgRow | null
 
@@ -208,10 +231,11 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
 
     return { rep, organization, profile, authUserId: userId }
   } catch (error) {
-    console.warn('[auth/current] unexpected auth resolution error', {
+    // A database/transport failure must not be reported as a missing mapping.
+    console.warn('[auth/current] auth resolution error', {
       message: error instanceof Error ? error.message : 'unknown error',
     })
-    return null
+    throw error
   }
 }
 
