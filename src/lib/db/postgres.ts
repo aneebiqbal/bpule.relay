@@ -96,17 +96,10 @@ function rewrite(text: string, values: unknown[]): { sql: string; params: unknow
  * `set_config(..., true)` (transaction-local). This is the exact behavior the
  * Neon executor uses and the only ordering Postgres guarantees for RLS plans.
  */
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+
 export class PostgresExecutorImpl implements NeonExecutorApi {
   readonly provider = 'postgres' as const
-
-  private client: PoolClient | null = null
-  private releaseScheduled = false
-  /**
-   * False when `after()` is unavailable (scripts, tests, background jobs). The
-   * executor then releases the connection after every statement instead of
-   * holding it for the request, so it can never exhaust the pool.
-   */
-  private reusable = true
 
   constructor(
     private readonly pgPool: Pool,
@@ -114,77 +107,52 @@ export class PostgresExecutorImpl implements NeonExecutorApi {
   ) {}
 
   /**
-   * One connection per executor (one per request), with the RLS identity set
-   * once. A session-level `set_config` is evaluated before the statement plan,
-   * so RLS sees the same identity as the previous `SET LOCAL` transaction — but
-   * a read now costs one round trip instead of four (BEGIN + set_config + query
-   * + COMMIT). The GUC is overwritten on every acquire and reset on release, so
-   * a pooled connection can never carry one user's identity into another's
-   * request.
+   * One round trip for `BEGIN` plus the transaction-local RLS identity.
+   *
+   * The identity is `SET LOCAL`, so it is scoped to this transaction and reset
+   * by `COMMIT`/`ROLLBACK` — no session state leaks between checkouts. The user
+   * id is a validated UUID, so inlining it is safe; anything else falls back to
+   * a parameterised `set_config` (one extra round trip).
+   *
+   * A client is checked out per operation and released in `finally`, so two
+   * concurrent operations never share a transaction client.
    */
-  private async acquire(): Promise<PoolClient> {
-    if (this.client) return this.client
-    const waitStarted = performance.now()
-    const client = await this.pgPool.connect()
-    const waitMs = performance.now() - waitStarted
-    const initStarted = performance.now()
-    await client.query('SELECT set_config($1, $2, false)', [
-      'app.current_user_id',
-      this.userId ?? '',
-    ])
-    perfLog('db.connect', waitMs, `init=${Math.round(performance.now() - initStarted)}ms`)
-    this.client = client
-    await this.scheduleRelease()
-    return client
-  }
-
-  private async scheduleRelease(): Promise<void> {
-    if (this.releaseScheduled) return
-    this.releaseScheduled = true
-    try {
-      const { after } = await import('next/server')
-      after(async () => {
-        await this.release()
-      })
-    } catch {
-      // No request scope (scripts, tests, background jobs): release after each
-      // statement so the pool is never exhausted.
-      this.reusable = false
+  private async begin(client: PoolClient): Promise<void> {
+    const userId = this.userId
+    if (userId && UUID_RE.test(userId)) {
+      await client.query(`BEGIN; SELECT set_config('app.current_user_id', '${userId}', true)`)
+      return
     }
-  }
-
-  /** Returns the connection to the pool with no identity left behind. */
-  async release(): Promise<void> {
-    const client = this.client
-    this.client = null
-    if (!client) return
-    await client.query('RESET app.current_user_id').catch(() => {})
-    client.release()
+    await client.query('BEGIN')
+    await client.query('SELECT set_config($1, $2, true)', ['app.current_user_id', userId ?? ''])
   }
 
   async query<T>(text: string, values: unknown[] = []): Promise<T[]> {
     const { sql, params } = rewrite(text, values)
-    const client = await this.acquire()
+    const client = await this.pgPool.connect()
     const started = performance.now()
     try {
+      await this.begin(client)
       const res = await client.query(sql, params)
+      await client.query('COMMIT')
       const ms = performance.now() - started
       perfLog('db.read', ms)
       perfSlow('db.read', ms)
       return res.rows as T[]
     } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
       throw new Error(`Postgres query failed: ${err instanceof Error ? err.message : String(err)}\n${sql}`)
     } finally {
-      if (!this.reusable) await this.release()
+      client.release()
     }
   }
 
   async queryInWrite<T>(text: string, values: unknown[] = []): Promise<T[]> {
     const { sql, params } = rewrite(text, values)
-    const client = await this.acquire()
+    const client = await this.pgPool.connect()
     const started = performance.now()
     try {
-      await client.query('BEGIN')
+      await this.begin(client)
       const res = await client.query(sql, params)
       await client.query('COMMIT')
       const ms = performance.now() - started
@@ -195,7 +163,7 @@ export class PostgresExecutorImpl implements NeonExecutorApi {
       await client.query('ROLLBACK').catch(() => {})
       throw new Error(`Postgres write failed: ${err instanceof Error ? err.message : String(err)}\n${sql}`)
     } finally {
-      if (!this.reusable) await this.release()
+      client.release()
     }
   }
 }
