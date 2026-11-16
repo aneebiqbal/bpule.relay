@@ -106,8 +106,8 @@ export default async function AppLayout({
     }
   })();
 
-  const [queue, identityData, sidebarCounts] = await Promise.all([
-    store.getQueue(),
+  const [sendSummary, identityData, sidebarCounts] = await Promise.all([
+    store.getSendSummary(),
     identityDataPromise,
     (async (): Promise<SidebarCounts> => {
       if (isDemoMode()) return { inboxNeedsReply: null, actionableTasks: null }
@@ -141,6 +141,14 @@ export default async function AppLayout({
 
   return (
     <>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `window.__RELAY_AUTH_CONTEXT__=${JSON.stringify({
+            isAdmin: Boolean(authCtx?.isAdmin),
+            isManager: Boolean(authCtx?.isManager),
+          })}`,
+        }}
+      />
       <AnalyticsProvider />
       <AppIdentifyWrapper
         userId={user.rep.id}
@@ -157,8 +165,8 @@ export default async function AppLayout({
             isAdmin={authCtx?.isAdmin ?? false}
             isManager={authCtx?.isManager ?? false}
             demo={isDemoMode()}
-            todaySends={queue.todaySends}
-            dailyLimit={queue.dailyLimit}
+            todaySends={sendSummary.todaySends}
+            dailyLimit={sendSummary.dailyLimit}
             sidebarCounts={sidebarCounts}
           >
             {children}
