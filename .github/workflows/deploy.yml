@@ -1,0 +1,33 @@
+name: Deploy Relay
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: relay-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to InterServer
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -e
+            cd /home/deploy/apps/relay
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            pnpm install --frozen-lockfile
+            pnpm build
+            pm2 restart relay --update-env
+            pm2 save
