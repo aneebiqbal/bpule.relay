@@ -176,11 +176,10 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
   {
     id: 'admin',
     label: 'Admin',
-    href: '/admin/command',
+    href: '/admin/people',
     icon: ShieldCheck,
     visible: adminUp,
     secondary: [
-      { id: 'command-center', label: 'Command Center', href: '/admin/command', group: 'Operations' },
       { id: 'people-roles', label: 'People & Roles', href: '/admin/people', group: 'Operations' },
       // Admin configures targets; Team reviews target progress. One surface each.
       { id: 'admin-targets', label: 'Daily Targets', href: '/admin/targets', group: 'Operations' },
@@ -203,8 +202,6 @@ export const PRIMARY_UTILITY_IDS: RelayNavDomain[] = ['settings', 'admin']
  * under an admin URL but belong to another domain resolve correctly.
  */
 export function domainForPathname(pathname: string): RelayNavDomain | null {
-  if (pathname === '/admin/command' || pathname.startsWith('/admin/command/')) return 'team'
-
   if (pathname === '/dashboard') return 'home'
   if (pathname === '/chats' || pathname.startsWith('/chats/')) return 'inbox'
   if (pathname === '/tasks' || pathname.startsWith('/tasks/')) return 'work'

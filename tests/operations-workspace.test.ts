@@ -282,7 +282,7 @@ describe('ROLE_VISIBILITY', () => {
   it('ROLE_SECTION_DETECTION: new routes land in the right section', () => {
     expect(domainForPathname('/team/groups/abc')).toBe('team')
     expect(domainForPathname('/team/activity')).toBe('team')
-    expect(domainForPathname('/admin/command')).toBe('team')
+    expect(domainForPathname('/admin/command')).toBe('admin')
     expect(domainForPathname('/accounts/acme')).toBe('sales')
   })
 })

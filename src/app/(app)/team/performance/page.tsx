@@ -47,7 +47,7 @@ export default async function TeamPerformancePage({
   const [reps, directory, profilesRes] = await Promise.all([
     assignableReps(ctx),
     getPeopleDirectory().catch(() => null),
-    ctx.client.from('revenue_identities').select('id, identity_name').eq('organization_id', ctx.auth.orgId).order('identity_name').limit(200),
+    ctx.client.from('revenue_identities').select('id, identity_name, channel').eq('organization_id', ctx.auth.orgId).order('identity_name').limit(200),
   ])
   const teamMemberIds = filters.team ? directory?.teams.find((t) => t.id === filters.team)?.memberIds ?? [] : null
   const repIds = effectiveRepIds(ctx.scope, { repId: filters.rep, teamMemberIds })
@@ -73,7 +73,7 @@ export default async function TeamPerformancePage({
   const activityHref = (event: string | null) =>
     opsHref('/reports/activity', { range: filters.range, team: filters.team, rep: filters.rep, profile: filters.profile }, { event })
   const rangeQuery = `range=${filters.range}`
-  const profiles = (profilesRes.data ?? []) as Array<{ id: string; identity_name: string }>
+  const profiles = (profilesRes.data ?? []) as Array<{ id: string; identity_name: string; channel: string }>
 
   return (
     <div className="space-y-5">
@@ -91,7 +91,7 @@ export default async function TeamPerformancePage({
             ? [{ key: 'team', label: 'Team', allLabel: 'All teams', options: directory.teams.map((t) => ({ value: t.id, label: t.name })) }]
             : []),
           { key: 'rep', label: 'Rep', allLabel: 'All reps', options: reps.map((r) => ({ value: r.id, label: r.name })) },
-          { key: 'profile', label: 'Profile', allLabel: 'All profiles', options: profiles.map((p) => ({ value: p.id, label: p.identity_name })) },
+          { key: 'profile', label: 'Profile', allLabel: 'All profiles', options: profiles.map((p) => ({ value: p.id, label: `${p.identity_name} · ${p.channel}` })) },
           {
             key: 'source',
             label: 'Source',
