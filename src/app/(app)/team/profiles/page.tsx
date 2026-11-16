@@ -1,16 +1,17 @@
 import { redirect } from 'next/navigation'
 import { getAuthContext } from '@/lib/auth/organization'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { loadTeamDay } from '@/lib/rep-day/team'
 import { loadTeamProfileDirectory, type TeamProfileDirectoryRow } from '@/lib/team/profiles'
-import { TeamProfilesTable } from '@/components/team/team-profiles-table'
-import { createServerSupabase } from '@/lib/supabase/server'
+import { PersonProfilesWorkspace } from '@/components/team/person-profiles-workspace'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Team → Profiles: the admin profile control surface and onboarding entry point.
+ * Team → Profiles: the admin profile control surface.
  *
- * `loadTeamDay` scopes the caller (admin → org, manager → managed team);
+ * One card per person; each distinct account/channel is a child with its own
+ * identity, operators, targets and actions. `loadTeamDay` scopes the caller and
  * `loadTeamProfileDirectory` supplies every profile, assigned or not.
  */
 export default async function TeamProfilesPage() {
@@ -51,7 +52,7 @@ export default async function TeamProfilesPage() {
   }
 
   return (
-    <TeamProfilesTable
+    <PersonProfilesWorkspace
       profiles={profiles}
       businessDate={businessDate}
       error={loadError}

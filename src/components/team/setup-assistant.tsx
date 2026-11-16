@@ -1,45 +1,40 @@
 'use client'
 
 /**
- * Setup Assistant — describe an outcome, preview the change, apply it.
+ * Setup Assistant — guided configuration with the current state first.
  *
- * Two equivalent authors: a structured form (no AI dependency) and an optional
- * natural-language parse. Both produce the same preview shape and both apply
- * through the canonical writers, so the AI never touches the database directly.
+ * Guide mode: pick a real account, see its current chain and plan, edit
+ * operators/targets/schedule, compare before/after, then apply through the
+ * canonical writers. Describe mode: natural language → validated preview.
+ * Nothing is applied without an explicit Apply; AI only produces drafts.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { V4Drawer, V4Chip } from '@/components/v4/primitives'
 import { cn } from 'cn'
 
-interface PreviewRep {
-  repId: string
-  repName: string
-}
-
-interface Preview {
-  assignments: Array<{
-    profileId: string
-    profileName: string
-    primaryRepId: string | null
-    primaryRepName: string | null
-    operators: PreviewRep[]
-    backups: PreviewRep[]
-  }>
+interface SetupAccount {
+  identityId: string
+  profileId: string
+  profileName: string
+  channel: string
+  identityName: string
+  primary: { repId: string; repName: string } | null
+  operators: Array<{ repId: string; repName: string }>
+  backups: Array<{ repId: string; repName: string }>
   targets: Array<{
-    profileId: string
-    profileName: string
-    identityId: string
-    identityName: string
-    channel: string
     activityType: string
+    label: string
     targetCount: number
     allocations: Array<{ repId: string; repName: string; targetCount: number }>
   }>
-  schedules: Array<{ profileId: string; profileName: string; repId: string; repName: string; daysOfWeek: number[] }>
+  shared: boolean
 }
 
-const EMPTY_PREVIEW: Preview = { assignments: [], targets: [], schedules: [] }
+interface RepOption {
+  id: string
+  name: string
+}
 
 const METRICS = [
   { value: 'connection_request', label: 'Connections' },
@@ -49,6 +44,12 @@ const METRICS = [
   { value: 'proposal', label: 'Proposals' },
   { value: 'prospect_extracted', label: 'Prospects' },
   { value: 'other', label: 'Tasks' },
+]
+
+const PERIODS = [
+  { value: 'DAY', label: 'Daily' },
+  { value: 'WEEK', label: 'Weekly' },
+  { value: 'MONTH', label: 'Monthly' },
 ]
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -67,36 +68,126 @@ export function SetupAssistant({
   identities: Array<{ id: string; profileId: string; channel: string; name: string }>
 }) {
   const router = useRouter()
-  const [mode, setMode] = useState<'describe' | 'form'>('describe')
-  const [prompt, setPrompt] = useState('')
-  const [preview, setPreview] = useState<Preview>(EMPTY_PREVIEW)
-  const [warnings, setWarnings] = useState<string[]>([])
-  const [busy, setBusy] = useState(false)
+  const [mode, setMode] = useState<'guide' | 'describe'>('guide')
+  const [accounts, setAccounts] = useState<SetupAccount[]>([])
+  const [stateReps, setStateReps] = useState<RepOption[]>(reps)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [results, setResults] = useState<string[]>([])
 
-  // Deterministic form state.
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [primary, setPrimary] = useState<Record<string, string>>({})
-  const [operators, setOperators] = useState<Record<string, string[]>>({})
+  const [accountQuery, setAccountQuery] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [operatorQuery, setOperatorQuery] = useState('')
+
+  const [primaryRepId, setPrimaryRepId] = useState('')
+  const [operatorIds, setOperatorIds] = useState<string[]>([])
+  const [backupIds, setBackupIds] = useState<string[]>([])
   const [metric, setMetric] = useState('connection_request')
-  const [target, setTarget] = useState('20')
-  const [channel, setChannel] = useState('')
-  const [split, setSplit] = useState<Record<string, string>>({})
+  const [targetCount, setTargetCount] = useState('20')
+  const [period, setPeriod] = useState('DAY')
+  const [allocations, setAllocations] = useState<Record<string, string>>({})
   const [days, setDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]))
+  const [dirty, setDirty] = useState(false)
 
-  const profileById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles])
-  const repById = useMemo(() => new Map(reps.map((rep) => [rep.id, rep])), [reps])
+  // Describe mode
+  const [prompt, setPrompt] = useState('')
+  const [preview, setPreview] = useState<{
+    assignments: Array<{ profileId: string; profileName: string; primaryRepId: string | null; primaryRepName: string | null; operators: Array<{ repId: string; repName: string }>; backups: Array<{ repId: string; repName: string }> }>
+    targets: Array<{ profileId: string; profileName: string; identityId: string; activityType: string; targetCount: number; allocations: Array<{ repId: string; repName: string; targetCount: number }> }>
+    schedules: Array<{ profileId: string; repId: string; daysOfWeek: number[] }>
+  }>({ assignments: [], targets: [], schedules: [] })
+  const [warnings, setWarnings] = useState<string[]>([])
 
-  function toggleSet(set: Set<string>, id: string): Set<string> {
+  const selected = useMemo(
+    () => accounts.find((account) => account.identityId === selectedId) ?? null,
+    [accounts, selectedId],
+  )
+
+  useEffect(() => {
+    if (!open || mode !== 'guide') return
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    fetch('/api/team/setup/state')
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(body.error ?? 'Could not load the current configuration.')
+        if (cancelled) return
+        setAccounts(body.accounts ?? [])
+        setStateReps(body.reps ?? reps)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the current configuration.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, mode, reps])
+
+  const filteredAccounts = useMemo(() => {
+    const q = accountQuery.trim().toLowerCase()
+    if (!q) return accounts
+    return accounts.filter((account) =>
+      `${account.profileName} ${account.identityName} ${account.channel}`.toLowerCase().includes(q),
+    )
+  }, [accounts, accountQuery])
+
+  function selectAccount(identityId: string) {
+    const account = accounts.find((row) => row.identityId === identityId)
+    if (!account) return
+    setSelectedId(identityId)
+    setPrimaryRepId(account.primary?.repId ?? '')
+    setOperatorIds(account.operators.map((row) => row.repId))
+    setBackupIds(account.backups.map((row) => row.repId))
+    const first = account.targets[0]
+    setMetric(first?.activityType ?? 'connection_request')
+    setTargetCount(String(first?.targetCount ?? 20))
+    setAllocations(
+      Object.fromEntries(
+        (first?.allocations ?? []).map((row) => [row.repId, String(row.targetCount)]),
+      ),
+    )
+    setPeriod('DAY')
+    setOperatorQuery('')
+    setDirty(false)
+    setResults([])
+  }
+
+  function toggleSet<T>(set: Set<T>, id: T): Set<T> {
     const next = new Set(set)
     if (next.has(id)) next.delete(id)
     else next.add(id)
     return next
   }
 
+  function toggleOperator(repId: string) {
+    setOperatorIds((current) => (current.includes(repId) ? current.filter((id) => id !== repId) : [...current, repId]))
+    setDirty(true)
+  }
+
+  function toggleBackup(repId: string) {
+    setBackupIds((current) => (current.includes(repId) ? current.filter((id) => id !== repId) : [...current, repId]))
+    setDirty(true)
+  }
+
+  const operatorOptions = useMemo(() => {
+    const q = operatorQuery.trim().toLowerCase()
+    const chosen = new Set([primaryRepId, ...operatorIds, ...backupIds])
+    return stateReps
+      .filter((rep) => !chosen.has(rep.id))
+      .filter((rep) => (q ? rep.name.toLowerCase().includes(q) : true))
+  }, [stateReps, operatorQuery, primaryRepId, operatorIds, backupIds])
+
+  const proposedTotal = [primaryRepId, ...operatorIds].filter(Boolean).length
+  const allocationSum = Object.values(allocations).reduce((sum, value) => sum + (Math.round(Number(value)) || 0), 0)
+  const targetValue = Math.round(Number(targetCount)) || 0
+  const allocationOverflow = allocationSum > targetValue
+
   async function parsePrompt() {
-    setBusy(true)
+    setLoading(true)
     setError(null)
     setWarnings([])
     try {
@@ -107,71 +198,100 @@ export function SetupAssistant({
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error ?? 'Could not parse that request.')
-      setPreview(body.preview ?? EMPTY_PREVIEW)
+      setPreview(body.preview ?? { assignments: [], targets: [], schedules: [] })
       setWarnings(body.warnings ?? [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not parse that request.')
     } finally {
-      setBusy(false)
+      setLoading(false)
     }
   }
 
-  function buildFormPreview(): Preview {
-    const assignments = [...selected].flatMap((id) => {
-      const repId = primary[id]
-      if (!repId) return []
-      const ops = operators[id] ?? []
-      return [{
-        profileId: id,
-        profileName: profileById.get(id)?.name ?? 'Profile',
-        primaryRepId: repId,
-        primaryRepName: repById.get(repId)?.name ?? 'Unknown',
-        operators: ops.map((op) => ({ repId: op, repName: repById.get(op)?.name ?? 'Unknown' })),
-        backups: [],
-      }]
-    })
-    const targets = [...selected].flatMap((id) => {
-      const count = Math.round(Number(target))
-      if (!Number.isFinite(count) || count <= 0) return []
-      const identity = identities.find((entry) => entry.profileId === id && (!channel || entry.channel === channel))
-      if (!identity) return []
-      const ops = operators[id] ?? []
-      const shares = Object.entries(split)
-        .filter(([repId]) => ops.includes(repId))
-        .map(([repId, value]) => ({ repId, targetCount: Math.round(Number(value)) || 0 }))
-        .filter((row) => row.targetCount > 0)
-      return [{
-        profileId: id,
-        profileName: profileById.get(id)?.name ?? 'Profile',
-        identityId: identity.id,
-        identityName: identity.name,
-        channel: identity.channel,
-        activityType: metric,
-        targetCount: count,
-        allocations: shares.map((row) => ({ ...row, repName: repById.get(row.repId)?.name ?? 'Unknown' })),
-      }]
-    })
-    const schedules = [...selected].flatMap((id) => {
-      const repId = primary[id]
-      if (!repId || days.size === 0) return []
-      return [{
-        profileId: id,
-        profileName: profileById.get(id)?.name ?? 'Profile',
-        repId,
-        repName: repById.get(repId)?.name ?? 'Unknown',
-        daysOfWeek: [...days].sort(),
-      }]
-    })
-    return { assignments, targets, schedules }
+  async function applyGuide() {
+    if (!selected) return
+    setLoading(true)
+    setError(null)
+    setResults([])
+    const log: string[] = []
+    try {
+      const assignment = await fetch('/api/team/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: [{
+            profileId: selected.profileId,
+            primaryRepId: primaryRepId || undefined,
+            operators: operatorIds.map((repId, index) => ({ repId, priority: index + 1 })),
+            backups: backupIds.map((repId, index) => ({ repId, priority: index + 1 })),
+          }],
+        }),
+      })
+      const assignmentBody = await assignment.json().catch(() => ({}))
+      if (!assignment.ok) throw new Error(assignmentBody.error ?? 'Assignment failed.')
+      const row = (assignmentBody.results ?? [])[0]
+      log.push(`${selected.profileName} · ${selected.channel}: ${row?.ok ? 'chain saved' : row?.error ?? 'failed'}`)
+
+      if (targetValue > 0) {
+        const target = await fetch('/api/admin/targets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            repId: primaryRepId || operatorIds[0],
+            revenueIdentityId: selected.identityId,
+            activityType: metric,
+            targetCount: targetValue,
+          }),
+        })
+        const targetBody = await target.json().catch(() => ({}))
+        if (!target.ok) {
+          log.push(`${selected.identityName}: target failed (${targetBody.error ?? 'error'})`)
+        } else {
+          const plan = targetBody.target ?? (Array.isArray(targetBody.targets) ? targetBody.targets[0] : null)
+          const shares = Object.entries(allocations)
+            .filter(([, value]) => (Math.round(Number(value)) || 0) > 0)
+            .map(([repId, value]) => ({ repId, targetCount: Math.round(Number(value)) }))
+          if (plan?.id && shares.length > 0) {
+            const alloc = await fetch(`/api/admin/targets/${plan.id}/allocations`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ mode: 'allocated', allocations: shares }),
+            })
+            const allocBody = await alloc.json().catch(() => ({}))
+            log.push(`${selected.identityName}: ${alloc.ok ? 'targets allocated' : `allocation failed (${allocBody.error ?? 'error'})`}`)
+          } else {
+            log.push(`${selected.identityName}: target set`)
+          }
+        }
+      }
+
+      if (days.size > 0 && primaryRepId) {
+        const schedule = await fetch(`/api/team/profiles/${selected.profileId}/schedules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shifts: [{ repId: primaryRepId, startTime: '09:00', endTime: '18:00', daysOfWeek: [...days].sort() }] }),
+        })
+        const scheduleBody = await schedule.json().catch(() => ({}))
+        log.push(`${selected.identityName}: ${schedule.ok ? 'schedule set' : `schedule failed (${scheduleBody.error ?? 'error'})`}`)
+      }
+
+      setResults(log)
+      setDirty(false)
+      router.refresh()
+      // Reload current state so the before/after reflects what was just saved.
+      const refreshed = await fetch('/api/team/setup/state').then((res) => res.json().catch(() => null))
+      if (refreshed?.accounts) {
+        setAccounts(refreshed.accounts)
+        if (selectedId) selectAccount(selectedId)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not apply the setup.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function applyFormPreview() {
-    setPreview(buildFormPreview())
-    setWarnings([])
-  }
-
-  async function apply() {
-    setBusy(true)
+  async function applyDescribe() {
+    setLoading(true)
     setError(null)
     setResults([])
     const log: string[] = []
@@ -192,333 +312,344 @@ export function SetupAssistant({
         const body = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(body.error ?? 'Assignment failed.')
         for (const row of body.results ?? []) {
-          const name = profileById.get(row.profileId)?.name ?? row.profileId
-          log.push(`${name}: ${row.ok ? 'assigned' : row.error ?? 'failed'}`)
+          log.push(`${row.profileId}: ${row.ok ? 'assigned' : row.error ?? 'failed'}`)
         }
       }
-
       for (const row of preview.targets) {
-        if (!row.identityId) {
-          log.push(`${row.profileName}: needs a channel — set the target from the profile.`)
-          continue
-        }
         const res = await fetch('/api/admin/targets', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            repId: row.allocations[0]?.repId ?? preview.assignments.find((assignment) => assignment.profileId === row.profileId)?.primaryRepId,
+            repId: row.allocations[0]?.repId ?? preview.assignments.find((a) => a.profileId === row.profileId)?.primaryRepId,
             revenueIdentityId: row.identityId,
             activityType: row.activityType,
             targetCount: row.targetCount,
           }),
         })
         const body = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          log.push(`${row.profileName}: target failed (${body.error ?? 'error'})`)
-          continue
-        }
-        const plan = body.target ?? (Array.isArray(body.targets) ? body.targets[0] : null)
-        if (plan?.id && row.allocations.length > 0) {
-          const allocRes = await fetch(`/api/admin/targets/${plan.id}/allocations`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: 'allocated', allocations: row.allocations }),
-          })
-          const allocBody = await allocRes.json().catch(() => ({}))
-          log.push(`${row.profileName}: ${allocRes.ok ? 'targets allocated' : `allocation failed (${allocBody.error ?? 'error'})`}`)
-        } else {
-          log.push(`${row.profileName}: target set`)
-        }
+        log.push(`${row.profileName}: ${res.ok ? 'target set' : `target failed (${body.error ?? 'error'})`}`)
       }
-
-      for (const row of preview.schedules) {
-        const res = await fetch(`/api/team/profiles/${row.profileId}/schedules`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ shifts: [{ repId: row.repId, startTime: '09:00', endTime: '18:00', daysOfWeek: row.daysOfWeek }] }),
-        })
-        const body = await res.json().catch(() => ({}))
-        log.push(`${row.profileName}: ${res.ok ? `schedule set for ${row.repName}` : `schedule failed (${body.error ?? 'error'})`}`)
-      }
-
       setResults(log)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not apply the setup.')
     } finally {
-      setBusy(false)
+      setLoading(false)
     }
   }
 
-  const empty = preview.assignments.length + preview.targets.length + preview.schedules.length === 0
+  const guideChanges = selected && primaryRepId && dirty
+  const describeChanges = preview.assignments.length + preview.targets.length + preview.schedules.length > 0
 
   return (
     <V4Drawer
       open={open}
       onClose={onClose}
-      width="max-w-2xl"
+      width="max-w-3xl"
       title={
         <div>
           <p className="text-[15px] font-medium text-ink">Setup assistant</p>
-          <p className="mt-0.5 text-[12px] text-stone">Describe the outcome, review the change, then apply it.</p>
+          <p className="mt-0.5 text-[12px] text-stone">See the current configuration, propose a change, then apply it.</p>
         </div>
       }
     >
       <div className="space-y-4 px-5 py-4">
-      <div className="flex rounded-lg border border-line bg-bone-raised p-0.5">
-        {(['describe', 'form'] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={mode === option}
-            onClick={() => setMode(option)}
-            className={cn(
-              'flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors',
-              mode === option ? 'bg-bone text-ink shadow-sm' : 'text-graphite hover:text-ink',
-            )}
-          >
-            {option === 'describe' ? 'Describe' : 'Form'}
-          </button>
-        ))}
-      </div>
-
-      {mode === 'describe' ? (
-        <div className="space-y-2">
-          <label className="block">
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">What should change?</span>
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              rows={4}
-              placeholder="Assign Ahmad and Dawood to Aneeb's profiles, split LinkedIn connection targets 60/40, weekdays for the next month."
-              className="mt-1 w-full rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] text-ink placeholder:text-stone"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void parsePrompt()}
-            disabled={busy || prompt.trim().length < 8}
-            className="rounded-lg bg-solid px-3 py-2 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy ? 'Working…' : 'Parse request'}
-          </button>
+        <div className="flex rounded-lg border border-line bg-bone-raised p-0.5">
+          {(['guide', 'describe'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={mode === option}
+              onClick={() => setMode(option)}
+              className={cn(
+                'flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors',
+                mode === option ? 'bg-bone text-ink shadow-sm' : 'text-graphite hover:text-ink',
+              )}
+            >
+              {option === 'guide' ? 'Guided' : 'Describe'}
+            </button>
+          ))}
         </div>
-      ) : (
-        <div className="space-y-3">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Profiles</p>
-            <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-              {profiles.map((profile) => (
-                <label key={profile.id} className="flex min-h-10 items-center gap-2 rounded-lg border border-line/70 px-3 text-[13px] text-graphite">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(profile.id)}
-                    onChange={() => setSelected((current) => toggleSet(current, profile.id))}
-                    className="size-4 accent-ink"
-                  />
-                  <span className="truncate">{profile.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          {[...selected].map((id) => (
-            <div key={id} className="rounded-xl border border-line bg-bone-raised p-3">
-              <p className="truncate text-[13px] font-medium text-ink">{profileById.get(id)?.name}</p>
-              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Primary</span>
-                  <select
-                    value={primary[id] ?? ''}
-                    onChange={(event) => setPrimary((current) => ({ ...current, [id]: event.target.value }))}
-                    className="mt-1 h-9 w-full rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
-                  >
-                    <option value="">Choose…</option>
-                    {reps.map((rep) => <option key={rep.id} value={rep.id}>{rep.name}</option>)}
-                  </select>
-                </label>
-                <div>
-                  <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Operators</span>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {reps.filter((rep) => rep.id !== primary[id]).map((rep) => (
-                      <button
-                        key={rep.id}
-                        type="button"
-                        aria-pressed={(operators[id] ?? []).includes(rep.id)}
-                        onClick={() =>
-                          setOperators((current) => {
-                            const currentList = current[id] ?? []
-                            const next = currentList.includes(rep.id)
-                              ? currentList.filter((value) => value !== rep.id)
-                              : [...currentList, rep.id]
-                            return { ...current, [id]: next }
-                          })
-                        }
-                        className={cn(
-                          'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
-                          (operators[id] ?? []).includes(rep.id)
-                            ? 'border-line bg-bone text-ink'
-                            : 'border-line/70 text-graphite hover:text-ink',
-                        )}
-                      >
-                        {rep.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+
+        {mode === 'guide' ? (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+            <div className="space-y-2">
+              <input
+                type="search"
+                value={accountQuery}
+                onChange={(event) => setAccountQuery(event.target.value)}
+                placeholder="Search person or account…"
+                aria-label="Search person or account"
+                className="h-9 w-full rounded-lg border border-line bg-bone-raised px-3 text-[13px] text-ink placeholder:text-stone"
+              />
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Current configuration</p>
+              <div className="max-h-[52vh] space-y-1.5 overflow-y-auto pr-1">
+                {loading ? (
+                  <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-graphite">Loading…</p>
+                ) : filteredAccounts.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-graphite">No accounts match.</p>
+                ) : (
+                  filteredAccounts.map((account) => (
+                    <button
+                      key={account.identityId}
+                      type="button"
+                      onClick={() => selectAccount(account.identityId)}
+                      className={cn(
+                        'w-full rounded-lg border px-3 py-2 text-left transition-colors',
+                        selectedId === account.identityId
+                          ? 'border-line bg-bone-raised ring-1 ring-line'
+                          : 'border-line/70 hover:bg-bone-raised',
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[13px] font-medium text-ink">{account.profileName}</span>
+                        <V4Chip>{account.channel}</V4Chip>
+                      </span>
+                      <span className="mt-0.5 block truncate text-[11px] text-stone">{account.identityName}</span>
+                      <span className="mt-1 block text-[11px] text-graphite">
+                        {account.primary ? `Primary ${account.primary.repName}` : 'No primary'}
+                        {account.operators.length > 0 ? ` · ${account.operators.length} operator${account.operators.length === 1 ? '' : 's'}` : ''}
+                        {account.targets.length > 0 ? ` · ${account.targets[0].targetCount} ${account.targets[0].label.toLowerCase()}` : ''}
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
-          ))}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+
+            <div className="space-y-3">
+              {!selected ? (
+                <p className="rounded-lg border border-dashed border-line px-3 py-8 text-center text-[13px] text-graphite">
+                  Select an account to see and edit its configuration.
+                </p>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-line bg-bone-raised p-3">
+                    <p className="truncate text-[13px] font-medium text-ink">{selected.profileName} · {selected.identityName}</p>
+                    <p className="text-[11px] text-stone">{selected.channel}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {selected.primary ? (
+                        <V4Chip tone="info">Primary {selected.primary.repName}</V4Chip>
+                      ) : (
+                        <V4Chip tone="warning">No primary</V4Chip>
+                      )}
+                      {selected.operators.map((row) => <V4Chip key={row.repId}>Operator {row.repName}</V4Chip>)}
+                      {selected.backups.map((row) => <V4Chip key={row.repId}>Backup {row.repName}</V4Chip>)}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block">
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Primary operator</span>
+                      <select
+                        value={primaryRepId}
+                        onChange={(event) => { setPrimaryRepId(event.target.value); setDirty(true) }}
+                        className="mt-1 h-9 w-full rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
+                      >
+                        <option value="">Choose…</option>
+                        {stateReps.map((rep) => <option key={rep.id} value={rep.id}>{rep.name}</option>)}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Operators</span>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {operatorIds.map((repId) => {
+                        const rep = stateReps.find((row) => row.id === repId)
+                        return (
+                          <button key={repId} type="button" onClick={() => toggleOperator(repId)} className="rounded-full border border-line bg-bone px-2.5 py-1 text-[11px] text-ink hover:bg-bone-raised">
+                            {rep?.name ?? repId} ×
+                          </button>
+                        )
+                      })}
+                      {operatorIds.length === 0 && <span className="text-[11px] text-stone">None</span>}
+                    </div>
+                    <input
+                      type="search"
+                      value={operatorQuery}
+                      onChange={(event) => setOperatorQuery(event.target.value)}
+                      placeholder="Add operator…"
+                      aria-label="Add operator"
+                      className="mt-1.5 h-9 w-full rounded-md border border-line bg-bone px-2 text-[12px] text-ink placeholder:text-stone"
+                    />
+                    {operatorOptions.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {operatorOptions.slice(0, 6).map((rep) => (
+                          <button key={rep.id} type="button" onClick={() => toggleOperator(rep.id)} className="rounded-full border border-line/70 px-2.5 py-1 text-[11px] text-graphite hover:text-ink">
+                            + {rep.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Backups</span>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {backupIds.map((repId) => {
+                        const rep = stateReps.find((row) => row.id === repId)
+                        return (
+                          <button key={repId} type="button" onClick={() => toggleBackup(repId)} className="rounded-full border border-line/70 px-2.5 py-1 text-[11px] text-graphite hover:text-ink">
+                            {rep?.name ?? repId} ×
+                          </button>
+                        )
+                      })}
+                      {backupIds.length === 0 && <span className="text-[11px] text-stone">None</span>}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <label className="block">
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Metric</span>
+                      <select value={metric} onChange={(event) => { setMetric(event.target.value); setDirty(true) }} className="mt-1 h-9 w-full rounded-md border border-line bg-bone px-2 text-[13px] text-ink">
+                        {METRICS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Target</span>
+                      <input type="number" min={1} value={targetCount} onChange={(event) => { setTargetCount(event.target.value); setDirty(true) }} className="mt-1 h-9 w-full rounded-md border border-line bg-bone px-2 text-[13px] tabular-nums text-ink" />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Period</span>
+                      <select value={period} onChange={(event) => setPeriod(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-line bg-bone px-2 text-[13px] text-ink">
+                        {PERIODS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </label>
+                    <div>
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Schedule</span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {DAY_LABELS.map((label, day) => (
+                          <button
+                            key={label}
+                            type="button"
+                            aria-pressed={days.has(day)}
+                            onClick={() => { setDays((current) => toggleSet(current, day)); setDirty(true) }}
+                            className={cn('rounded-full border px-1.5 py-1 text-[10px]', days.has(day) ? 'border-line bg-bone text-ink' : 'border-line/70 text-graphite')}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {proposedTotal > 1 && (
+                    <div>
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Allocation (optional)</span>
+                      <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {[primaryRepId, ...operatorIds].filter(Boolean).map((repId) => {
+                          const rep = stateReps.find((row) => row.id === repId)
+                          return (
+                            <label key={repId} className="block">
+                              <span className="text-[10px] text-stone">{rep?.name ?? repId}</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={allocations[repId] ?? ''}
+                                onChange={(event) => { setAllocations((current) => ({ ...current, [repId]: event.target.value })); setDirty(true) }}
+                                className="mt-0.5 h-8 w-full rounded-md border border-line bg-bone px-1.5 text-[12px] tabular-nums text-ink"
+                              />
+                            </label>
+                          )
+                        })}
+                      </div>
+                      <p className={cn('mt-1 text-[11px]', allocationOverflow ? 'text-status-danger' : 'text-stone')}>
+                        Allocated {allocationSum} of {targetValue}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="rounded-lg border border-line bg-bone px-3 py-2 text-[12px]">
+                    <p className="font-medium text-ink">Before → After</p>
+                    <p className="mt-1 text-graphite">
+                      Primary: {selected.primary?.repName ?? '—'} → {stateReps.find((r) => r.id === primaryRepId)?.name ?? '—'}
+                    </p>
+                    <p className="text-graphite">
+                      Operators: {selected.operators.map((r) => r.repName).join(', ') || '—'} → {operatorIds.map((id) => stateReps.find((r) => r.id === id)?.name).filter(Boolean).join(', ') || '—'}
+                    </p>
+                    <p className="text-graphite">
+                      Target: {selected.targets[0] ? `${selected.targets[0].targetCount} ${selected.targets[0].label}` : '—'} → {targetValue} {METRICS.find((m) => m.value === metric)?.label}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
             <label className="block">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Channel</span>
-              <select
-                value={channel}
-                onChange={(event) => setChannel(event.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
-              >
-                <option value="">All channels</option>
-                {[...new Set(identities.filter((entry) => selected.has(entry.profileId)).map((entry) => entry.channel))].map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Metric</span>
-              <select
-                value={metric}
-                onChange={(event) => setMetric(event.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-line bg-bone px-2 text-[13px] text-ink"
-              >
-                {METRICS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Target / day</span>
-              <input
-                type="number"
-                min={1}
-                value={target}
-                onChange={(event) => setTarget(event.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-line bg-bone px-2 text-[13px] tabular-nums text-ink"
+              <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">What should change?</span>
+              <textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                rows={4}
+                placeholder="Assign Ahmad and Dawood to Aneeb's LinkedIn account, split connection targets 60/40, weekdays."
+                className="mt-1 w-full rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] text-ink placeholder:text-stone"
               />
             </label>
-            <div className="col-span-2">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Operator split (optional)</span>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {reps.map((rep) => (
-                  <label key={rep.id} className="flex items-center gap-1 text-[11px] text-graphite">
-                    {rep.name}
-                    <input
-                      type="number"
-                      min={0}
-                      value={split[rep.id] ?? ''}
-                      onChange={(event) => setSplit((current) => ({ ...current, [rep.id]: event.target.value }))}
-                      className="h-8 w-16 rounded-md border border-line bg-bone px-1.5 text-[12px] tabular-nums text-ink"
-                    />
-                  </label>
+            <button
+              type="button"
+              onClick={() => void parsePrompt()}
+              disabled={loading || prompt.trim().length < 8}
+              className="rounded-lg bg-solid px-3 py-2 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? 'Working…' : 'Preview request'}
+            </button>
+            {warnings.length > 0 && (
+              <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2">
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-status-warning">Could not resolve</p>
+                <ul className="mt-1 space-y-0.5 text-[12px] text-graphite">
+                  {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                </ul>
+              </div>
+            )}
+            {describeChanges === false ? (
+              <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[13px] text-graphite">Nothing to preview yet.</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Proposed (not applied)</p>
+                {preview.assignments.map((row) => (
+                  <div key={`a:${row.profileId}`} className="rounded-lg border border-line bg-bone px-3 py-2 text-[12px]">
+                    <p className="font-medium text-ink">{row.profileName}</p>
+                    <p className="text-graphite">{row.primaryRepName ? `Primary ${row.primaryRepName}` : 'No primary'} · {row.operators.map((rep) => rep.repName).join(', ') || 'No operators'}</p>
+                  </div>
+                ))}
+                {preview.targets.map((row) => (
+                  <div key={`t:${row.profileId}:${row.activityType}`} className="rounded-lg border border-line bg-bone px-3 py-2 text-[12px]">
+                    <p className="font-medium text-ink">{row.profileName}</p>
+                    <p className="text-graphite">{row.targetCount} {row.activityType}{row.allocations.length > 0 ? ` · ${row.allocations.map((a) => `${a.repName} ${a.targetCount}`).join(', ')}` : ''}</p>
+                  </div>
                 ))}
               </div>
-            </div>
+            )}
           </div>
-          <div>
-            <span className="text-[10px] uppercase tracking-[0.12em] text-stone">Schedule days</span>
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {DAY_LABELS.map((label, day) => (
-                <button
-                  key={label}
-                  type="button"
-                  aria-pressed={days.has(day)}
-                  onClick={() => {
-                    const next = new Set(days)
-                    if (next.has(day)) next.delete(day)
-                    else next.add(day)
-                    setDays(next)
-                  }}
-                  className={cn(
-                    'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
-                    days.has(day) ? 'border-line bg-bone text-ink' : 'border-line/70 text-graphite hover:text-ink',
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+        )}
+
+        {results.length > 0 && (
+          <div className="space-y-1 rounded-lg border border-line bg-bone px-3 py-2">
+            {results.map((row) => <p key={row} className="text-[12px] text-graphite">{row}</p>)}
           </div>
+        )}
+        {error && <p role="alert" className="text-[12px] text-status-danger">{error}</p>}
+
+        <div className="flex items-center justify-end gap-2 border-t border-line pt-3">
+          <V4Chip>
+            {mode === 'guide'
+              ? selected
+                ? dirty ? 'Unsaved changes' : 'No changes'
+                : 'Select an account'
+              : `${preview.assignments.length + preview.targets.length} proposed`}
+          </V4Chip>
           <button
             type="button"
-            onClick={applyFormPreview}
-            disabled={selected.size === 0}
-            className="rounded-lg border border-line px-3 py-2 text-[12px] font-medium text-graphite transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => (mode === 'guide' ? void applyGuide() : void applyDescribe())}
+            disabled={loading || (mode === 'guide' ? !guideChanges || allocationOverflow || !primaryRepId : !describeChanges)}
+            className="rounded-lg bg-solid px-3 py-2 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Build preview
+            {loading ? 'Applying…' : 'Apply changes'}
           </button>
         </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-status-warning">Could not resolve</p>
-          <ul className="mt-1 space-y-0.5 text-[12px] text-graphite">
-            {warnings.map((warning) => <li key={warning}>{warning}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {empty ? (
-        <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[13px] text-graphite">
-          Nothing to preview yet.
-        </p>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone">Change preview</p>
-          {preview.assignments.map((row) => (
-            <div key={`a:${row.profileId}`} className="rounded-lg border border-line bg-bone px-3 py-2 text-[12px]">
-              <p className="font-medium text-ink">{row.profileName}</p>
-              <p className="text-graphite">
-                {row.primaryRepName ? `Primary ${row.primaryRepName}` : 'No primary'} ·{' '}
-                {row.operators.length > 0 ? `Operators ${row.operators.map((rep) => rep.repName).join(', ')}` : 'No operators'}
-              </p>
-            </div>
-          ))}
-          {preview.targets.map((row) => (
-            <div key={`t:${row.profileId}:${row.activityType}`} className="rounded-lg border border-line bg-bone px-3 py-2 text-[12px]">
-              <p className="font-medium text-ink">{row.profileName} · {row.activityType}</p>
-              <p className="text-graphite">
-                {row.targetCount}/day
-                {row.allocations.length > 0 ? ` · ${row.allocations.map((alloc) => `${alloc.repName} ${alloc.targetCount}`).join(', ')}` : ' · shared'}
-              </p>
-            </div>
-          ))}
-          {preview.schedules.map((row) => (
-            <div key={`s:${row.profileId}:${row.repId}`} className="rounded-lg border border-line bg-bone px-3 py-2 text-[12px]">
-              <p className="font-medium text-ink">{row.profileName} · {row.repName}</p>
-              <p className="text-graphite">{row.daysOfWeek.map((day) => DAY_LABELS[day]).join(', ')}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {results.length > 0 && (
-        <div className="space-y-1 rounded-lg border border-line bg-bone px-3 py-2">
-          {results.map((row) => (
-            <p key={row} className="text-[12px] text-graphite">{row}</p>
-          ))}
-        </div>
-      )}
-
-      {error && <p role="alert" className="text-[12px] text-status-danger">{error}</p>}
-
-      <div className="flex items-center justify-end gap-2 border-t border-line pt-3">
-        <V4Chip>{preview.assignments.length + preview.targets.length + preview.schedules.length} changes</V4Chip>
-        <button
-          type="button"
-          onClick={() => void apply()}
-          disabled={busy || empty}
-          className="rounded-lg bg-solid px-3 py-2 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy ? 'Applying…' : 'Apply changes'}
-        </button>
-      </div>
       </div>
     </V4Drawer>
   )

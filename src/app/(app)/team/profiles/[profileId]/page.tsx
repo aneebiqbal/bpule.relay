@@ -16,14 +16,22 @@ export const dynamic = 'force-dynamic'
  */
 export default async function TeamProfileDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ profileId: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const ctx = await getAuthContext()
   if (!ctx) redirect('/login')
   if (!ctx.isAdmin && !ctx.isManager) redirect('/dashboard')
 
   const { profileId } = await params
+  const sp = await searchParams
+  const rawTab = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab
+  const initialTab: 'overview' | 'channels' | 'schedule' | 'knowledge' | 'execution' | 'history' | undefined =
+    rawTab === 'channels' || rawTab === 'schedule' || rawTab === 'knowledge' || rawTab === 'execution' || rawTab === 'history'
+      ? rawTab
+      : undefined
 
   const supabase = await createServerSupabase()
   const { data: profileRow } = await supabase
@@ -135,6 +143,7 @@ export default async function TeamProfileDetailPage({
       activeCoverage={activeCoverage}
       schedules={schedules}
       operatorStatus={operatorStatus}
+      initialTab={initialTab}
     />
   )
 }

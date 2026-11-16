@@ -62,6 +62,7 @@ export function TeamProfileDetailView({
   activeCoverage = [],
   schedules = [],
   operatorStatus = {},
+  initialTab,
 }: {
   model: ProfileOperatingModel
   canManage: boolean
@@ -74,9 +75,11 @@ export function TeamProfileDetailView({
   schedules?: import('@/lib/schedules/model').ScheduleInput[]
   /** Time-aware operator status per channel profile. */
   operatorStatus?: Record<string, OperatorStatus>
+  /** Deep-link target tab (e.g. from a profile card action). */
+  initialTab?: Tab
 }) {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'overview')
   const [addChannelOpen, setAddChannelOpen] = useState(false)
 
   const totalTarget = model.channels.reduce((sum, channel) => sum + channel.today.target, 0)
@@ -153,7 +156,13 @@ export function TeamProfileDetailView({
         />
       )}
       {tab === 'knowledge' && <KnowledgeTab model={model} />}
-      {tab === 'execution' && <ExecutionTab model={model} />}
+      {tab === 'execution' && (
+        <ExecutionTab
+          model={model}
+          canManage={canManage}
+          onConfigure={() => setTab('channels')}
+        />
+      )}
       {tab === 'history' && <HistoryTab model={model} />}
 
       <AddChannelDialog
@@ -911,7 +920,7 @@ function KnowledgeTab({ model }: { model: ProfileOperatingModel }) {
   )
 }
 
-function ExecutionTab({ model }: { model: ProfileOperatingModel }) {
+function ExecutionTab({ model, canManage, onConfigure }: { model: ProfileOperatingModel; canManage: boolean; onConfigure: (identityId: string) => void }) {
   if (model.channels.length === 0) {
     return (
       <V4Panel>
@@ -945,9 +954,29 @@ function ExecutionTab({ model }: { model: ProfileOperatingModel }) {
               ))}
             </dl>
           ) : (
-            <p className="mt-3 text-[12px] text-stone">No targets configured for this channel.</p>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-line px-3 py-3">
+              <p className="text-[12px] text-graphite">No targets configured for this channel.</p>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => onConfigure(channel.identityId)}
+                  className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+                >
+                  Configure target
+                </button>
+              )}
+            </div>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
+            {canManage && channel.targets.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onConfigure(channel.identityId)}
+                className="rounded-lg border border-line px-3 py-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
+              >
+                Edit targets
+              </button>
+            )}
             <Link
               href={`/workspace/${channel.identityId}`}
               className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"

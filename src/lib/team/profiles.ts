@@ -131,6 +131,7 @@ function buildChannelDetails(
       profileId: identity.profile_id,
       channel: identity.channel,
       identityName: identity.identity_name,
+      primaryRepId: canonical?.primaryRepId ?? null,
       primaryRepName: canonical?.primaryRepName ?? null,
       operatorRepIds: canonical?.operators.map((operator) => operator.repId) ?? [],
       backupRepIds: canonical?.backups.map((backup) => backup.repId) ?? [],
@@ -151,6 +152,7 @@ export interface TeamProfileChannelDetail {
   profileId: string | null
   channel: string
   identityName: string
+  primaryRepId: string | null
   primaryRepName: string | null
   operators: string[]
   backups: string[]
