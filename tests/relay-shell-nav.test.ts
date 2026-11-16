@@ -162,7 +162,7 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
     expect(domainLabel('/leads')).toBe('Sales')
     expect(domainLabel('/content')).toBe('Content')
     expect(domainLabel('/reports/sales')).toBe('Insights')
-    expect(domainLabel('/admin/command')).toBe('Admin')
+    expect(domainLabel('/admin/people')).toBe('Admin')
     const adminItem = (href: string) =>
       NAV_DOMAINS.find((d) => d.id === 'admin')!.secondary.find((i) => i.href === href)?.label
     expect(byHref('/leads')).toBe('Leads')
@@ -171,7 +171,7 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
     expect(byHref('/content')).toBe('Studio')
     expect(byHref('/team')).toBe('Today')
     expect(byHref('/team/people')).toBe('People')
-    expect(adminItem('/admin/command')).toBe('Command Center')
+    expect(adminItem('/admin/people')).toBe('People & Roles')
     expect(adminItem('/admin/system')).toBe('System / Quality')
     expect(byHref('/team/profiles')).toBe('Profiles')
     expect(byHref('/content/growth')).toBe('Growth')
@@ -206,10 +206,10 @@ describe('V3_NAV_ROLE_VISIBILITY', () => {
     expect(visibleDomains(owner).map((d) => d.id)).toContain('admin')
   })
 
-  it('managers reach Today through Team; admins reach Command Center through Admin', () => {
+  it('managers reach Today through Team; admins reach People & Roles through Admin', () => {
     expect(secondaryItems('team', manager).map((i) => i.href)).toContain('/team')
-    expect(secondaryItems('team', admin).map((i) => i.href)).not.toContain('/admin/command')
-    expect(secondaryItems('admin', admin).map((i) => i.href)).toContain('/admin/command')
+    expect(secondaryItems('team', admin).map((i) => i.href)).not.toContain('/admin/people')
+    expect(secondaryItems('admin', admin).map((i) => i.href)).toContain('/admin/people')
   })
 
   it('admin-only secondary items are hidden from reps and managers', () => {
@@ -326,19 +326,19 @@ describe('V3_NAV_MOBILE', () => {
 
 describe('domainForPathname', () => {
   it('routes admin-owned URLs to the domain that owns the feature', () => {
-    expect(domainForPathname('/admin/command')).toBe('team')
-    expect(domainForPathname('/admin/command/abc')).toBe('team')
+    expect(domainForPathname('/admin/command')).toBe('admin')
+    expect(domainForPathname('/admin/command/abc')).toBe('admin')
     expect(domainForPathname('/admin/ai-usage')).toBe('admin')
     expect(domainForPathname('/admin/revenue-intelligence')).toBe('admin')
     expect(domainForPathname('/admin/people')).toBe('admin')
   })
 
-  it('resolves the Command Center to the domain the role reached it from', () => {
+  it('resolves the Admin entry to the admin domain', () => {
     expect(resolvePrimaryActiveId('/admin/command', admin)).toBe('admin')
     expect(resolvePrimaryActiveId('/admin/command/abc', admin)).toBe('admin')
     expect(resolvePrimaryActiveId('/admin/command', manager)).toBe('team')
     expect(resolvePrimaryActiveId('/admin/command', rep)).toBeNull()
-    expect(domainForPathname('/admin/command')).toBe('team')
+    expect(domainForPathname('/admin/command')).toBe('admin')
   })
 
   it('keeps conversation surfaces under Inbox', () => {
@@ -477,5 +477,25 @@ describe('V3_NESTED_ROUTE_SELECTION', () => {
       domainLabel: 'Sales',
       itemLabel: 'Leads',
     })
+  })
+})
+
+describe('ADMIN_ENTRY_IS_REACHABLE', () => {
+  it('the Admin domain points at a real admin page, not a redirect into Team', () => {
+    const adminDomain = NAV_DOMAINS.find((domain) => domain.id === 'admin')
+    expect(adminDomain).toBeTruthy()
+    expect(adminDomain!.href).toBe('/admin/people')
+    expect(domainForPathname(adminDomain!.href)).toBe('admin')
+  })
+
+  it('the /admin landing resolves to the admin domain', () => {
+    expect(domainForPathname('/admin')).toBe('admin')
+    expect(resolvePrimaryActiveId('/admin', admin)).toBe('admin')
+  })
+
+  it('admin secondary items are all admin-domain routes', () => {
+    for (const item of secondaryItems('admin', admin)) {
+      expect(domainForPathname(item.href.split('?')[0])).toBe('admin')
+    }
   })
 })
