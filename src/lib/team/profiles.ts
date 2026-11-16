@@ -40,6 +40,7 @@ export function buildTeamProfiles(
 ): TeamProfileRow[] {
   const byProfile = new Map<string, TeamProfileRow>()
   const statusRankById = new Map<string, number>()
+  const seenLanesByKey = new Map<string, Set<string>>()
 
   for (const person of payload.people) {
     for (const identity of person.identities) {
@@ -73,7 +74,18 @@ export function buildTeamProfiles(
       if (!row.assignedReps.includes(person.repName)) row.assignedReps.push(person.repName)
       if (!row.assignedRepIds.includes(person.repId)) row.assignedRepIds.push(person.repId)
 
+      let seenLanes = seenLanesByKey.get(key)
+      if (!seenLanes) {
+        seenLanes = new Set<string>()
+        seenLanesByKey.set(key, seenLanes)
+      }
+
       for (const goal of person.goals.filter((g) => g.identityId === identity.id)) {
+        // A shared lane is ONE requirement. Counting it once per operator made
+        // the profile total disagree with the sum of the people who work it.
+        const laneKey = `${goal.identityId}:${goal.activityType}`
+        if (seenLanes.has(laneKey)) continue
+        seenLanes.add(laneKey)
         row.targetCount += goal.target
         row.completedCount += goal.completed
         if (goal.activityType === 'followup') row.followUps += goal.completed

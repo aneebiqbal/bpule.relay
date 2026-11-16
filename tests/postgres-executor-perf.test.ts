@@ -129,6 +129,19 @@ describe('PostgresExecutorImpl connection ownership', () => {
     expect(texts.filter((t) => t.startsWith('INSERT INTO messages'))).toHaveLength(1)
     expect(a.release).toHaveBeenCalledTimes(1)
   })
+
+  it('fails fast when the pool cannot hand out a client (no indefinite queue)', async () => {
+    vi.resetModules()
+    process.env.DATABASE_POOL_QUEUE_MS = '50'
+    try {
+      const { PostgresExecutorImpl: Fresh } = await import('@/lib/db/postgres')
+      const pending = new Promise(() => {}) // never resolves: every connection is busy
+      const executor = new Fresh({ connect: () => pending } as unknown as import('pg').Pool, 'u1')
+      await expect(executor.query('SELECT 1')).rejects.toThrow(/pool exhausted/)
+    } finally {
+      delete process.env.DATABASE_POOL_QUEUE_MS
+    }
+  })
 })
 
 describe('postgresDbClient', () => {

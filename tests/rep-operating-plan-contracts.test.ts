@@ -37,12 +37,14 @@ describe('REP_OPERATING_PLAN_EXECUTABLE_ONLY', () => {
 })
 
 describe('PRIMARY_ASSIGNMENT_CREATES_EXECUTION', () => {
-  it('the assignment module writes eligibility, PRIMARY coverage and the channel plan', () => {
-    const source = read('src/lib/profiles/assignment.ts')
-    expect(source).toContain("from('identity_assignments')")
-    expect(source).toContain("from('profile_coverage')")
-    expect(source).toContain("from('daily_target_plans')")
-    expect(source).toContain("role: 'PRIMARY'")
+  it('the canonical chain writer writes eligibility, PRIMARY coverage and the channel plan', () => {
+    const assignment = read('src/lib/profiles/assignment.ts')
+    const coverage = read('src/lib/coverage/actions.ts')
+    expect(assignment).toContain('saveResponsibilityChain')
+    expect(coverage).toContain("from('identity_assignments')")
+    expect(coverage).toContain("from('profile_coverage')")
+    expect(coverage).toContain("from('daily_target_plans')")
+    expect(coverage).toContain("role: 'PRIMARY'")
   })
 
   it('onboarding assigns through the canonical module', () => {
@@ -56,8 +58,9 @@ describe('BACKUP_HAS_NO_DAILY_TARGET', () => {
     const source = read('src/lib/profiles/assignment.ts')
     const backup = source.slice(source.indexOf('assignBackupResponsibility'))
     const body = backup.slice(0, backup.indexOf('export async function removeResponsibility'))
-    expect(body).toContain("role: 'BACKUP'")
+    expect(body).toContain('saveResponsibilityChain')
     expect(body).not.toContain("from('daily_target_plans')")
+    expect(read('src/lib/coverage/actions.ts')).toContain("role: 'BACKUP'")
   })
 })
 
@@ -88,9 +91,9 @@ describe('REMOVE_ASSIGNMENT_PRESERVES_PLAN', () => {
     const source = read('src/lib/profiles/assignment.ts')
     const remove = source.slice(source.indexOf('export async function removeResponsibility'))
     const body = remove.slice(0, remove.indexOf('export async function transferResponsibility'))
-    expect(body).toContain("from('profile_coverage')")
+    expect(body).toContain('saveResponsibilityChain')
     expect(body).not.toContain("from('daily_target_plans')")
-    expect(body).toContain('active: false')
+    expect(read('src/lib/coverage/actions.ts')).toContain('active: false')
   })
 })
 

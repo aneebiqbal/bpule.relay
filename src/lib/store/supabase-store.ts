@@ -532,6 +532,12 @@ export class SupabaseStore implements ScoutStore {
     private readonly organization: Organization,
     /** Object storage client (Aiven Postgres), not part of the DB adapter. */
     private readonly storageClient: StorageClient | null = null,
+    /**
+     * Organization admin/owner. The API routes authorize by capability; this
+     * flag keeps the store's legacy admin gates from rejecting a manager who
+     * holds MANAGE_TEAM_TARGETS / MANAGE_REVENUE_IDENTITIES.
+     */
+    private readonly isAdmin = false,
   ) {}
 
   get organizationId(): string {
@@ -6402,7 +6408,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async listRevenueIdentitiesAdmin(): Promise<RevenueIdentity[]> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { data, error } = await this.client
       .from('revenue_identities').select('*').eq('organization_id', this.orgId)
       .order('created_at', { ascending: false })
@@ -6411,7 +6417,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getRevenueIdentityAdmin(id: string): Promise<RevenueIdentity | null> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { data, error } = await this.client
       .from('revenue_identities').select('*').eq('id', id).eq('organization_id', this.orgId).maybeSingle()
     if (error) throw error
@@ -6426,7 +6432,7 @@ export class SupabaseStore implements ScoutStore {
     preferredOpportunityTypes?: string[]; proposalPositioning?: string | null;
     channel: RevenueIdentityChannel; profileId?: string | null;
   }): Promise<RevenueIdentity> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { data, error } = await this.client
       .from('revenue_identities')
       .insert({
@@ -6449,7 +6455,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async updateRevenueIdentityAdmin(id: string, patches: Record<string, unknown>): Promise<RevenueIdentity> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
     const fMap: Record<string, string> = {
       slug: 'slug', identityName: 'identity_name', title: 'title', positioning: 'positioning',
@@ -6472,7 +6478,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async archiveRevenueIdentityAdmin(id: string): Promise<void> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { error } = await this.client
       .from('revenue_identities').update({ status: 'archived', updated_at: new Date().toISOString() })
       .eq('id', id).eq('organization_id', this.orgId)
@@ -6484,7 +6490,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async listIdentityAssignmentsAdmin(): Promise<IdentityAssignment[]> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { data, error } = await this.client
       .from('identity_assignments').select('*').eq('organization_id', this.orgId)
       .order('created_at', { ascending: false })
@@ -6497,7 +6503,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async assignIdentityAdmin(identityId: string, repId: string): Promise<IdentityAssignment> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     // Cross-org boundary: both the identity and the rep must belong to this
     // organization. The upsert carries org scope, but it cannot verify it.
     const [identity, rep] = await Promise.all([
@@ -6520,7 +6526,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async unassignIdentityAdmin(identityId: string, repId: string): Promise<void> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { error } = await this.client
       .from('identity_assignments').delete()
       .eq('revenue_identity_id', identityId).eq('rep_id', repId).eq('organization_id', this.orgId)
@@ -6557,7 +6563,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async listDailyTargetsAdmin(): Promise<DailyTarget[]> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { data, error } = await this.client
       .from('daily_target_plans').select('*').eq('organization_id', this.orgId)
       .order('created_at', { ascending: false })
@@ -6609,7 +6615,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async createDailyTargetAdmin(input: { repId: string; revenueIdentityId: string; activityType: ActivityType; targetCount: number }): Promise<DailyTarget> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { data: assigned } = await this.client
       .from('identity_assignments')
       .select('id')
@@ -6657,7 +6663,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async ensureDefaultDailyTargetsAdmin(input: { repId: string; revenueIdentityId: string }): Promise<DailyTarget[]> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const identity = await this.getRevenueIdentityAdmin(input.revenueIdentityId)
     if (!identity) throw new Error('Identity not found')
 
@@ -6683,7 +6689,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async backfillDefaultDailyTargetsAdmin(): Promise<{ created: number; assignments: number }> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const assignments = await this.listIdentityAssignmentsAdmin()
     let created = 0
     for (const assignment of assignments) {
@@ -6697,7 +6703,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async updateDailyTargetAdmin(id: string, patches: { targetCount?: number; active?: boolean }): Promise<DailyTarget> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (patches.targetCount !== undefined) update.target_count = patches.targetCount
     if (patches.active !== undefined) update.active = patches.active
@@ -6715,7 +6721,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async deleteDailyTargetAdmin(id: string): Promise<void> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { error } = await this.client.from('daily_target_plans').delete().eq('id', id).eq('organization_id', this.orgId)
     if (error) throw error
     await this.client.from('accountability_audit_log').insert({
@@ -6724,7 +6730,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getDailyTargetAdmin(id: string): Promise<DailyTarget | null> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { data, error } = await this.client
       .from('daily_target_plans').select('*').eq('id', id).eq('organization_id', this.orgId).maybeSingle()
     if (error) throw error
@@ -6745,7 +6751,7 @@ export class SupabaseStore implements ScoutStore {
    * only the active target lanes are deactivated. Historical rows are kept.
    */
   async deactivateDailyPlanAdmin(repId: string, revenueIdentityId: string): Promise<{ deactivated: number }> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const { data, error } = await this.client
       .from('daily_target_plans')
       .update({ active: false, updated_at: new Date().toISOString() })
@@ -6762,7 +6768,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getTeamAccountabilityAdmin(date?: string): Promise<TeamAccountabilityView> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const targetDate = date ?? (await this.businessDate())
     const { data: accountability } = await this.client
       .from('daily_accountability').select('*').eq('organization_id', this.orgId).eq('target_date', targetDate)
@@ -6800,7 +6806,7 @@ export class SupabaseStore implements ScoutStore {
   }
 
   async getCommandCenterAdmin(): Promise<CommandCenterView> {
-    if (this.rep.role !== 'admin') throw new Error('Admin only')
+    if (!this.isAdmin) throw new Error('Admin only')
     const today = await this.businessDate()
     const { data: plans } = await this.client.from('daily_target_plans').select('*').eq('organization_id', this.orgId).eq('active', true)
     const repByIdentity = await this.primaryRepByIdentity((plans ?? []).map((row) => row.revenue_identity_id as string))

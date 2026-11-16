@@ -1,7 +1,7 @@
 import type { DbClient } from '@/lib/db/types'
-import { activityLabel, defaultTargetsForChannel } from '@/lib/accountability/default-targets'
+import { activityLabel } from '@/lib/accountability/default-targets'
 import { normalizeChannel } from '@/lib/profiles/channel'
-import { ensureOperatorAcknowledgement, ensurePrimaryAcknowledgement } from '@/lib/responsibility/load'
+import { configureCoverage } from '@/lib/coverage/actions'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
@@ -21,6 +21,10 @@ import { loadOperatingPolicy } from '@/lib/org-clock/load'
  *
  * There is no multi-statement transaction in the Neon adapter, so each step is
  * idempotent and every write is org-scoped.
+ *
+ * shortcut: this incremental per-seat path and `configureCoverage` (full-chain)
+ * both write profile_coverage/identity_assignments. They must keep audit and
+ * acknowledgement fields in sync; unify when a change touches both again.
  */
 
 export interface AssignInput {
@@ -42,6 +46,84 @@ export interface AssignResult {
 }
 
 export type ResponsibilityRole = 'PRIMARY' | 'OPERATOR' | 'BACKUP'
+
+export interface ResponsibilityChain {
+  primaryRepId: string | null
+  operators: Array<{ repId: string; priority: number }>
+  backups: Array<{ repId: string; priority: number }>
+}
+
+/** The current active chain for one profile, from the canonical seat table. */
+export async function readResponsibilityChain(
+  client: DbClient,
+  orgId: string,
+  profileId: string,
+): Promise<ResponsibilityChain> {
+  const { data, error } = await client
+    .from('profile_coverage')
+    .select('rep_id, role, priority')
+    .eq('organization_id', orgId)
+    .eq('profile_id', profileId)
+    .eq('active', true)
+    .limit(100)
+  if (error) throw error
+  const chain: ResponsibilityChain = { primaryRepId: null, operators: [], backups: [] }
+  for (const row of (data ?? []) as Array<{ rep_id: string; role: string; priority: number }>) {
+    if (row.role === 'PRIMARY') chain.primaryRepId = row.rep_id
+    else if (row.role === 'OPERATOR') chain.operators.push({ repId: row.rep_id, priority: row.priority })
+    else if (row.role === 'BACKUP') chain.backups.push({ repId: row.rep_id, priority: row.priority })
+  }
+  chain.operators.sort((a, b) => a.priority - b.priority)
+  chain.backups.sort((a, b) => a.priority - b.priority)
+  return chain
+}
+
+/**
+ * The ONE write path for a responsibility chain.
+ *
+ * `configureCoverage` is the canonical reconcile: it deactivates the previous
+ * chain, inserts the new seats, syncs eligibility, arms acknowledgements and
+ * records the coverage event. This wrapper adds the accountability audit row
+ * and keeps the per-action event vocabulary. Every assignment API — the
+ * incremental admin route, the profile dialog and the bulk command-center
+ * endpoint — funnels through here, so there is no second write path.
+ */
+export async function saveResponsibilityChain(
+  client: DbClient,
+  input: {
+    orgId: string
+    profileId: string
+    identityId: string
+    primaryRepId: string | null
+    operators: Array<{ repId: string; priority: number }>
+    backups: Array<{ repId: string; priority: number }>
+    actorRepId: string
+    auditEventType: string
+    auditDetail?: Record<string, unknown>
+    ensureTargets?: boolean
+  },
+): Promise<{ ok: boolean; error?: string; seeded?: number }> {
+  const result = await configureCoverage({
+    organizationId: input.orgId,
+    profileId: input.profileId,
+    primaryRepId: input.primaryRepId,
+    operators: input.operators,
+    backups: input.backups,
+    actorRepId: input.actorRepId,
+    client,
+    ensureTargets: input.ensureTargets,
+  })
+  if (!result.ok) return result
+  const { error } = await client.from('accountability_audit_log').insert({
+    organization_id: input.orgId,
+    rep_id: input.actorRepId,
+    revenue_identity_id: input.identityId,
+    event_type: input.auditEventType,
+    detail: input.auditDetail ?? {},
+  })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, seeded: result.seeded }
+}
 
 async function readIdentity(client: DbClient, orgId: string, identityId: string) {
   const { data, error } = await client
@@ -92,119 +174,40 @@ export async function assignPrimaryResponsibility(
 ): Promise<AssignResult> {
   const identity = await readIdentity(client, input.orgId, input.identityId)
   const profileId = identity.profile_id
-  const now = new Date().toISOString()
 
-  const { data: previousPrimary } = await client
-    .from('profile_coverage')
-    .select('rep_id')
-    .eq('organization_id', input.orgId)
-    .eq('profile_id', profileId)
-    .eq('role', 'PRIMARY')
-    .eq('active', true)
-    .maybeSingle()
-  const previousPrimaryRepId = (previousPrimary?.rep_id as string | null) ?? null
+  const chain = await readResponsibilityChain(client, input.orgId, profileId)
+  const previousPrimaryRepId = chain.primaryRepId
+  const transferred = previousPrimaryRepId != null && previousPrimaryRepId !== input.repId
 
-  // 1. Eligibility first — the assignment row is what the canonical scope reads
-  //    alongside PRIMARY coverage.
-  const { error: assignmentError } = await client
-    .from('identity_assignments')
-    .upsert(
-      {
-        organization_id: input.orgId,
-        revenue_identity_id: input.identityId,
-        rep_id: input.repId,
-        assigned_by: input.actorRepId,
-      },
-      { onConflict: 'revenue_identity_id,rep_id' },
-    )
-  if (assignmentError) throw assignmentError
-
-  // 2. Execution: retire the OLD PRIMARY and any row the NEW owner already holds
-  //    on this profile (one active row per rep is enforced by pc_active_rep_uniq).
-  //    Other operators and backups are deliberately NOT matched here.
-  const { error: retireError } = await client
-    .from('profile_coverage')
-    .update({ active: false, updated_at: now })
-    .eq('organization_id', input.orgId)
-    .eq('profile_id', profileId)
-    .eq('active', true)
-    .or(`rep_id.eq.${input.repId},role.eq.PRIMARY`)
-  if (retireError) throw retireError
-
-  const { data: primaryInserted, error: primaryError } = await client
-    .from('profile_coverage')
-    .insert({
-      organization_id: input.orgId,
-      profile_id: profileId,
-      rep_id: input.repId,
-      role: 'PRIMARY',
-      priority: 1,
-      active: true,
-      created_by: input.actorRepId,
-    })
-    .select('id')
-  if (primaryError) throw primaryError
-
-  const primaryRowId = (primaryInserted?.[0]?.id as string | undefined) ?? null
-  if (primaryRowId) {
-    await ensurePrimaryAcknowledgement(client, {
-      organizationId: input.orgId,
-      profileId,
-      repId: input.repId,
-      sourceRowId: primaryRowId,
-      assignedAt: now,
-    })
-  }
-
-  // 3. The plan belongs to the CHANNEL, not the operator, so a transfer never
-  //    moves it. Ownership changes; the requirement does not.
-  const targetsTransferred = 0
-
-  // 4. Seed the identity's plan only when it has none.
-  let targetsSeeded = 0
-  const { data: existingPlans } = await client
-    .from('daily_target_plans')
-    .select('id')
-    .eq('organization_id', input.orgId)
-    .eq('revenue_identity_id', input.identityId)
-    .eq('active', true)
-    .limit(1)
-  if ((!existingPlans || existingPlans.length === 0) && input.ensureTargets !== false) {
-    const pack = defaultTargetsForChannel(normalizeChannel(identity.channel))
-    const { data: seeded, error: seedError } = await client
-      .from('daily_target_plans')
-      .insert(
-        pack.map((row) => ({
-          organization_id: input.orgId,
-          revenue_identity_id: input.identityId,
-          activity_type: row.activityType,
-          target_count: row.targetCount,
-          targetable: row.activityType !== 'proposal',
-          active: true,
-          created_by: input.actorRepId,
-        })),
-      )
-      .select('id')
-    if (seedError) throw seedError
-    targetsSeeded = seeded?.length ?? 0
-  }
+  // Ownership moves; the new owner's existing seat is retired so they hold
+  // exactly one row. Operators and backups are carried across untouched.
+  const result = await saveResponsibilityChain(client, {
+    orgId: input.orgId,
+    profileId,
+    identityId: input.identityId,
+    primaryRepId: input.repId,
+    operators: chain.operators.filter((seat) => seat.repId !== input.repId),
+    backups: chain.backups.filter((seat) => seat.repId !== input.repId),
+    actorRepId: input.actorRepId,
+    auditEventType: transferred ? 'identity_transferred' : 'identity_assigned',
+    auditDetail: { rep_id: input.repId, previous_primary_rep_id: previousPrimaryRepId },
+    ensureTargets: input.ensureTargets !== false,
+  })
+  if (!result.ok) throw new Error(result.error ?? 'ASSIGN_FAILED')
 
   await client.from('coverage_events').insert({
     organization_id: input.orgId,
     profile_id: profileId,
-    event_type: previousPrimaryRepId && previousPrimaryRepId !== input.repId ? 'COVERAGE_TRANSFERRED' : 'COVERAGE_ASSIGNED',
+    event_type: transferred ? 'COVERAGE_TRANSFERRED' : 'COVERAGE_ASSIGNED',
     primary_rep_id: input.repId,
     reason: previousPrimaryRepId ? `Transferred from ${previousPrimaryRepId}` : 'Assigned',
     actor_rep_id: input.actorRepId,
   })
 
-  await client.from('accountability_audit_log').insert({
-    organization_id: input.orgId,
-    rep_id: input.actorRepId,
-    revenue_identity_id: input.identityId,
-    event_type: 'identity_assigned',
-    detail: { rep_id: input.repId, previous_primary_rep_id: previousPrimaryRepId },
-  })
+  // The plan belongs to the CHANNEL, not the operator, so a transfer never
+  // moves it. `saveResponsibilityChain` seeds the default pack only when the
+  // identity has no active plan and reports how many lanes it wrote.
+  const targetsSeeded = result.seeded ?? 0
 
   await notifyAssigned(client, {
     orgId: input.orgId,
@@ -217,7 +220,7 @@ export async function assignPrimaryResponsibility(
     title: 'You now own this profile',
   })
 
-  return { identityId: input.identityId, profileId, repId: input.repId, previousPrimaryRepId, targetsTransferred, targetsSeeded }
+  return { identityId: input.identityId, profileId, repId: input.repId, previousPrimaryRepId, targetsTransferred: 0, targetsSeeded }
 }
 
 /**
@@ -231,20 +234,11 @@ export async function addOperatorResponsibility(
 ): Promise<AssignResult> {
   const identity = await readIdentity(client, input.orgId, input.identityId)
   const profileId = identity.profile_id
-  const now = new Date().toISOString()
-
-  const { data: existingRow } = await client
-    .from('profile_coverage')
-    .select('id, role, priority')
-    .eq('organization_id', input.orgId)
-    .eq('profile_id', profileId)
-    .eq('rep_id', input.repId)
-    .eq('active', true)
-    .maybeSingle()
+  const chain = await readResponsibilityChain(client, input.orgId, profileId)
 
   // Already the owner: an operator seat would be a second active row for the
   // same rep, which the model forbids. Report it rather than silently demoting.
-  if (existingRow?.role === 'PRIMARY') {
+  if (chain.primaryRepId === input.repId) {
     return {
       identityId: input.identityId,
       profileId,
@@ -255,68 +249,25 @@ export async function addOperatorResponsibility(
     }
   }
 
-  const { error: assignmentError } = await client
-    .from('identity_assignments')
-    .upsert(
-      {
-        organization_id: input.orgId,
-        revenue_identity_id: input.identityId,
-        rep_id: input.repId,
-        assigned_by: input.actorRepId,
-      },
-      { onConflict: 'revenue_identity_id,rep_id' },
-    )
-  if (assignmentError) throw assignmentError
+  const existingOperator = chain.operators.find((seat) => seat.repId === input.repId)
+  const operators = existingOperator
+    ? chain.operators
+    : [...chain.operators, { repId: input.repId, priority: (chain.operators.at(-1)?.priority ?? 0) + 1 }]
+  // A BACKUP seat is promoted in place, so it leaves the backup chain.
+  const backups = chain.backups.filter((seat) => seat.repId !== input.repId)
 
-  let operatorRowId: string | null = null
-  if (existingRow?.role === 'OPERATOR') {
-    operatorRowId = existingRow.id as string
-  } else {
-    // A BACKUP seat is promoted in place; a new seat takes the next priority.
-    if (existingRow?.role === 'BACKUP') {
-      const { error: promoteError } = await client
-        .from('profile_coverage')
-        .update({ role: 'OPERATOR', updated_at: now })
-        .eq('id', existingRow.id as string)
-      if (promoteError) throw promoteError
-      operatorRowId = existingRow.id as string
-    } else {
-      const { data: chain } = await client
-        .from('profile_coverage')
-        .select('priority')
-        .eq('organization_id', input.orgId)
-        .eq('profile_id', profileId)
-        .eq('role', 'OPERATOR')
-        .eq('active', true)
-        .order('priority', { ascending: false })
-        .limit(1)
-      const priority = ((chain?.[0]?.priority as number | undefined) ?? 0) + 1
-      const { data: inserted, error: insertError } = await client
-        .from('profile_coverage')
-        .insert({
-          organization_id: input.orgId,
-          profile_id: profileId,
-          rep_id: input.repId,
-          role: 'OPERATOR',
-          priority,
-          active: true,
-          created_by: input.actorRepId,
-        })
-        .select('id')
-      if (insertError) throw insertError
-      operatorRowId = (inserted?.[0]?.id as string | undefined) ?? null
-    }
-  }
-
-  if (operatorRowId) {
-    await ensureOperatorAcknowledgement(client, {
-      organizationId: input.orgId,
-      profileId,
-      repId: input.repId,
-      sourceRowId: operatorRowId,
-      assignedAt: now,
-    })
-  }
+  const result = await saveResponsibilityChain(client, {
+    orgId: input.orgId,
+    profileId,
+    identityId: input.identityId,
+    primaryRepId: chain.primaryRepId,
+    operators,
+    backups,
+    actorRepId: input.actorRepId,
+    auditEventType: 'identity_operator_added',
+    auditDetail: { rep_id: input.repId },
+  })
+  if (!result.ok) throw new Error(result.error ?? 'ASSIGN_FAILED')
 
   await client.from('coverage_events').insert({
     organization_id: input.orgId,
@@ -325,14 +276,6 @@ export async function addOperatorResponsibility(
     primary_rep_id: input.repId,
     reason: 'Operator added',
     actor_rep_id: input.actorRepId,
-  })
-
-  await client.from('accountability_audit_log').insert({
-    organization_id: input.orgId,
-    rep_id: input.actorRepId,
-    revenue_identity_id: input.identityId,
-    event_type: 'identity_operator_added',
-    detail: { rep_id: input.repId },
   })
 
   await notifyAssigned(client, {
@@ -373,61 +316,33 @@ export async function removeOperatorResponsibility(
     .maybeSingle()
   if (!identity) throw new Error('IDENTITY_NOT_FOUND')
   const profileId = (identity.profile_id as string | null) ?? null
+  if (!profileId) return { profileId: null }
 
-  const { data: existingRow } = await client
-    .from('profile_coverage')
-    .select('id, role')
-    .eq('organization_id', input.orgId)
-    .eq('profile_id', profileId)
-    .eq('rep_id', input.repId)
-    .eq('active', true)
-    .maybeSingle()
-
-  if (existingRow?.role === 'PRIMARY') {
+  const chain = await readResponsibilityChain(client, input.orgId, profileId)
+  if (chain.primaryRepId === input.repId) {
     throw new Error('CANNOT_REMOVE_PRIMARY')
   }
 
-  const { error: unassignError } = await client
-    .from('identity_assignments')
-    .delete()
-    .eq('organization_id', input.orgId)
-    .eq('revenue_identity_id', input.identityId)
-    .eq('rep_id', input.repId)
-  if (unassignError) throw unassignError
+  const result = await saveResponsibilityChain(client, {
+    orgId: input.orgId,
+    profileId,
+    identityId: input.identityId,
+    primaryRepId: chain.primaryRepId,
+    operators: chain.operators.filter((seat) => seat.repId !== input.repId),
+    backups: chain.backups.filter((seat) => seat.repId !== input.repId),
+    actorRepId: input.actorRepId,
+    auditEventType: 'identity_operator_removed',
+    auditDetail: { rep_id: input.repId },
+  })
+  if (!result.ok) throw new Error(result.error ?? 'REMOVE_FAILED')
 
-  if (profileId && existingRow) {
-    await client
-      .from('profile_coverage')
-      .update({ active: false, updated_at: new Date().toISOString() })
-      .eq('id', existingRow.id as string)
-  }
-  if (profileId) {
-    await client
-      .from('responsibility_acknowledgements')
-      .delete()
-      .eq('organization_id', input.orgId)
-      .eq('profile_id', profileId)
-      .eq('rep_id', input.repId)
-      .eq('subject', 'OPERATOR')
-  }
-
-  if (profileId) {
-    await client.from('coverage_events').insert({
-      organization_id: input.orgId,
-      profile_id: profileId,
-      event_type: 'OPERATOR_REMOVED',
-      primary_rep_id: input.repId,
-      reason: 'Operator removed',
-      actor_rep_id: input.actorRepId,
-    })
-  }
-
-  await client.from('accountability_audit_log').insert({
+  await client.from('coverage_events').insert({
     organization_id: input.orgId,
-    rep_id: input.actorRepId,
-    revenue_identity_id: input.identityId,
-    event_type: 'identity_operator_removed',
-    detail: { rep_id: input.repId },
+    profile_id: profileId,
+    event_type: 'OPERATOR_REMOVED',
+    primary_rep_id: input.repId,
+    reason: 'Operator removed',
+    actor_rep_id: input.actorRepId,
   })
 
   return { profileId }
@@ -444,67 +359,42 @@ export async function assignBackupResponsibility(
   input: { orgId: string; identityId: string; repId: string; actorRepId: string },
 ): Promise<{ profileId: string }> {
   const identity = await readIdentity(client, input.orgId, input.identityId)
+  const chain = await readResponsibilityChain(client, input.orgId, identity.profile_id)
 
-  const { error: assignmentError } = await client
-    .from('identity_assignments')
-    .upsert(
-      {
-        organization_id: input.orgId,
-        revenue_identity_id: input.identityId,
-        rep_id: input.repId,
-        assigned_by: input.actorRepId,
-      },
-      { onConflict: 'revenue_identity_id,rep_id' },
-    )
-  if (assignmentError) throw assignmentError
-
-  const { data: existing } = await client
-    .from('profile_coverage')
-    .select('id, role')
-    .eq('organization_id', input.orgId)
-    .eq('profile_id', identity.profile_id)
-    .eq('rep_id', input.repId)
-    .eq('active', true)
-    .maybeSingle()
-  // An existing PRIMARY or OPERATOR seat already outranks a backup: keep it.
-  if (!existing || existing.role === 'BACKUP') {
-    if (existing) {
-      await client
-        .from('profile_coverage')
-        .update({ role: 'BACKUP', updated_at: new Date().toISOString() })
-        .eq('id', existing.id as string)
-    } else {
-      const { data: chain } = await client
-        .from('profile_coverage')
-        .select('priority')
-        .eq('organization_id', input.orgId)
-        .eq('profile_id', identity.profile_id)
-        .eq('active', true)
-        .order('priority', { ascending: false })
-        .limit(1)
-      const priority = ((chain?.[0]?.priority as number | undefined) ?? 1) + 1
-      const { error: backupError } = await client
-        .from('profile_coverage')
-        .insert({
+  // An existing PRIMARY or OPERATOR seat already outranks a backup: keep it, but
+  // still make sure the rep holds eligibility.
+  if (chain.primaryRepId === input.repId || chain.operators.some((seat) => seat.repId === input.repId)) {
+    await client
+      .from('identity_assignments')
+      .upsert(
+        {
           organization_id: input.orgId,
-          profile_id: identity.profile_id,
+          revenue_identity_id: input.identityId,
           rep_id: input.repId,
-          role: 'BACKUP',
-          priority,
-          active: true,
-          created_by: input.actorRepId,
-        })
-      if (backupError) throw backupError
-    }
+          assigned_by: input.actorRepId,
+        },
+        { onConflict: 'revenue_identity_id,rep_id' },
+      )
+    return { profileId: identity.profile_id }
   }
 
-  await client.from('accountability_audit_log').insert({
-    organization_id: input.orgId,
-    rep_id: input.actorRepId,
-    revenue_identity_id: input.identityId,
-    event_type: 'identity_backup_assigned',
-    detail: { rep_id: input.repId },
+  const existing = chain.backups.find((seat) => seat.repId === input.repId)
+  const backups = existing
+    ? chain.backups
+    : [...chain.backups, { repId: input.repId, priority: (chain.backups.at(-1)?.priority ?? 1) + 1 }]
+
+  const result = await saveResponsibilityChain(client, {
+    orgId: input.orgId,
+    profileId: identity.profile_id,
+    identityId: input.identityId,
+    primaryRepId: chain.primaryRepId,
+    operators: chain.operators,
+    backups,
+    actorRepId: input.actorRepId,
+    auditEventType: 'identity_backup_assigned',
+    auditDetail: { rep_id: input.repId },
   })
+  if (!result.ok) throw new Error(result.error ?? 'ASSIGN_FAILED')
 
   return { profileId: identity.profile_id }
 }
@@ -525,54 +415,30 @@ export async function removeResponsibility(
     .eq('organization_id', input.orgId)
     .maybeSingle()
   if (!identity) throw new Error('IDENTITY_NOT_FOUND')
+  const profileId = (identity.profile_id as string | null) ?? null
+  if (!profileId) return { profileId: null }
 
-  const { data: existingRow } = await client
-    .from('profile_coverage')
-    .select('id, role')
-    .eq('organization_id', input.orgId)
-    .eq('profile_id', identity.profile_id)
-    .eq('rep_id', input.repId)
-    .eq('active', true)
-    .maybeSingle()
-  if (existingRow?.role === 'PRIMARY') {
+  const chain = await readResponsibilityChain(client, input.orgId, profileId)
+  if (chain.primaryRepId === input.repId) {
     throw new Error('CANNOT_REMOVE_PRIMARY')
   }
 
-  const now = new Date().toISOString()
-  const { error: unassignError } = await client
-    .from('identity_assignments')
-    .delete()
-    .eq('organization_id', input.orgId)
-    .eq('revenue_identity_id', input.identityId)
-    .eq('rep_id', input.repId)
-  if (unassignError) throw unassignError
-
-  if (identity?.profile_id && existingRow) {
-    await client
-      .from('profile_coverage')
-      .update({ active: false, updated_at: now })
-      .eq('id', existingRow.id as string)
-    await client
-      .from('responsibility_acknowledgements')
-      .delete()
-      .eq('organization_id', input.orgId)
-      .eq('profile_id', identity.profile_id)
-      .eq('rep_id', input.repId)
-      .eq('subject', 'OPERATOR')
-  }
+  const result = await saveResponsibilityChain(client, {
+    orgId: input.orgId,
+    profileId,
+    identityId: input.identityId,
+    primaryRepId: chain.primaryRepId,
+    operators: chain.operators.filter((seat) => seat.repId !== input.repId),
+    backups: chain.backups.filter((seat) => seat.repId !== input.repId),
+    actorRepId: input.actorRepId,
+    auditEventType: 'identity_unassigned',
+    auditDetail: { rep_id: input.repId },
+  })
+  if (!result.ok) throw new Error(result.error ?? 'REMOVE_FAILED')
 
   // The channel's plan and its completion history are untouched: removing an
   // operator never rewrites what the profile still owes or has already done.
-
-  await client.from('accountability_audit_log').insert({
-    organization_id: input.orgId,
-    rep_id: input.actorRepId,
-    revenue_identity_id: input.identityId,
-    event_type: 'identity_unassigned',
-    detail: { rep_id: input.repId },
-  })
-
-  return { profileId: (identity?.profile_id as string | null) ?? null }
+  return { profileId }
 }
 
 /**
@@ -585,54 +451,23 @@ export async function transferResponsibility(
   input: { orgId: string; identityId: string; fromRepId: string; toRepId: string; actorRepId: string },
 ): Promise<AssignResult> {
   const identity = await readIdentity(client, input.orgId, input.identityId)
-  const now = new Date().toISOString()
+  const chain = await readResponsibilityChain(client, input.orgId, identity.profile_id)
 
   // The plan belongs to the channel, so a transfer never moves it. Ownership
-  // changes; the requirement and its completion history stay put.
-  const moved: never[] = []
-
-  const { error: removeAssignmentError } = await client
-    .from('identity_assignments')
-    .delete()
-    .eq('organization_id', input.orgId)
-    .eq('revenue_identity_id', input.identityId)
-    .eq('rep_id', input.fromRepId)
-  if (removeAssignmentError) throw removeAssignmentError
-
-  const { error: retireError } = await client
-    .from('profile_coverage')
-    .update({ active: false, updated_at: now })
-    .eq('organization_id', input.orgId)
-    .eq('profile_id', identity.profile_id)
-    .eq('active', true)
-    .or(`rep_id.eq.${input.toRepId},role.eq.PRIMARY`)
-  if (retireError) throw retireError
-
-  const { error: assignmentError } = await client
-    .from('identity_assignments')
-    .upsert(
-      {
-        organization_id: input.orgId,
-        revenue_identity_id: input.identityId,
-        rep_id: input.toRepId,
-        assigned_by: input.actorRepId,
-      },
-      { onConflict: 'revenue_identity_id,rep_id' },
-    )
-  if (assignmentError) throw assignmentError
-
-  const { error: primaryError } = await client
-    .from('profile_coverage')
-    .insert({
-      organization_id: input.orgId,
-      profile_id: identity.profile_id,
-      rep_id: input.toRepId,
-      role: 'PRIMARY',
-      priority: 1,
-      active: true,
-      created_by: input.actorRepId,
-    })
-  if (primaryError) throw primaryError
+  // changes; the requirement and its completion history stay put. The new
+  // owner's existing seat is retired so they hold exactly one row.
+  const result = await saveResponsibilityChain(client, {
+    orgId: input.orgId,
+    profileId: identity.profile_id,
+    identityId: input.identityId,
+    primaryRepId: input.toRepId,
+    operators: chain.operators.filter((seat) => seat.repId !== input.toRepId),
+    backups: chain.backups.filter((seat) => seat.repId !== input.toRepId),
+    actorRepId: input.actorRepId,
+    auditEventType: 'identity_transferred',
+    auditDetail: { from_rep_id: input.fromRepId, to_rep_id: input.toRepId },
+  })
+  if (!result.ok) throw new Error(result.error ?? 'TRANSFER_FAILED')
 
   await client.from('coverage_events').insert({
     organization_id: input.orgId,
@@ -643,20 +478,12 @@ export async function transferResponsibility(
     actor_rep_id: input.actorRepId,
   })
 
-  await client.from('accountability_audit_log').insert({
-    organization_id: input.orgId,
-    rep_id: input.actorRepId,
-    revenue_identity_id: input.identityId,
-    event_type: 'identity_transferred',
-    detail: { from_rep_id: input.fromRepId, to_rep_id: input.toRepId },
-  })
-
   return {
     identityId: input.identityId,
     profileId: identity.profile_id,
     repId: input.toRepId,
     previousPrimaryRepId: input.fromRepId,
-    targetsTransferred: moved?.length ?? 0,
+    targetsTransferred: 0,
     targetsSeeded: 0,
   }
 }

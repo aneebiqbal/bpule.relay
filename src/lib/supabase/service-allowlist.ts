@@ -40,6 +40,11 @@ export const SERVICE_CLIENT_ALLOWLIST: ReadonlyArray<{ prefix: string; reason: s
   // Documented fail-closed tables.
   { prefix: 'src/app/api/admin/performance/config/', reason: 'performance_config has no RLS policy (fail-closed); migration needed' },
 
+  // CV object download. The route enforces profile access (admin or owner) before
+  // the storage read; object storage is not RLS-scoped, so the service client is
+  // the only way to stream the blob.
+  { prefix: 'src/app/api/profiles/[id]/cv/', reason: 'CV object download; route enforces profile access, storage is not RLS-scoped' },
+
   // Read-only admin telemetry. These read across many tables and are the next
   // migration to relay_app + admin authorization; tracked as documented debt.
   { prefix: 'src/app/api/admin/health/', reason: 'Release-health telemetry; read-only admin system' },

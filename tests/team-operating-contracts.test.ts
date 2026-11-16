@@ -38,20 +38,22 @@ describe('TEAM_NAV_MAX_FIVE_PRIMARY_SURFACES', () => {
 })
 
 describe('TEAM_TODAY_IS_OPERATIONAL_HOME', () => {
-  it('Team → Today renders the operating page', () => {
-    expect(read('src/app/(app)/team/page.tsx')).toMatch(/TeamToday/)
-    const source = read('src/components/team/team-today.tsx')
-    expect(source).toMatch(/Needs attention/)
+  it('Team → Today renders the command center', () => {
+    expect(read('src/app/(app)/team/page.tsx')).toMatch(/TeamCommandCenter/)
+    const source = read('src/components/team/team-command-center.tsx')
+    expect(source).toMatch(/Action queue/)
+    expect(source).toMatch(/Who works what/)
+    expect(source).toMatch(/Target progress/)
     expect(source).toMatch(/Coverage exceptions/)
-    expect(source).toMatch(/Overdue assigned tasks/)
-    expect(source).toMatch(/Recent activity/)
+    expect(source).toMatch(/Recent changes/)
   })
 
-  it('the operating page reads the canonical authorities only', () => {
-    const source = read('src/components/team/team-today.tsx')
+  it('the command center derives from the canonical authorities only', () => {
+    const source = read('src/lib/team/load-command-center.ts')
     expect(source).toMatch(/loadTeamDay/)
-    expect(source).toMatch(/getPeopleDirectory|loadPeopleDirectory/)
+    expect(source).toMatch(/getPeopleDirectory/)
     expect(source).toMatch(/loadCoveragePlan/)
+    expect(source).toMatch(/loadDailyPlanProgress/)
     expect(source).toMatch(/loadTimeline/)
   })
 })

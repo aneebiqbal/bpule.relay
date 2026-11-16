@@ -7,6 +7,7 @@ import { SupabaseStore } from '@/lib/store/supabase-store'
 import { getDemoStore } from '@/lib/store/demo-registry'
 import { isDemoMode } from '@/lib/ai/config'
 import { getCurrentUser } from '@/lib/auth/current'
+import { getAuthContext } from '@/lib/auth/organization'
 import { currentDbProvider, getDbClient } from '@/lib/db/provider'
 
 /**
@@ -31,6 +32,17 @@ export const createScoutStore = cache(async (): Promise<ScoutStore> => {
   const provider = currentDbProvider()
   const identityBound = provider !== 'supabase'
   const client = identityBound ? await getDbClient(user.authUserId) : await getDbClient()
+  // Organization role, not reps.role: a manager with MANAGE_TEAM_TARGETS or
+  // MANAGE_REVENUE_IDENTITIES is authorized by the route and must not be rejected
+  // by the store's legacy bootstrap-role gate.
+  const auth = await getAuthContext().catch(() => null)
+  const canManageTeamConfig = Boolean(
+    auth && (
+      auth.isAdmin ||
+      auth.capabilities.has('MANAGE_TEAM_TARGETS') ||
+      auth.capabilities.has('MANAGE_REVENUE_IDENTITIES')
+    ),
+  )
   return new SupabaseStore(
     user.rep,
     client,
@@ -40,6 +52,7 @@ export const createScoutStore = cache(async (): Promise<ScoutStore> => {
     provider === 'supabase'
       ? createSupabaseStorage((await getSupabaseAuthClient()).storage)
       : createPostgresStorage(client),
+    canManageTeamConfig,
   )
 })
 

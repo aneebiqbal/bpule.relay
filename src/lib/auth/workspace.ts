@@ -73,12 +73,13 @@ async function resolveAuthorizedIdentities(): Promise<AuthorizedIdentity[]> {
   ]
   const personIdByProfile = new Map<string, string>()
   if (profileIds.length > 0) {
-    const { data: profileRows } = await store
+    const profileRes = await store
       .getSupabaseClient()
       .from('profiles')
       .select('id, person_id')
       .in('id', profileIds)
-    for (const row of profileRows ?? []) {
+    if (profileRes.error) throw profileRes.error
+    for (const row of profileRes.data ?? []) {
       personIdByProfile.set(row.id as string, (row.person_id as string | null) ?? (row.id as string))
     }
   }

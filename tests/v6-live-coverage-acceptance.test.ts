@@ -19,12 +19,13 @@ import {
 import { closeDbPool, dbClientFor, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
-// Aneeb · LinkedIn. This profile is used because its PRIMARY is the same rep
-// the assertions below name, and Hassan/Madiha both hold eligibility on it.
-// (The fixture previously used Zaira · Upwork, whose live PRIMARY changed, so
-// the suite was red on production data it no longer described.)
-const PROFILE = '87c10cd5-58e3-4742-910d-4de549d522c7' // Aneeb · LinkedIn
-const IDENTITY = 'e57519a5-bc62-4bfe-b29d-2be809e8d9af' // Aneeb · LinkedIn
+const RUN = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+// The fixture is fully disposable: a dedicated profile + channel identity are
+// created for the suite and deleted afterwards. It never touches a real
+// production profile, so an interrupted run cannot leave production ownership
+// changed.
+let PROFILE = ''
+let IDENTITY = ''
 const PRIMARY = 'aaaaaaaa-0000-0000-0000-000000000004' // Ahmad
 const COVERING = 'aaaaaaaa-0000-0000-0000-000000000003' // Madiha
 const BACKUP = 'aaaaaaaa-0000-0000-0000-000000000002' // Hassan
@@ -36,9 +37,66 @@ const TODAY = new Date().toISOString().slice(0, 10)
 /** One client for the whole suite: the pooler drops connections under churn. */
 let client: ReturnType<typeof dbClientFor>
 let admin: ReturnType<typeof serviceDbClient>
-beforeAll(() => {
+
+beforeAll(async () => {
   client = dbClientFor(AUTH_USER)
   admin = serviceDbClient()
+
+  const { data: profile, error: profileError } = await admin
+    .from('profiles')
+    .insert({
+      organization_id: ORG,
+      rep_id: ACTOR,
+      platform: 'linkedin',
+      display_name: 'V6 live fixture',
+      full_name: 'V6 live fixture',
+      label: 'V6 fixture',
+      person_id: null,
+    })
+    .select('id')
+    .single()
+  if (profileError) throw profileError
+  PROFILE = profile.id as string
+
+  const { data: identity, error: identityError } = await admin
+    .from('revenue_identities')
+    .insert({
+      organization_id: ORG,
+      profile_id: PROFILE,
+      identity_name: 'V6 live fixture',
+      channel: 'linkedin',
+      status: 'active',
+      slug: `v6-live-fixture-${RUN}`,
+    })
+    .select('id')
+    .single()
+  if (identityError) throw identityError
+  IDENTITY = identity.id as string
+
+  // Give the fixture a valid owner immediately, so a parallel test that scans
+  // the organization never observes a half-built profile. configureCoverage
+  // writes the PRIMARY seat and syncs eligibility together; the covering rep
+  // (eligibility only) is added afterwards.
+  const configured = await configureCoverage({
+    organizationId: ORG,
+    profileId: PROFILE,
+    primaryRepId: PRIMARY,
+    operators: [],
+    backups: [{ repId: BACKUP, priority: 1 }],
+    actorRepId: ACTOR,
+    client: admin,
+  })
+  if (!configured.ok) throw new Error(configured.error ?? 'fixture configure failed')
+
+  const { error: coveringError } = await admin
+    .from('identity_assignments')
+    .insert({
+      organization_id: ORG,
+      revenue_identity_id: IDENTITY,
+      rep_id: COVERING,
+      assigned_by: ACTOR,
+    })
+  if (coveringError) throw coveringError
 })
 
 function scope(client: ReturnType<typeof dbClientFor>, repId: string) {
@@ -115,58 +173,8 @@ async function cleanupFixture() {
   await admin.from('notifications').delete().like('dedupe_key', `%${PROFILE}%`)
 }
 
-/**
- * The fixture needs a known owner on Zaira · Upwork. Production ownership moves
- * as Admin works, so the suite takes the seat over and puts the original back.
- */
-let originalPrimary: {
-  id: string
-  rep_id: string
-  role: string
-  priority: number
-  created_by: string | null
-} | null = null
-let originalReadiness: Array<{ rep_id: string }> = []
-let captured = false
-
-beforeAll(() => {
-  client = dbClientFor(AUTH_USER)
-  admin = serviceDbClient()
-})
-
 beforeEach(async () => {
-  // Capture production ownership and readiness once, BEFORE the fixture mutates
-  // anything, so the suite can put them back exactly at the end.
-  if (!captured) {
-    captured = true
-    const { data: current } = await admin
-      .from('profile_coverage')
-      .select('id, rep_id, role, priority, created_by')
-      .eq('organization_id', ORG)
-      .eq('profile_id', PROFILE)
-      .eq('role', 'PRIMARY')
-      .eq('active', true)
-      .maybeSingle()
-    originalPrimary = (current as typeof originalPrimary) ?? null
-    const { data: readiness } = await admin
-      .from('profile_readiness')
-      .select('rep_id')
-      .eq('organization_id', ORG)
-      .eq('profile_id', PROFILE)
-      .in('rep_id', [PRIMARY, COVERING, BACKUP])
-    originalReadiness = (readiness as Array<{ rep_id: string }>) ?? []
-  }
-
   await cleanupFixture()
-
-  // Readiness is a per-device confirmation: cleared per run so the
-  // acknowledgement assertion is about this run, restored once at the end.
-  await admin
-    .from('profile_readiness')
-    .delete()
-    .eq('organization_id', ORG)
-    .eq('profile_id', PROFILE)
-    .in('rep_id', [PRIMARY, COVERING, BACKUP])
 
   await configureCoverage({
     organizationId: ORG,
@@ -177,7 +185,8 @@ beforeEach(async () => {
     actorRepId: ACTOR,
     client: admin,
   })
-  // The covering rep must hold eligibility; the fixture never removes it.
+  // The covering rep must hold eligibility; configureCoverage only syncs the
+  // seats it was given, so re-add the covering rep's eligibility.
   await admin
     .from('identity_assignments')
     .upsert(
@@ -194,38 +203,14 @@ beforeEach(async () => {
 afterAll(async () => {
   try {
     await cleanupFixture()
-    await admin
-      .from('profile_coverage')
-      .update({ active: false, updated_at: new Date().toISOString() })
-      .eq('organization_id', ORG)
-      .eq('profile_id', PROFILE)
-      .eq('active', true)
-    if (originalPrimary) {
-      await admin.from('profile_coverage').upsert(
-        {
-          id: originalPrimary.id,
-          organization_id: ORG,
-          profile_id: PROFILE,
-          rep_id: originalPrimary.rep_id,
-          role: originalPrimary.role,
-          priority: originalPrimary.priority,
-          active: true,
-          created_by: originalPrimary.created_by,
-        },
-        { onConflict: 'id' },
-      )
-    }
-    for (const row of originalReadiness) {
-      await admin.from('profile_readiness').upsert(
-        {
-          organization_id: ORG,
-          profile_id: PROFILE,
-          rep_id: row.rep_id,
-          acknowledged_by: row.rep_id,
-        },
-        { onConflict: 'organization_id,profile_id,rep_id' },
-      )
-    }
+    // Remove the disposable fixture entirely: coverage rows, eligibility,
+    // acknowledgements, the channel identity and the profile.
+    await admin.from('responsibility_acknowledgements').delete().eq('organization_id', ORG).eq('profile_id', PROFILE)
+    await admin.from('coverage_events').delete().eq('organization_id', ORG).eq('profile_id', PROFILE)
+    await admin.from('profile_coverage').delete().eq('organization_id', ORG).eq('profile_id', PROFILE)
+    await admin.from('identity_assignments').delete().eq('organization_id', ORG).eq('revenue_identity_id', IDENTITY)
+    await admin.from('revenue_identities').delete().eq('organization_id', ORG).eq('id', IDENTITY)
+    await admin.from('profiles').delete().eq('organization_id', ORG).eq('id', PROFILE)
   } finally {
     await closeDbPool()
   }

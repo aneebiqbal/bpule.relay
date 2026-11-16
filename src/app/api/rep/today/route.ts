@@ -49,6 +49,9 @@ export async function GET() {
     id: row.assignmentId,
     revenue_identity_id: row.id,
     identity: identityById.get(row.id) ?? null,
+    // The canonical execution scope says whether this is primary ownership,
+    // an operator seat or temporary cover — the operator's precise role.
+    role: row.access,
   }))
   const { data: targets } = await supabase
     .from('daily_target_plans')
@@ -104,6 +107,7 @@ export async function GET() {
     return {
       assignmentId: a.id,
       identity,
+      role: a.role,
       targets: targetViews,
     }
   })

@@ -225,8 +225,9 @@ describe('NEW_RESPONSIBILITY_REQUIRES_ACK', () => {
   it('a new primary ownership episode seeds an acknowledgement', () => {
     const source = read('src/lib/coverage/actions.ts')
     expect(source).toMatch(/ensurePrimaryAcknowledgement/)
+    // The assignment module funnels through the one canonical chain writer.
     const assignment = read('src/lib/profiles/assignment.ts')
-    expect(assignment).toMatch(/ensurePrimaryAcknowledgement/)
+    expect(assignment).toMatch(/saveResponsibilityChain/)
   })
 
   it('the migration creates the acknowledgement authority', () => {

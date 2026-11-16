@@ -1,11 +1,11 @@
-import { TeamToday } from '@/components/team/team-today'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Admin → Command Center. The same operating page as Team → Today, reached
- * from the Admin domain — one implementation, two role entry points.
+ * Compatibility: the Team command center is the single operating surface at
+ * /team. This URL redirects so existing bookmarks and deep links keep working.
  */
-export default function CommandPage() {
-  return <TeamToday />
+export default function AdminCommandRedirect() {
+  redirect('/team')
 }

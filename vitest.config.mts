@@ -13,7 +13,10 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts'],
     testTimeout: 120_000,
-
+    // Live-DB suites do several sequential writes in beforeEach/afterAll; the
+    // 5s default hook timeout aborted them mid-fixture and leaked state.
+    hookTimeout: 120_000,
+    teardownTimeout: 120_000,
   },
   resolve: {
     alias: {

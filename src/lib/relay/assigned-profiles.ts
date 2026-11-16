@@ -10,6 +10,8 @@ export interface AssignedProfileIdentity {
 export interface AssignedProfileRow {
   assignmentId: string
   identity: AssignedProfileIdentity
+  /** Canonical execution role: primary | operator | coverage. */
+  role: string
   targets: TargetProgressView[]
 }
 
@@ -59,6 +61,7 @@ export function normalizeAssignedProfiles(raw: unknown): AssignedProfilesModel {
       return {
         assignmentId: text(row.assignmentId) ?? text(row.id) ?? `assignment-${index}`,
         identity: identityOf(row.identity),
+        role: text(row.role) ?? text(row.access) ?? 'primary',
         targets: targets.map((target, targetIndex) => targetOf(target, targetIndex)),
       }
     }),

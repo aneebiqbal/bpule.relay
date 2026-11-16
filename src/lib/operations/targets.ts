@@ -17,7 +17,6 @@ import { isMissingRelation } from '@/lib/operations/db-errors'
 import { MEETING_EVENT } from '@/lib/sales/meetings'
 import { CONNECTION_EVENTS, SENT_MESSAGE_EVENTS } from '@/lib/sales/send-truth'
 import { targetProgressSql } from '@/lib/analytics/aggregates'
-import { primaryRepByIdentity } from '@/lib/targets/plan-scope'
 
 export type TargetType = 'CONNECTIONS' | 'MESSAGES_SENT' | 'UPWORK_APPLICATIONS' | 'MEETINGS' | 'PROPOSALS'
 export type TargetPeriod = 'DAY' | 'WEEK' | 'MONTH'
@@ -206,17 +205,74 @@ export async function loadTargets(
     loadTargetEvents(client, input, repIds),
   ])
   if (planRead.error && !isMissingRelation(planRead.error)) throw planRead.error
-  // The requirement is channel-owned; project it onto the current operator.
-  const repByIdentity = await primaryRepByIdentity(
-    client,
-    input.orgId,
-    (planRead.data ?? []).map((row) => row.revenue_identity_id as string),
+  // The requirement is channel-owned. Project it onto the operator seats:
+  // an ALLOCATED lane yields each operator's share; a SHARED lane is one
+  // requirement and is attributed to the PRIMARY as the personal expectation
+  // (never duplicated per operator, so team roll-ups never double-count).
+  const planRows = (planRead.data ?? []) as Array<{
+    id: string
+    revenue_identity_id: string
+    activity_type: string
+    target_count: number
+  }>
+  if (planRows.length === 0) {
+    return { ...assembleTargets({ ...input, dailyTargets: [], events: [] }), available: true, truncated: false }
+  }
+  const [seats, allocations] = await Promise.all([
+    client
+      .from('profile_coverage')
+      .select('profile_id, rep_id, role')
+      .eq('organization_id', input.orgId)
+      .eq('active', true)
+      .in('role', ['PRIMARY', 'OPERATOR'])
+      .limit(2000),
+    client
+      .from('daily_plan_allocations')
+      .select('plan_id, rep_id, target_count')
+      .eq('organization_id', input.orgId)
+      .eq('active', true)
+      .limit(2000),
+  ])
+  if (seats.error) throw seats.error
+  if (allocations.error && !isMissingRelation(allocations.error)) throw allocations.error
+
+  const profileByIdentity = new Map(
+    (
+      await client
+        .from('revenue_identities')
+        .select('id, profile_id')
+        .eq('organization_id', input.orgId)
+        .in('id', planRows.map((row) => row.revenue_identity_id))
+        .limit(2000)
+    ).data?.map((row) => [row.id as string, (row as { profile_id: string | null }).profile_id ?? null]) ?? [],
   )
-  const targetRows = (planRead.data ?? []).map((row) => ({
-    rep_id: repByIdentity.get(row.revenue_identity_id as string) ?? 'unassigned',
-    activity_type: row.activity_type,
-    target_count: row.target_count,
-  })).filter((row) => repIds.includes(row.rep_id))
+  const seatsByProfile = new Map<string, Array<{ rep_id: string; role: string }>>()
+  for (const row of (seats.data ?? []) as Array<{ profile_id: string; rep_id: string; role: string }>) {
+    const list = seatsByProfile.get(row.profile_id) ?? []
+    list.push(row)
+    seatsByProfile.set(row.profile_id, list)
+  }
+  const allocationByPlan = new Map<string, Map<string, number>>()
+  for (const row of (allocations.data ?? []) as Array<{ plan_id: string; rep_id: string; target_count: number }>) {
+    const byRep = allocationByPlan.get(row.plan_id) ?? new Map<string, number>()
+    byRep.set(row.rep_id, row.target_count)
+    allocationByPlan.set(row.plan_id, byRep)
+  }
+
+  const targetRows = planRows.flatMap((row) => {
+    const profileId = profileByIdentity.get(row.revenue_identity_id) ?? null
+    const seatList = profileId ? (seatsByProfile.get(profileId) ?? []) : []
+    const allocated = allocationByPlan.get(row.id)
+    if (allocated) {
+      return [...allocated.entries()].map(([repId, targetCount]) => ({
+        rep_id: repId,
+        activity_type: row.activity_type,
+        target_count: targetCount,
+      }))
+    }
+    const primary = seatList.find((seat) => seat.role === 'PRIMARY')?.rep_id ?? 'unassigned'
+    return [{ rep_id: primary, activity_type: row.activity_type, target_count: row.target_count }]
+  }).filter((row) => repIds.includes(row.rep_id))
   const assembled = assembleTargets({
     ...input,
     dailyTargets: targetRows,

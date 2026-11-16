@@ -95,9 +95,9 @@ describe('COMMAND_CENTRE_GATE — escalation recovery', () => {
 
 describe('COMMAND_CENTRE_GATE — role enforcement', () => {
   it('the operating page refuses a rep', () => {
-    const page = read('src/app/(app)/admin/command/page.tsx')
-    expect(page).toContain('TeamToday')
-    expect(read('src/components/team/team-today.tsx')).toContain('requireTeamContext')
+    const page = read('src/app/(app)/team/page.tsx')
+    expect(page).toContain('requireTeamContext')
+    expect(page).toContain('TeamCommandCenter')
   })
 
   it('the API refuses a rep, not only the navigation', () => {
@@ -176,7 +176,7 @@ describe('COMMAND_CENTRE_GATE — day selection', () => {
   })
 
   it('the operating page is Team → Today; the rep-day detail keeps the date', () => {
-    expect(read('src/app/(app)/team/page.tsx')).toContain('TeamToday')
+    expect(read('src/app/(app)/team/page.tsx')).toContain('TeamCommandCenter')
     expect(read('src/app/(app)/admin/command/[repId]/page.tsx')).toContain('loadRepDayDetail')
   })
 })

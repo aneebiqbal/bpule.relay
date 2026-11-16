@@ -98,6 +98,26 @@ function rewrite(text: string, values: unknown[]): { sql: string; params: unknow
  */
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 
+/**
+ * A pool checkout can queue indefinitely when every connection is busy. Fail
+ * fast instead: a hung checkout is a production incident, not a slow query.
+ */
+const POOL_WAIT_MS = Number(process.env.DATABASE_POOL_QUEUE_MS ?? 15_000)
+
+async function checkout(pgPool: Pool): Promise<PoolClient> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      pgPool.connect(),
+      new Promise<PoolClient>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('database pool exhausted')), POOL_WAIT_MS)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export class PostgresExecutorImpl implements NeonExecutorApi {
   readonly provider = 'postgres' as const
 
@@ -129,7 +149,7 @@ export class PostgresExecutorImpl implements NeonExecutorApi {
 
   async query<T>(text: string, values: unknown[] = []): Promise<T[]> {
     const { sql, params } = rewrite(text, values)
-    const client = await this.pgPool.connect()
+    const client = await checkout(this.pgPool)
     const started = performance.now()
     try {
       await this.begin(client)
@@ -149,7 +169,7 @@ export class PostgresExecutorImpl implements NeonExecutorApi {
 
   async queryInWrite<T>(text: string, values: unknown[] = []): Promise<T[]> {
     const { sql, params } = rewrite(text, values)
-    const client = await this.pgPool.connect()
+    const client = await checkout(this.pgPool)
     const started = performance.now()
     try {
       await this.begin(client)

@@ -11,7 +11,8 @@ import { syncChannelEligibility } from '@/lib/profiles/assignment'
 import { notifyOnce } from '@/lib/notifications/deliver'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 import { reassignAssignedTask } from '@/lib/tasks/assigned-tasks'
-import { channelLabel } from '@/lib/profiles/channel'
+import { channelLabel, normalizeChannel } from '@/lib/profiles/channel'
+import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import type { AuthContext } from '@/lib/auth/organization'
 
 /** The profile's human label — identity name plus channel, never a bare id. */
@@ -653,17 +654,23 @@ export async function revokeCoverage(input: {
 export async function configureCoverage(input: {
   organizationId: string
   profileId: string
-  primaryRepId: string
+  /** Null when the caller is adding an operator/backup to a profile that has
+   *  no owner yet; the canonical model then has zero active PRIMARY rows. */
+  primaryRepId: string | null
   operators: Array<{ repId: string; priority: number }>
   backups: Array<{ repId: string; priority: number }>
   actorRepId: string
   client?: DbClient
-}): Promise<{ ok: boolean; error?: string }> {
+  /** Seed the channel's default plan when it has none. The bulk/command-center
+   *  assign path opts in; the per-profile dialog keeps its existing behaviour. */
+  ensureTargets?: boolean
+}): Promise<{ ok: boolean; error?: string; seeded?: number }> {
   const client = input.client ?? (await createServerSupabase())
   const now = new Date().toISOString()
+  let seeded = 0
 
   const rows = [
-    { role: 'PRIMARY' as const, repId: input.primaryRepId, priority: 1 },
+    ...(input.primaryRepId ? [{ role: 'PRIMARY' as const, repId: input.primaryRepId, priority: 1 }] : []),
     ...input.operators.map((operator, index) => ({
       role: 'OPERATOR' as const,
       repId: operator.repId,
@@ -730,8 +737,8 @@ export async function configureCoverage(input: {
   const insertedByRep = new Map(
     (inserted ?? []).map((row) => [row.rep_id as string, row.id as string]),
   )
-  const primaryRowId = insertedByRep.get(input.primaryRepId) ?? null
-  if (primaryRowId) {
+  const primaryRowId = input.primaryRepId ? (insertedByRep.get(input.primaryRepId) ?? null) : null
+  if (primaryRowId && input.primaryRepId) {
     await ensurePrimaryAcknowledgement(client, {
       organizationId: input.organizationId,
       profileId: input.profileId,
@@ -761,7 +768,44 @@ export async function configureCoverage(input: {
     actor_rep_id: input.actorRepId,
   })
 
-  return { ok: true }
+  // The bulk/command-center assign path seeds the channel's default plan when
+  // none exists, so a freshly staffed profile is executable immediately. The
+  // per-profile dialog leaves the plan exactly as it was.
+  if (input.ensureTargets) {
+    const { data: identityRows } = await client
+      .from('revenue_identities')
+      .select('id, channel')
+      .eq('organization_id', input.organizationId)
+      .eq('profile_id', input.profileId)
+      .eq('status', 'active')
+      .limit(10)
+    for (const identity of (identityRows ?? []) as Array<{ id: string; channel: string }>) {
+      const { data: existingPlans } = await client
+        .from('daily_target_plans')
+        .select('id')
+        .eq('organization_id', input.organizationId)
+        .eq('revenue_identity_id', identity.id)
+        .eq('active', true)
+        .limit(1)
+      if (existingPlans && existingPlans.length > 0) continue
+      const pack = defaultTargetsForChannel(normalizeChannel(identity.channel))
+      const { data: seededRows, error: seedError } = await client.from('daily_target_plans').insert(
+        pack.map((row) => ({
+          organization_id: input.organizationId,
+          revenue_identity_id: identity.id,
+          activity_type: row.activityType,
+          target_count: row.targetCount,
+          targetable: row.activityType !== 'proposal',
+          active: true,
+          created_by: input.actorRepId,
+        })),
+      ).select('id')
+      if (seedError) return { ok: false, error: seedError.message }
+      seeded += seededRows?.length ?? 0
+    }
+  }
+
+  return { ok: true, seeded }
 }
 
 export type { CoverageMode }

@@ -4,9 +4,25 @@
  * Deterministic: no provider key, no network. Covers the structured failure
  * category, the request-scoped trace context, and the persisted trace fields.
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, beforeAll, afterAll } from 'vitest'
 
 const captured: Array<Record<string, unknown>> = []
+
+// persistTrace no-ops without a configured project. These tests exercise the
+// persistence path, so provide the env the guard reads (the Supabase client
+// itself is mocked below).
+const ENV = {
+  url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+}
+beforeAll(() => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co'
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
+})
+afterAll(() => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = ENV.url
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = ENV.key
+})
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabase: async () => ({

@@ -165,6 +165,14 @@ function ids(rows: Array<{ id: string }>) {
 
 describeLive('MULTI_OPERATOR_ACCEPTANCE', () => {
   it('one profile, one primary, two operators, one shared plan', async () => {
+    // Clear any completion rows a previous interrupted run left behind, then
+    // snapshot. Without this a leftover AHMAD row makes the contribution count
+    // one too high and the live suite flaky.
+    await client.raw(
+      `delete from daily_accountability where organization_id = $1 and revenue_identity_id = $2
+        and target_date = $3 and rep_id in ($4, $5)`,
+      [ORG, IDENTITY, TODAY, HASSAN, AHMAD],
+    )
     await snapshot()
     try {
       // 1. Add Ahmad as an active operator. Ownership must not move.

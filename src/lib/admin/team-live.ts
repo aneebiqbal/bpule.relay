@@ -40,6 +40,14 @@ export type TeamLiveGoal = {
   remaining: number
   identityId: string
   status: string | null
+  /** True when more than one operator works this lane. The lane is one shared
+   *  requirement, never one requirement per operator. */
+  shared: boolean
+  /** This operator's allocated share, when the lane is ALLOCATED. */
+  allocation: number | null
+  /** The operator's personal expectation: allocation, or the solo lane target.
+   *  Unallocated shared lanes contribute 0 here and surface in sharedTarget. */
+  personal: number
 }
 
 export type TeamLiveLead = {
@@ -67,6 +75,9 @@ export type TeamLivePerson = {
   totalTarget: number
   totalCompleted: number
   totalRemaining: number
+  /** Shared lanes this rep works, counted once each. Never added to totalTarget
+   *  so a shared requirement is not double-claimed as personal. */
+  sharedTarget: number
   lastActivityAt: string | null
   identityCount: number
 }
@@ -77,7 +88,14 @@ type RepRow = { id: string; name: string; role: string }
 type IdentityRow = { id: string; identity_name: string; channel: string; title: string | null; profile_id?: string | null }
 type ProfileRow = { id: string; display_name?: string | null; full_name?: string | null; label?: string | null; person_id?: string | null }
 type AssignmentRow = { revenue_identity_id?: string | null; identity_id?: string | null; rep_id: string }
-type TargetRow = { rep_id: string; revenue_identity_id: string; activity_type: string; target_count: number }
+type TargetRow = {
+  rep_id: string
+  revenue_identity_id: string
+  activity_type: string
+  target_count: number
+  shared?: boolean
+  allocation?: number | null
+}
 type AccountabilityRow = { rep_id: string; revenue_identity_id: string; activity_type: string; completed_count: number | null; status?: string | null }
 type MessageRow = { rep_id: string | null; type: string | null; sent_at: string | null }
 type LeadTodayRow = { owner_rep_id: string | null; created_at: string | null }
@@ -176,14 +194,22 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
       )
       const done = matches.reduce((sum, a) => sum + (a.completed_count ?? 0), 0)
       const target = t.target_count ?? 0
+      const shared = t.shared === true
+      const allocation = typeof t.allocation === 'number' && t.allocation > 0 ? t.allocation : null
+      // A shared lane's personal expectation is its allocation; unallocated
+      // shared lanes contribute to sharedTarget, not to totalTarget.
+      const personal = allocation ?? (shared ? 0 : target)
       return {
         activityType: t.activity_type,
         label: activityLabel(t.activity_type),
         target,
         completed: done,
-        remaining: Math.max(0, target - done),
+        remaining: Math.max(0, (allocation ?? target) - done),
         identityId: t.revenue_identity_id,
         status: (matches[0]?.status as string) ?? null,
+        shared,
+        allocation,
+        personal,
       }
     })
 
@@ -209,8 +235,9 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
       ...extractionRuns.map((e) => e.created_at),
     ].filter((value): value is string => Boolean(value)).sort((a, b) => b.localeCompare(a))
 
-    const totalTarget = goals.reduce((sum, goal) => sum + goal.target, 0)
+    const totalTarget = goals.reduce((sum, goal) => sum + goal.personal, 0)
     const totalCompleted = goals.reduce((sum, goal) => sum + goal.completed, 0)
+    const sharedTarget = goals.filter((goal) => goal.shared).reduce((sum, goal) => sum + goal.target, 0)
 
     return {
       repId: rep.id,
@@ -236,6 +263,7 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
       totalTarget,
       totalCompleted,
       totalRemaining: Math.max(0, totalTarget - totalCompleted),
+      sharedTarget,
       lastActivityAt: allTimestamps[0] ?? null,
       identityCount: repIdentities.length,
     }

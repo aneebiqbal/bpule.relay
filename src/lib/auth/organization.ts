@@ -1,5 +1,6 @@
 import { cache } from 'react'
-import { getCurrentUser } from './current'
+import { getCurrentUser, AuthDatabaseError } from './current'
+import { isMissingRelation } from '@/lib/operations/db-errors'
 import { isDemoMode } from '@/lib/ai/config'
 import { getDbClient } from '@/lib/db/provider'
 import { perfTrace } from '@/lib/perf-trace'
@@ -62,7 +63,7 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
 
   // Org role and team memberships are independent; run them together. The
   // capability set depends on the role, so it is the only second wave.
-  const [{ data: orgRoleRow }, { data: membershipRows }] = await perfTrace(
+  const [orgRoleRes, membershipRes] = await perfTrace(
     'auth.orgRole+memberships',
     () =>
       Promise.all([
@@ -79,6 +80,17 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
           .eq('active', true),
       ]),
   )
+  // Authorization reads must never silently degrade: a failed role or
+  // membership lookup would otherwise fall back to a weaker role/capability
+  // set. Surface the database failure as a 500 instead.
+  if (orgRoleRes.error && !isMissingRelation(orgRoleRes.error)) {
+    throw new AuthDatabaseError('organization_roles lookup failed', orgRoleRes.error)
+  }
+  if (membershipRes.error && !isMissingRelation(membershipRes.error)) {
+    throw new AuthDatabaseError('team_memberships lookup failed', membershipRes.error)
+  }
+  const orgRoleRow = orgRoleRes.data
+  const membershipRows = membershipRes.data
 
   // organization_roles is the canonical source of truth for org-level access.
   // reps.role is used only as a bootstrap fallback when no org role row exists
@@ -94,13 +106,16 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
   const teamIds = (membershipRows ?? []).map((m: { team_id: string }) => m.team_id)
   const teamNameById = new Map<string, string>()
   if (teamIds.length > 0) {
-    const { data: teamRows } = await perfTrace('auth.teams', () =>
+    const teamRes = await perfTrace('auth.teams', () =>
       supabase
         .from('teams')
         .select('id, name')
         .in('id', teamIds),
     )
-    for (const row of teamRows ?? []) {
+    if (teamRes.error && !isMissingRelation(teamRes.error)) {
+      throw new AuthDatabaseError('teams lookup failed', teamRes.error)
+    }
+    for (const row of teamRes.data ?? []) {
       teamNameById.set(row.id, row.name)
     }
   }
@@ -120,7 +135,7 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
     .filter((m) => m.role === 'MEMBER')
     .map((m) => m.teamId)
 
-  const { data: capabilityRows } = await perfTrace('auth.capabilities', () =>
+  const capabilityRes = await perfTrace('auth.capabilities', () =>
     supabase
       .from('capabilities')
       .select('capability')
@@ -128,8 +143,11 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
       .eq('role', organizationRole)
       .eq('granted', true),
   )
+  if (capabilityRes.error && !isMissingRelation(capabilityRes.error)) {
+    throw new AuthDatabaseError('capabilities lookup failed', capabilityRes.error)
+  }
 
-  const capabilities = new Set((capabilityRows ?? []).map((c) => c.capability))
+  const capabilities = new Set((capabilityRes.data ?? []).map((c) => c.capability))
 
   return {
     repId: user.rep.id,

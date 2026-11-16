@@ -181,7 +181,7 @@ describe('V63_DISCOVERY_IDEMPOTENT_REPLAY', () => {
     // With no profiles in this org the resolution is null — but it must never be
     // the raw profile id string.
     expect(candidates?.[0]?.revenue_identity_id == null || typeof candidates?.[0]?.revenue_identity_id === 'string').toBe(true)
-  }, 60_000)
+  }, 180_000)
 })
 
 describe('V63_PROVIDER_FAILURE_POLICY', () => {

@@ -110,9 +110,11 @@ describe('RETURN_RESTORES_PRIMARY_EXECUTION', () => {
 describe('PERMANENT_TRANSFER_IS_NOT_COVERAGE', () => {
   it('transfer writes the primary chain, never a coverage assignment', () => {
     const transfer = extractFunction(read('src/lib/profiles/assignment.ts'), 'transferResponsibility')
-    expect(transfer).toMatch(/profile_coverage/)
-    expect(transfer).toMatch(/role: 'PRIMARY'/)
+    expect(transfer).toMatch(/saveResponsibilityChain/)
     expect(transfer).not.toMatch(/coverage_assignments/)
+    const coverage = read('src/lib/coverage/actions.ts')
+    expect(coverage).toMatch(/profile_coverage/)
+    expect(coverage).toMatch(/role: 'PRIMARY'/)
   })
 })
 
