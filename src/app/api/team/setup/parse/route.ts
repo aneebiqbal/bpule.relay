@@ -39,13 +39,14 @@ const METRIC_ALIASES: Record<string, string> = {
 }
 
 const OUTPUT_SCHEMA = {
-  assignments: { type: 'array', required: false, description: 'profiles to staff' },
+  assignments: { type: 'array', required: false, description: 'profiles to staff, with optional channel' },
   targets: { type: 'array', required: false, description: 'channel targets to set' },
   schedules: { type: 'array', required: false, description: 'weekday coverage to apply' },
 } as const
 
 interface ParsedAssignment {
   profile?: unknown
+  channel?: unknown
   primary?: unknown
   operators?: unknown
   backups?: unknown
@@ -71,7 +72,24 @@ function stringList(value: unknown): string[] {
 }
 
 function normalizeKey(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+  // The model echoes the "[id]" and "(full name)" annotations back; strip them
+  // so "Muhammad Aneeb [abc]" resolves like "Muhammad Aneeb".
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/[\s-]+/g, ' ')
+    .trim()
+}
+
+/** Pull a channel mention out of a free-text request, if any. */
+function channelFromText(value: string): string | null {
+  const text = value.toLowerCase()
+  if (text.includes('linkedin') || text.includes('linked in')) return 'linkedin'
+  if (text.includes('upwork') || text.includes('up work')) return 'upwork'
+  if (text.includes('email') || text.includes('e-mail')) return 'email'
+  return null
 }
 
 export async function POST(req: NextRequest) {
@@ -109,7 +127,14 @@ export async function POST(req: NextRequest) {
 
   const profileName = (row: { display_name: string | null; full_name: string | null; label: string | null }) =>
     row.display_name ?? row.full_name ?? row.label ?? 'Unnamed profile'
-  const profileByKey = new Map(profiles.map((row) => [normalizeKey(profileName(row)), row]))
+  const profileAliases = (row: { display_name: string | null; full_name: string | null; label: string | null }) =>
+    [row.display_name, row.full_name, row.label].filter((value): value is string => Boolean(value)).map(normalizeKey)
+  const profileByKey = new Map<string, (typeof profiles)[number]>()
+  for (const row of profiles) {
+    for (const alias of profileAliases(row)) {
+      if (!profileByKey.has(alias)) profileByKey.set(alias, row)
+    }
+  }
   const profileById = new Map(profiles.map((row) => [row.id, row]))
   const repByKey = new Map(reps.map((row) => [normalizeKey(row.name), row]))
   const repById = new Map(reps.map((row) => [row.id, row]))
@@ -125,9 +150,10 @@ export async function POST(req: NextRequest) {
     'Use ONLY the people and profiles listed. Names may be matched case-insensitively; an unknown name is omitted and reported.',
     'Return JSON only. Do not invent profiles, people, channels or metrics.',
     'Metric aliases: connections, messages, replies, followups, applications, proposals, prospects, tasks.',
-    'Assignments: profile, primary (one), operators (many), backups (many).',
-    'Targets: profile, channel, metric, target (number), split (optional array of {rep, share}).',
-    'Schedules: profile, rep, days (0=Sunday..6=Saturday).',
+    'Assignments: profile, channel (optional), primary (one), operators (many), backups (many). "Assign/Add <people> to <profile>" means OPERATORS unless the request explicitly says primary or owner.',
+    'Targets: profile, channel, metric, target (number), split (optional array of {rep, share}). A "60/40" split means 60% and 40% OF THE TARGET, not 60 and 40.',
+    'Schedules: profile, rep, days (0=Sunday..6=Saturday). Include a schedule ONLY when the request explicitly mentions scheduling, days, weekdays or availability — never invent one.',
+    'Change only what the request asks for. Do not add assignments, targets or schedules that were not requested.',
   ].join('\n')
 
   const { data } = await generate<Record<string, unknown>>({
@@ -148,25 +174,60 @@ export async function POST(req: NextRequest) {
   const rawTargets = Array.isArray(data.targets) ? (data.targets as ParsedTarget[]) : []
   const rawSchedules = Array.isArray(data.schedules) ? (data.schedules as ParsedSchedule[]) : []
 
-  const resolveProfile = (value: unknown): { id: string; name: string } | null => {
+  const resolveProfile = (value: unknown, channel?: string | null): { id: string; name: string } | null => {
     if (typeof value !== 'string') return null
     const direct = profileById.get(value)
     if (direct) return { id: direct.id, name: profileName(direct) }
-    const byName = profileByKey.get(normalizeKey(value))
-    if (byName) return { id: byName.id, name: profileName(byName) }
-    return null
+    const key = normalizeKey(value)
+    if (!key) return null
+    const tokens = key.split(' ').filter(Boolean)
+    const matchIn = (pool: typeof profiles) => {
+      const exactInPool = pool.find((row) => profileAliases(row).includes(key))
+      if (exactInPool) return exactInPool
+      const tokenMatches = pool.filter((row) =>
+        profileAliases(row).some((alias) => tokens.every((token) => alias.includes(token))),
+      )
+      if (tokenMatches.length === 1) return tokenMatches[0]
+      const substringMatches = pool.filter((row) =>
+        profileAliases(row).some((alias) => alias.includes(key) || key.includes(alias)),
+      )
+      return substringMatches.length === 1 ? substringMatches[0] : null
+    }
+    // A channel in the request ("Aneeb's LinkedIn") disambiguates people who
+    // have the same name on more than one platform — it wins over a bare name.
+    if (channel) {
+      const scoped = matchIn(
+        profiles.filter((row) => identities.some((entry) => entry.profile_id === row.id && entry.channel === channel)),
+      )
+      if (scoped) return { id: scoped.id, name: profileName(scoped) }
+    }
+    const exact = profileByKey.get(key)
+    if (exact) return { id: exact.id, name: profileName(exact) }
+    const any = matchIn(profiles)
+    return any ? { id: any.id, name: profileName(any) } : null
   }
   const resolveRep = (value: unknown): { id: string; name: string } | null => {
     if (typeof value !== 'string') return null
     const direct = repById.get(value)
     if (direct) return { id: direct.id, name: direct.name }
-    const byName = repByKey.get(normalizeKey(value))
-    if (byName) return { id: byName.id, name: byName.name }
+    const key = normalizeKey(value)
+    if (!key) return null
+    const exact = repByKey.get(key)
+    if (exact) return { id: exact.id, name: exact.name }
+    const tokens = key.split(' ').filter(Boolean)
+    const tokenMatches = reps.filter((row) => tokens.every((token) => normalizeKey(row.name).includes(token)))
+    if (tokenMatches.length === 1) return { id: tokenMatches[0].id, name: tokenMatches[0].name }
+    const substringMatches = reps.filter((row) => {
+      const alias = normalizeKey(row.name)
+      return alias.includes(key) || key.includes(alias)
+    })
+    if (substringMatches.length === 1) return { id: substringMatches[0].id, name: substringMatches[0].name }
     return null
   }
 
   const assignments = rawAssignments.flatMap((row) => {
-    const profile = resolveProfile(row.profile)
+    const channel = typeof row.channel === 'string' ? row.channel.toLowerCase() : channelFromText(prompt)
+    const profile = resolveProfile(row.profile, channel)
     if (!profile) {
       warnings.push(`Unknown profile: ${String(row.profile ?? '')}`)
       return []

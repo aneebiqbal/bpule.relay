@@ -62,6 +62,75 @@ function ident(name: string): string {
 }
 
 /**
+ * Every jsonb/json column in the schema, keyed `table.column`.
+ *
+ * The pg and Neon drivers serialize a JS array as a Postgres array literal
+ * (`{a,b}`), which is not valid JSON — writing one to a jsonb column fails with
+ * "invalid input syntax for type json". Callers that already `JSON.stringify`
+ * (the store does) are unaffected; this is the safety net for every other
+ * write path. Keyed by table because several names (`skills`, `technologies`,
+ * `industries`, `detected_people`, …) are real array/scalar columns elsewhere.
+ * Keep in sync with information_schema (data_type in json/jsonb).
+ */
+const JSONB_COLUMNS = new Set([
+  'accountability_audit_log.detail', 'accountability_audit_log.new_value', 'accountability_audit_log.previous_value', 'action_events.metadata',
+  'activity_log.metadata', 'captured_prospects.canonical_intelligence', 'captured_prospects.score_breakdown', 'content_evaluations.distribution_notes',
+  'content_evaluations.quality_notes', 'content_idea_genomes.content_memory_overlap', 'content_opportunities.qualification', 'content_personas.onboarding_data',
+  'content_personas.trend_interest_profile', 'content_profiles.experiences', 'content_profiles.expertise', 'content_profiles.field_confidence',
+  'content_profiles.goals', 'content_profiles.opinions', 'content_profiles.projects', 'content_profiles.sources',
+  'content_profiles.storytelling_tendencies', 'content_profiles.technologies', 'content_profiles.topics_avoided', 'content_profiles.topics_cared',
+  'content_profiles.voice_samples', 'content_profiles.writing_characteristics', 'content_quick_captures.suggested_angles', 'content_taste_profiles.short_term',
+  'content_taste_profiles.territory_affinity', 'conversation_states.commercial_state', 'conversation_states.composer_draft', 'conversation_states.memory',
+  'csv_imports.details', 'daily_content_briefs.trend_snapshot', 'daily_content_ideas.quality_result', 'daily_growth_briefs.alternate_ideas',
+  'daily_growth_briefs.quality_result', 'daily_growth_briefs.trend_snapshot', 'day_closes.completion_snapshot', 'email_delivery_events.payload',
+  'email_mailboxes.metadata', 'email_mailboxes.secrets_ciphertext', 'email_sending_policies.suppression_rules', 'eval_runs.details',
+  'help_requests.context', 'intelligence_sample_events.payload', 'intelligence_samples.capture_failures', 'intelligence_samples.client_replies',
+  'intelligence_samples.evidence_ledger', 'intelligence_samples.extracted_identity', 'intelligence_samples.followup_drafts', 'intelligence_samples.human_edited_text',
+  'intelligence_samples.human_feedback', 'intelligence_samples.model_raw_output', 'intelligence_samples.rejected_signals', 'intelligence_samples.reply_drafts',
+  'intelligence_samples.resolved_decision', 'intelligence_samples.score_dimensions', 'intelligence_samples.screening_answers', 'intelligence_samples.sender_rankings',
+  'intelligence_samples.source_facts', 'leads.canonical_intelligence', 'leads.evidence_ledger', 'leads.extraction_completeness',
+  'leads.extraction_profile', 'leads.inbound_raw', 'leads.raw_source_data', 'leads.remote_eligibility',
+  'leads.score_breakdown', 'message_evaluations.dimensions', 'monthly_accountability_reviews.consistency_snapshot', 'monthly_accountability_reviews.execution_snapshot',
+  'monthly_accountability_reviews.outcome_snapshot', 'monthly_accountability_reviews.quality_snapshot', 'notification_log.payload', 'notifications.metadata',
+  'operational_jobs.payload', 'operational_jobs.result', 'organization_operating_policy.coverage_limits', 'organization_operating_policy.target_pack',
+  'organization_operating_policy.warning_thresholds', 'organization_rulebooks.performance_weights', 'organization_rulebooks.signals', 'organization_rulebooks.sla_config',
+  'organization_rulebooks.verdict_thresholds', 'organizations.holidays', 'organizations.settings', 'prepared_email_drafts.claim_safety',
+  'prepared_email_drafts.research_brief', 'prepared_email_drafts.strategy', 'profile_enrichment_runs.audit', 'profile_enrichment_runs.decisions',
+  'profile_enrichment_runs.profile_snapshot_before', 'profile_enrichment_runs.proposal', 'profile_enrichment_runs.relationship_counts_after', 'profile_enrichment_runs.relationship_counts_before',
+  'profile_import_batches.metadata', 'profile_merge_log.counts_after', 'profile_merge_log.counts_before', 'profile_merge_log.identity_check',
+  'profile_merge_log.merged_fields', 'profile_merge_log.reassigned_refs', 'profile_merge_log.removed_duplicates', 'profile_merge_log.source_snapshot',
+  'profile_merge_log.target_snapshot_before', 'profile_opportunity_matches.matching_capabilities', 'profile_opportunity_matches.missing_capabilities', 'profile_opportunity_matches.relevant_proof',
+  'profile_reviews.relevant_skills', 'profile_sources.detected_people', 'profile_sources.extraction_result', 'profiles.ai_context',
+  'profiles.audience_client_fit', 'profiles.communication_style', 'profiles.differentiators', 'profiles.industries',
+  'profiles.languages', 'profiles.preferred_engagement_types', 'profiles.primary_skills', 'profiles.secondary_skills',
+  'profiles.service_capabilities', 'profiles.specialties', 'profiles.technologies', 'relay_events.metadata',
+  'relay_events.payload', 'relay_growth_drafts.post_plan', 'relay_growth_experiments.results', 'relay_reconciliation_v51_applications_backup.risks',
+  'relay_reconciliation_v51_applications_backup.screening_answers', 'relay_reconciliation_v51_events_backup.metadata', 'relay_reconciliation_v51_jobs_backup.extracted_fields', 'relay_reconciliation_v51_jobs_backup.job_facts',
+  'relay_reconciliation_v51_jobs_backup.location_restrictions', 'relay_reconciliation_v51_jobs_backup.profile_match', 'relay_reconciliation_v51_jobs_backup.score_breakdown', 'relay_reconciliation_v51_jobs_backup.skills',
+  'relay_runs.context', 'relay_runs.metadata', 'relay_runs.result_snapshot', 'relay_runs.strategy_snapshot',
+  'relay_v51_upwork_applications_backup.question_answers', 'relay_v51_upwork_applications_backup.risks', 'relay_v51_upwork_jobs_backup.extracted_fields', 'relay_v51_upwork_jobs_backup.job_facts',
+  'relay_v51_upwork_jobs_backup.location_restrictions', 'relay_v51_upwork_jobs_backup.profile_match', 'relay_v51_upwork_jobs_backup.score_breakdown', 'relay_v51_upwork_jobs_backup.skills',
+  'rep_day.carryover', 'rep_day.shortfall', 'revenue_identities.allowed_first_person_claims', 'revenue_identities.channel_rules',
+  'revenue_identities.expertise', 'revenue_identities.industries', 'revenue_identities.preferred_opportunity_types', 'revenue_identities.skills',
+  'revenue_identities.technologies', 'revenue_identities.voice_tone', 'reward_eligibility.reason_snapshot', 'reward_policies.criteria',
+  'scoring_feedback.expected', 'scoring_feedback.observed', 'scoring_feedback.versions', 'scoring_labels.evidence_lines',
+  'scoring_labels.observed', 'scoring_shadow_decisions.candidate_detail', 'scoring_shadow_decisions.features', 'scoring_shadow_decisions.routing_v1',
+  'scoring_shadow_decisions.routing_v2', 'scoring_shadow_decisions.sales_thesis', 'style_cards.style_card', 'tailored_cvs.ats_dimensions',
+  'tailored_cvs.base_resume_snapshot', 'tailored_cvs.tailored_resume', 'task_events.metadata', 'trend_items.metrics',
+  'trend_sources.config', 'upwork_applications.risks', 'upwork_applications.screening_answers', 'upwork_jobs.extracted_fields',
+  'upwork_jobs.job_facts', 'upwork_jobs.location_restrictions', 'upwork_jobs.profile_match', 'upwork_jobs.score_breakdown',
+  'upwork_jobs.skills', 'upwork_proposal_versions.proof_refs', 'upwork_proposal_versions.screening_answers', 'voice_profiles.style_card',
+])
+
+/** Arrays/objects bound for a jsonb column must be sent as a JSON string. */
+export function writeValue(table: string, column: string, value: unknown): unknown {
+  if (!JSONB_COLUMNS.has(`${table}.${column}`)) return value
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string') return value
+  return JSON.stringify(value)
+}
+
+/**
  * Normalize a thrown driver error into the `DbError` the contract promises.
  * Postgres errors carry a `code` (42P01, 42703, ...); Neon wraps them in a plain
  * `Error`, so callers that branch on the code get it when the driver does.
@@ -649,7 +718,7 @@ export class PostgresQueryBuilder<T = Record<string, unknown>> implements DbQuer
         const cols = Object.keys(rows[0] as object)
         const tuples = rows.map((r) => {
           const obj = r as Record<string, unknown>
-          params.push(...cols.map((c) => obj[c]))
+          params.push(...cols.map((c) => writeValue(this.table, c, obj[c])))
           return `(${cols.map(() => '?').join(', ')})`
         })
         sql = `INSERT INTO ${ident(this.table)} (${cols.map(ident).join(', ')}) VALUES ${tuples.join(', ')}${returningSql}`
@@ -661,7 +730,7 @@ export class PostgresQueryBuilder<T = Record<string, unknown>> implements DbQuer
         if (!row || typeof row !== 'object') throw new Error('update() requires an object')
         const rowObj = row as Record<string, unknown>
         const cols = Object.keys(rowObj)
-        params.push(...cols.map((c) => rowObj[c]))
+        params.push(...cols.map((c) => writeValue(this.table, c, rowObj[c])))
         sql = `UPDATE ${ident(this.table)} SET ${cols.map((c) => `${ident(c)} = ?`).join(', ')}${whereSql}${orderSql}${limitSql}${offsetSql}${returningSql}`
         pushFilterParams()
         break
@@ -673,7 +742,7 @@ export class PostgresQueryBuilder<T = Record<string, unknown>> implements DbQuer
         const cols = Object.keys(rows[0] as object)
         const tuples = rows.map((r) => {
           const obj = r as Record<string, unknown>
-          params.push(...cols.map((c) => obj[c]))
+          params.push(...cols.map((c) => writeValue(this.table, c, obj[c])))
           return `(${cols.map(() => '?').join(', ')})`
         })
         let conflictSql = ''

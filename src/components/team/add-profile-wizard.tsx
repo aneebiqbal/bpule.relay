@@ -138,7 +138,11 @@ export function AddProfileWizard({
       const data = await res.json()
       const source = (data.sources ?? []).find((item: { profile_id?: string }) => item.profile_id)
       if (!source?.profile_id) {
-        setError('The document was processed, but no profile was created.')
+        // The processor records the real reason on each source; never hide it
+        // behind a generic message when a document fails.
+        const failed = (data.sources ?? []).find((item: { error_message?: string | null }) => item.error_message)
+        const detail = failed?.error_message ?? data?.batch?.error_message ?? 'The document was processed, but no profile was created.'
+        setError(detail)
         setProcessing(false)
         return
       }
