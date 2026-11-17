@@ -139,7 +139,6 @@ positive target — and derive the remaining-work assertion from the live value.
 The production target is untouched. Both files pass.
 
 ### 8.3 Responsibility failures are now diagnosable
-
 The assign / transfer / remove dialogs showed their own fallback text whenever
 the response body had no `error` (for example a proxy 502/504 under load), which
 read as "failed to add / transfer / remove". They now surface
@@ -155,3 +154,19 @@ previous fixture writes committing). The three assignment actions issue roughly 
 dozen sequential writes each; under pool contention that exceeds the client's
 10 s connection timeout. The fix is to reduce those round trips and/or the pool
 contention — not yet done.
+
+### 8.4 Assignment reconciliation scanner (read-only + approved repair)
+
+`lib/profiles/reconcile.ts` scans the whole organisation and classifies drift:
+eligibility without a seat, seat without eligibility, multiple active primaries,
+seats on archived profiles/identities, orphaned eligibility and orphaned seats.
+`GET /api/admin/reconciliation` returns the report (admin capability only);
+`POST` re-scans and repairs **only** findings that still match the approval, and
+only the two unambiguous classes (revoke eligibility-without-seat, grant
+seat-without-eligibility), each audited. Nothing is rewritten without
+`approve: true`.
+
+A live run over the real organisation found drift to inspect: seats without
+eligibility on archived Aneeb identities, and eligibility without seats for
+Madiha/Hassan on other profiles. The scanner reports them for human review
+rather than guessing.

@@ -15,7 +15,8 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
-import { addOperatorResponsibility, removeOperatorResponsibility, transferResponsibility, readResponsibilityChain, assignPrimaryResponsibility } from '@/lib/profiles/assignment'
+import { addOperatorResponsibility, removeOperatorResponsibility, transferResponsibility, assignPrimaryResponsibility, readResponsibilityChain } from '@/lib/profiles/assignment'
+import { scanAssignmentDrift, repairAssignmentDrift } from '@/lib/profiles/reconcile'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
@@ -136,6 +137,38 @@ describeLive('OPERATOR_VISIBILITY', () => {
       expect(chain.operators.map((seat) => seat.repId)).toContain(AHMAD)
       const ownerStillSees = await listExecutableIdentitiesForRep(client, ORG, AHMAD, date)
       expect(ownerStillSees.some((row) => row.id === identityId)).toBe(true)
+    } finally {
+      await cleanupFixture(client, profileId, identityId)
+    }
+  }, 180_000)
+
+  it('the reconciliation scan finds and repairs drift without touching history', async () => {
+    const client = serviceDbClient()
+    const { profileId, identityId } = await seedFixture(client)
+    try {
+      await assignPrimaryResponsibility(client, { orgId: ORG, identityId, repId: AHMAD, actorRepId: ACTOR, ensureTargets: false })
+      // Seat with no eligibility row.
+      await client.from('profile_coverage').insert({
+        organization_id: ORG, profile_id: profileId, rep_id: DAWOOD, role: 'OPERATOR', priority: 1, active: true, created_by: ACTOR,
+      })
+      // Eligibility with no seat.
+      await client.from('identity_assignments').insert({
+        organization_id: ORG, revenue_identity_id: identityId, rep_id: MADIHA, assigned_by: ACTOR,
+      })
+
+      const before = await scanAssignmentDrift(client, ORG)
+      const seatOnly = before.findings.find((row) => row.kind === 'seat_without_eligibility' && row.repId === DAWOOD)
+      const eligibilityOnly = before.findings.find((row) => row.kind === 'eligibility_without_seat' && row.repId === MADIHA)
+      expect(seatOnly, 'seat without eligibility').toBeTruthy()
+      expect(eligibilityOnly, 'eligibility without seat').toBeTruthy()
+
+      const repaired = await repairAssignmentDrift(client, ORG, [seatOnly, eligibilityOnly], ACTOR)
+      expect(repaired.applied.sort()).toEqual(['eligibility_without_seat', 'seat_without_eligibility'])
+      expect(repaired.skipped).toEqual([])
+
+      const after = repaired.report
+      expect(after.findings.some((row) => row.kind === 'seat_without_eligibility' && row.repId === DAWOOD && row.profileId === profileId)).toBe(false)
+      expect(after.findings.some((row) => row.kind === 'eligibility_without_seat' && row.repId === MADIHA && row.profileId === profileId)).toBe(false)
     } finally {
       await cleanupFixture(client, profileId, identityId)
     }
