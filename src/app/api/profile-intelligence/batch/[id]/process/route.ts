@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth/organization'
-import { createServiceSupabase } from '@/lib/supabase/service'
+import { createProfileClient } from '@/lib/supabase/service'
 import { DocumentParseError, parseDocument } from '@/lib/profile-intelligence/parse-document'
 import { parseSpreadsheet, spreadsheetToText } from '@/lib/profile-intelligence/parse-spreadsheet'
 import { runExtractionPipeline, synthesizeAiContext } from '@/lib/profile-intelligence/pipeline'
@@ -52,7 +52,7 @@ export async function POST(
   }
 
   const deadline = Date.now() + TIME_BUDGET_MS
-  const client: Db = createServiceSupabase()
+  const client: Db = createProfileClient()
   const orgId = authCtx.orgId
 
   const { data: batch, error: batchError } = await client
@@ -637,6 +637,7 @@ async function writeOutcome(client: Db, sourceId: string, outcome: SourceOutcome
   if (error) {
     // Older databases lack extraction_result: save the status regardless.
     delete fields.extraction_result
+    delete fields.detected_people
     const retry = await updateSource(client, sourceId, fields)
     if (retry.error) console.error('[profile-intelligence] could not save source outcome:', retry.error.message)
   }

@@ -71,6 +71,30 @@ Backend fixes:
   schedules;
 - the apply path now writes parsed schedules (previously parsed but dropped).
 
+### 5. CV upload / profile creation fixed (two root causes)
+
+Uploading a CV failed with "The document was processed, but no profile was
+created." Two independent defects:
+
+1. **Storage download crashed.** The batch processor used the plain service
+   client (`createServiceSupabase()`), which has no `.storage`, then called
+   `client.storage.from('profile-sources').download(...)` →
+   `Cannot read properties of undefined (reading 'from')`. It now uses
+   `createProfileClient()`, which carries the Postgres storage adapter.
+2. **jsonb writes failed.** Under the `postgres` provider the driver sends a JS
+   array as a Postgres array literal (`{a,b}`), which is invalid JSON, so every
+   profile insert failed with `invalid input syntax for type json`. The shared
+   query builder now stringifies arrays/objects bound for jsonb columns
+   (`writeValue` + the schema's jsonb column set), fixing profile creation,
+   profile editing, knowledge edits and revenue-identity writes at once.
+
+The wizard also surfaces the processor's real error instead of a generic
+message.
+
+Verified against the attached `Aleena_Saman_CV.docx`: parse → extraction
+("Aleena Saman", Lead Software Engineer, Spark Solutions) → insert all succeed,
+with the insert rolled back so no production row was written.
+
 ## Verified
 
 | Gate | Result |
