@@ -61,6 +61,7 @@ export function PersonProfilesWorkspace(props: {
   businessDate: string
   error?: boolean
   reps: RepOption[]
+  canManageIdentities: boolean
 }) {
   return <WorkspaceInner {...props} />
 }
@@ -70,11 +71,13 @@ function WorkspaceInner({
   businessDate,
   error = false,
   reps,
+  canManageIdentities,
 }: {
   profiles: TeamProfileDirectoryRow[]
   businessDate: string
   error?: boolean
   reps: RepOption[]
+  canManageIdentities: boolean
 }) {
   const searchParams = useSearchParams()
   const [density, setDensity] = useState<Density>('cards')
@@ -151,13 +154,15 @@ function WorkspaceInner({
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => setWizardOpen(true)}
-            className="rounded-lg bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
-          >
-            Add account
-          </button>
+          {canManageIdentities && (
+            <button
+              type="button"
+              onClick={() => setWizardOpen(true)}
+              className="rounded-lg bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+            >
+              Add account
+            </button>
+          )}
         </div>
       </div>
 
@@ -208,7 +213,7 @@ function WorkspaceInner({
       </div>
 
       {density === 'table' ? (
-        <TeamProfilesTable profiles={profiles} businessDate={businessDate} error={error} reps={reps} />
+        <TeamProfilesTable profiles={profiles} businessDate={businessDate} error={error} reps={reps} canManageIdentities={canManageIdentities} />
       ) : filtered.length === 0 ? (
         <V4Empty title="No people match this view" body="Adjust the filters or add an account." />
       ) : (
@@ -220,6 +225,7 @@ function WorkspaceInner({
               expanded={expanded.has(profile.profileId)}
               onToggle={() => toggleExpand(profile.profileId)}
               onAssign={(channel) => setAssign({ channel, profileId: profile.profileId })}
+              canManageIdentities={canManageIdentities}
             />
           ))}
         </div>
@@ -254,11 +260,13 @@ function PersonCard({
   expanded,
   onToggle,
   onAssign,
+  canManageIdentities,
 }: {
   profile: TeamProfileDirectoryRow
   expanded: boolean
   onToggle: () => void
   onAssign: (channel: TeamProfileChannelDetail) => void
+  canManageIdentities: boolean
 }) {
   const issues: string[] = []
   if (!profile.primaryRepName) issues.push('No primary')
@@ -334,13 +342,15 @@ function PersonCard({
                     </div>
                   </dl>
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => onAssign(channel)}
-                      className="rounded-md border border-line px-2.5 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink"
-                    >
-                      Assign operators
-                    </button>
+                    {canManageIdentities && (
+                      <button
+                        type="button"
+                        onClick={() => onAssign(channel)}
+                        className="rounded-md border border-line px-2.5 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink"
+                      >
+                        Assign operators
+                      </button>
+                    )}
                     <Link href={`/team/profiles/${profile.profileId}?tab=execution`} className="rounded-md border border-line px-2.5 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink">
                       Configure target
                     </Link>

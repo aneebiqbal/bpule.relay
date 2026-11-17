@@ -57,6 +57,7 @@ export default async function TeamProfilesPage() {
       businessDate={businessDate}
       error={loadError}
       reps={reps}
+      canManageIdentities={ctx.isAdmin || ctx.isOwner || ctx.capabilities.has('MANAGE_REVENUE_IDENTITIES')}
     />
   )
 }
