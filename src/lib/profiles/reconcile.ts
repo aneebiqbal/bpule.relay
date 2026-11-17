@@ -20,6 +20,7 @@ export type ReconcileKind =
   | 'eligibility_without_seat'
   | 'seat_without_eligibility'
   | 'multiple_active_primaries'
+  | 'active_plan_without_primary'
   | 'seat_on_archived_identity'
   | 'seat_on_archived_profile'
   | 'orphaned_eligibility'
@@ -31,6 +32,12 @@ export interface ReconcileFinding {
   identityId: string | null
   repId: string
   detail: string
+  /** Canonical state proposed for this record; never applied here. */
+  proposed?: {
+    primaryRepId?: string | null
+    removeEligibilityRepIds?: string[]
+    addEligibilityRepIds?: string[]
+  }
 }
 
 export interface ReconcileReport {
@@ -45,17 +52,21 @@ export const RECONCILE_KINDS: ReconcileKind[] = [
   'eligibility_without_seat',
   'seat_without_eligibility',
   'multiple_active_primaries',
+  'active_plan_without_primary',
   'seat_on_archived_identity',
   'seat_on_archived_profile',
   'orphaned_eligibility',
   'orphaned_seat',
 ]
 
-export async function scanAssignmentDrift(client: DbClient, orgId: string): Promise<ReconcileReport> {  const [seatsRes, eligibilityRes, identityRes, profileRes] = await Promise.all([
+export async function scanAssignmentDrift(client: DbClient, orgId: string): Promise<ReconcileReport> {  const [seatsRes, eligibilityRes, identityRes, profileRes, planRes, primaryHistoryRes] = await Promise.all([
     client.from('profile_coverage').select('profile_id, rep_id, role, active').eq('organization_id', orgId).limit(5000),
     client.from('identity_assignments').select('revenue_identity_id, rep_id').eq('organization_id', orgId).limit(5000),
     client.from('revenue_identities').select('id, profile_id, status').eq('organization_id', orgId).limit(5000),
     client.from('profiles').select('id, archived_at').eq('organization_id', orgId).limit(5000),
+    client.from('daily_target_plans').select('revenue_identity_id').eq('organization_id', orgId).eq('active', true).limit(5000),
+    // Every PRIMARY seat ever recorded, so a repair can name the last known owner.
+    client.from('profile_coverage').select('profile_id, rep_id').eq('organization_id', orgId).eq('role', 'PRIMARY').limit(5000),
   ])
 
   const seats = (seatsRes.data ?? []) as Array<{ profile_id: string; rep_id: string; role: string; active: boolean }>
@@ -100,6 +111,41 @@ export async function scanAssignmentDrift(client: DbClient, orgId: string): Prom
         detail: `${count} active PRIMARY seats`,
       })
     }
+  }
+
+  // An active plan with no active PRIMARY. The proposal names the last known
+  // owner when history has one; it is reported, never applied.
+  const activePrimaryByProfile = new Map<string, string>()
+  for (const [profileId, count] of primaries) {
+    if (count === 1) {
+      const seat = activeSeats.find((row) => row.profile_id === profileId && row.role === 'PRIMARY')
+      if (seat) activePrimaryByProfile.set(profileId, seat.rep_id)
+    }
+  }
+  const lastKnownPrimary = new Map<string, string>()
+  for (const row of (primaryHistoryRes.data ?? []) as Array<{ profile_id: string; rep_id: string }>) {
+    lastKnownPrimary.set(row.profile_id, row.rep_id)
+  }
+  const seenPlanGap = new Set<string>()
+  for (const plan of (planRes.data ?? []) as Array<{ revenue_identity_id: string }>) {
+    const identity = identityById.get(plan.revenue_identity_id)
+    if (!identity?.profile_id) continue
+    const profileId = identity.profile_id
+    if (activePrimaryByProfile.has(profileId)) continue
+    const dedupeKey = `${profileId}:${plan.revenue_identity_id}`
+    if (seenPlanGap.has(dedupeKey)) continue
+    seenPlanGap.add(dedupeKey)
+    const proposed = lastKnownPrimary.get(profileId) ?? null
+    push({
+      kind: 'active_plan_without_primary',
+      profileId,
+      identityId: plan.revenue_identity_id,
+      repId: proposed ?? '',
+      detail: proposed
+        ? 'active plan but no active PRIMARY; the last known owner is available'
+        : 'active plan but no active PRIMARY and no historical owner',
+      proposed: { primaryRepId: proposed },
+    })
   }
 
   for (const seat of activeSeats) {

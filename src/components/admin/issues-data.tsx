@@ -15,6 +15,7 @@ const LABELS: Record<ReconcileKind, string> = {
   eligibility_without_seat: 'Eligibility without a seat',
   seat_without_eligibility: 'Seat without eligibility',
   multiple_active_primaries: 'Multiple active primaries',
+  active_plan_without_primary: 'Active plan without a primary',
   seat_on_archived_identity: 'Seat on an archived channel',
   seat_on_archived_profile: 'Seat on an archived profile',
   orphaned_eligibility: 'Orphaned eligibility',
@@ -159,6 +160,12 @@ export function IssuesData({ report, isAdmin }: { report: ReconcileReport; isAdm
                     {finding.identityId ? ` · Channel ${finding.identityId.slice(0, 8)}` : ''}
                     {finding.repId ? ` · Rep ${finding.repId.slice(0, 8)}` : ''}
                   </p>
+                  {finding.proposed?.primaryRepId && (
+                    <p className="text-[11px] text-graphite">
+                      Proposed primary: <span className="font-medium text-ink">{finding.proposed.primaryRepId.slice(0, 8)}</span>
+                      {' '}(review required — not applied)
+                    </p>
+                  )}
                 </div>
                 {!canRepair && <span className="text-[11px] text-stone">Review manually</span>}
               </li>

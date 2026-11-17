@@ -436,6 +436,77 @@ export async function ensureOperatorAcknowledgement(
   }
 }
 
+/**
+ * Seed OPERATOR acknowledgements for a whole chain in one pass.
+ *
+ * Same semantics as calling `ensureOperatorAcknowledgement` per seat — an
+ * unchanged `source_row_id` does not re-arm, a new one re-arms, a missing row
+ * is created — but one read plus one insert instead of two round trips per
+ * operator.
+ */
+export async function ensureOperatorAcknowledgements(
+  client: DbClient,
+  seats: Array<{ organizationId: string; profileId: string; repId: string; sourceRowId: string; assignedAt: string }>,
+): Promise<void> {
+  if (seats.length === 0) return
+  const { data: existingRows, error: readError } = await client
+    .from('responsibility_acknowledgements')
+    .select('id, rep_id, source_row_id')
+    .eq('organization_id', seats[0].organizationId)
+    .eq('profile_id', seats[0].profileId)
+    .eq('subject', 'OPERATOR')
+    .limit(500)
+  if (readError) {
+    console.warn('[responsibility] operator acknowledgement read failed', readError.message)
+    return
+  }
+
+  const existingByRep = new Map<string, { id: string; source_row_id: string | null }>()
+  for (const row of existingRows ?? []) existingByRep.set(row.rep_id, row)
+
+  const inserts: Array<Record<string, unknown>> = []
+  const updates: Array<{ id: string; sourceRowId: string; assignedAt: string }> = []
+  const seen = new Set<string>()
+  for (const seat of seats) {
+    if (seen.has(seat.repId)) continue
+    seen.add(seat.repId)
+    const existing = existingByRep.get(seat.repId)
+    if (existing && existing.source_row_id === seat.sourceRowId) continue
+    if (existing) {
+      updates.push({ id: existing.id as string, sourceRowId: seat.sourceRowId, assignedAt: seat.assignedAt })
+    } else {
+      inserts.push({
+        organization_id: seat.organizationId,
+        profile_id: seat.profileId,
+        rep_id: seat.repId,
+        subject: 'OPERATOR',
+        source_row_id: seat.sourceRowId,
+        assigned_at: seat.assignedAt,
+        acknowledged_at: null,
+      })
+    }
+  }
+
+  if (inserts.length > 0) {
+    const { error } = await client.from('responsibility_acknowledgements').insert(inserts)
+    if (error && (error as { code?: string }).code !== '23505') {
+      console.warn('[responsibility] operator acknowledgement batch failed', error.message)
+    }
+  }
+  for (const update of updates) {
+    const { error } = await client
+      .from('responsibility_acknowledgements')
+      .update({
+        source_row_id: update.sourceRowId,
+        assigned_at: update.assignedAt,
+        acknowledged_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', update.id)
+    if (error) console.warn('[responsibility] operator acknowledgement re-arm failed', error.message)
+  }
+}
+
 /** Drop the OPERATOR acknowledgement when the seat is removed. */
 export async function deleteOperatorAcknowledgement(
   client: DbClient,

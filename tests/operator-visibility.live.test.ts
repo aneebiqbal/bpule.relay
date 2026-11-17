@@ -142,6 +142,37 @@ describeLive('OPERATOR_VISIBILITY', () => {
     }
   }, 180_000)
 
+  it('the scanner proposes a repair for an active plan with no primary', async () => {
+    const client = serviceDbClient()
+    const stamp = `${Date.now()}-plan`
+    const label = `ZZ Plan Gap ${stamp}`
+    const { data: profile } = await client.from('profiles').insert({
+      organization_id: ORG, rep_id: ACTOR, platform: 'upwork', full_name: label, display_name: label, label,
+    }).select('id').single()
+    const { data: identity } = await client.from('revenue_identities').insert({
+      organization_id: ORG, profile_id: profile.id, identity_name: label, channel: 'upwork', status: 'active', slug: `zz-plan-${stamp}`,
+    }).select('id').single()
+    try {
+      // Historical owner (now inactive) and an active plan with no active primary.
+      await client.from('profile_coverage').insert({
+        organization_id: ORG, profile_id: profile.id, rep_id: AHMAD, role: 'PRIMARY', priority: 1, active: false, created_by: ACTOR,
+      })
+      await client.from('daily_target_plans').insert({
+        organization_id: ORG, revenue_identity_id: identity.id, activity_type: 'application', target_count: 10, targetable: true, active: true, created_by: ACTOR,
+      })
+
+      const report = await scanAssignmentDrift(client, ORG)
+      const finding = report.findings.find(
+        (row) => row.kind === 'active_plan_without_primary' && row.profileId === profile.id && row.identityId === identity.id,
+      )
+      expect(finding, 'plan-without-primary finding').toBeTruthy()
+      expect(finding?.proposed?.primaryRepId).toBe(AHMAD)
+    } finally {
+      await cleanupFixture(client, profile.id, identity.id)
+      await client.from('daily_target_plans').delete().eq('revenue_identity_id', identity.id)
+    }
+  }, 180_000)
+
   it('the reconciliation scan finds and repairs drift without touching history', async () => {
     const client = serviceDbClient()
     const { profileId, identityId } = await seedFixture(client)

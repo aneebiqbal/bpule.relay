@@ -4,7 +4,7 @@ import type { CoverageMode } from './engine'
 import { isCoverageExecutionMode, type CoverageExecutionMode } from './access'
 import {
   ensureCoverageAcknowledgement,
-  ensureOperatorAcknowledgement,
+  ensureOperatorAcknowledgements,
   ensurePrimaryAcknowledgement,
 } from '@/lib/responsibility/load'
 import { syncChannelEligibility } from '@/lib/profiles/assignment'
@@ -747,17 +747,18 @@ export async function configureCoverage(input: {
       assignedAt: now,
     })
   }
-  for (const operator of uniqueRows.filter((row) => row.role === 'OPERATOR')) {
-    const rowId = insertedByRep.get(operator.repId)
-    if (!rowId) continue
-    await ensureOperatorAcknowledgement(client, {
+  // One batched acknowledgement seed for the whole operator chain.
+  const operatorSeats = uniqueRows
+    .filter((row) => row.role === 'OPERATOR')
+    .map((row) => ({
       organizationId: input.organizationId,
       profileId: input.profileId,
-      repId: operator.repId,
-      sourceRowId: rowId,
+      repId: row.repId,
+      sourceRowId: insertedByRep.get(row.repId),
       assignedAt: now,
-    })
-  }
+    }))
+    .filter((seat): seat is typeof seat & { sourceRowId: string } => Boolean(seat.sourceRowId))
+  await ensureOperatorAcknowledgements(client, operatorSeats)
 
   await client.from('coverage_events').insert({
     organization_id: input.organizationId,

@@ -581,15 +581,18 @@ async function notifyAssigned(
       orgBusinessDate(client, input.orgId),
       planSummary(client, input.orgId, input.identityId),
     ])
-    const { error } = await client.from('notifications').insert({
-      organization_id: input.orgId,
-      recipient_id: input.repId,
-      notification_type: 'identity_assigned',
-      title: input.title,
-      body: `${input.identityName} · ${normalizeChannel(input.channel)}\n\nDaily plan:\n${summary}`,
-      link: `/team/profiles/${input.profileId}`,
-      dedupe_key: `responsibility_assigned:${input.subject}:${input.repId}:${input.identityId}:${businessDate}`,
-    })
+    const { error } = await client.from('notifications').upsert(
+      {
+        organization_id: input.orgId,
+        recipient_id: input.repId,
+        notification_type: 'identity_assigned',
+        title: input.title,
+        body: `${input.identityName} · ${normalizeChannel(input.channel)}\n\nDaily plan:\n${summary}`,
+        link: `/team/profiles/${input.profileId}`,
+        dedupe_key: `responsibility_assigned:${input.subject}:${input.repId}:${input.identityId}:${businessDate}`,
+      },
+      { onConflict: 'recipient_id,dedupe_key' },
+    )
     if (error) console.warn('[assignment] notification failed', error.message)
   } catch (error) {
     // A notification must never fail a committed assignment.
