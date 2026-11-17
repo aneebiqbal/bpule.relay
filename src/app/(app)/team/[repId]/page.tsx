@@ -46,7 +46,8 @@ import { RepOperatingPlanView, type AssignableIdentity } from '@/components/team
 import { loadRepOperatingPlan } from '@/lib/operations/rep-operating-plan'
 import { can } from '@/lib/auth/organization'
 import { personNameFromProfile } from '@/lib/profiles/person-name'
-import { channelLabel, normalizeChannel } from '@/lib/profiles/channel'
+import { normalizeChannel } from '@/lib/profiles/channel'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import { availabilityLabel } from '@/lib/coverage/load'
 import type { AvailabilityState } from '@/lib/coverage/engine'
 
@@ -414,7 +415,7 @@ function ProfilesTab({ basics }: { basics: RepBasics }) {
             <li key={identity.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-medium text-ink">{identity.name}</p>
-                <p className="text-[11px] text-stone">{identity.channel ? channelLabel(identity.channel) : 'Channel unknown'}</p>
+                <p className="text-[11px] text-stone">{identity.channel ? <ChannelBadge channel={identity.channel} /> : 'Channel unknown'}</p>
               </div>
               {identity.profileId && (
                 <Link

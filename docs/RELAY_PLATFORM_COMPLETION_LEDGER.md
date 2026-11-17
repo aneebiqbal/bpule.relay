@@ -38,6 +38,21 @@ Replaces the flat checkbox grid with the required flow:
 New pure module `src/components/coverage/people-chain-diff.ts` (framework-free,
 unit-tested) so the UI and the tests share one change set.
 
+### 3. Real LinkedIn / Upwork brand marks on every profile mention
+
+`ChannelBadge` — the one component that names a channel — used generic Lucide
+icons (`Users`, `Briefcase`). The official Simple Icons glyphs (LinkedIn
+`#0A66C2`, Upwork `#6FDA44`) are now the single brand source in
+`channel-logo.tsx`, and `ChannelBadge` renders them. Text-only channel mentions
+were replaced with the badge on: Team command center (operator + profile
+matrix), People profiles workspace, profile detail identity list, profile
+switcher, responsibility workspace header, and the Manage People dialog
+subtitle. `Dialog` titles accept a node so the Transfer/Remove dialogs can carry
+the mark.
+
+Native `<select>` options (Upwork profile picker, target manager, channel
+filter) keep text labels — options cannot render SVG consistently.
+
 ## Verified
 
 | Gate | Result |

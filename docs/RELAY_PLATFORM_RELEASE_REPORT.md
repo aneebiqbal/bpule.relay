@@ -43,6 +43,8 @@ dialog still calls the canonical `configureCoverage` writer.
 - Coverage capability parity: writer accepts `MANAGE_REVENUE_IDENTITIES`; every
   identity write (assign people, add account/profile) is hidden from roles that
   cannot write.
+- Real LinkedIn/Upwork brand marks replace generic Lucide icons and raw channel
+  text on every profile/channel mention.
 
 ## 6. Design / navigation
 

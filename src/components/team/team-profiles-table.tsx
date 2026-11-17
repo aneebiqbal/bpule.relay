@@ -379,7 +379,7 @@ function PersonRow({ profile, reps, canManageIdentities }: { profile: TeamProfil
             <ManagePeopleDialog
               profileId={manageChannel.profileId ?? profile.profileId}
               identityName={manageChannel.identityName}
-              channel={channelLabel(manageChannel.channel)}
+              channel={manageChannel.channel}
               primaryRepId={profile.primaryRepId}
               operators={manageChannel.operatorRepIds.map((repId) => ({
                 repId,

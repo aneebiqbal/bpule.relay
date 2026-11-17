@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronUp, Search } from 'lucide-react'
 import { diffPeopleChain, type ChainSeat } from './people-chain-diff'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 
 interface Seat {
   repId: string
@@ -46,7 +47,7 @@ export function ManagePeopleDialog({
 }: {
   profileId: string
   identityName: string
-  channel: string
+  channel: string | null | undefined
   primaryRepId: string | null
   operators: Seat[]
   backups: Seat[]
@@ -165,8 +166,10 @@ export function ManagePeopleDialog({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-[14px] font-medium text-ink">Manage people</h3>
-            <p className="mt-0.5 text-[12px] text-stone">
-              {identityName} · {channel}
+            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-stone">
+              <span className="truncate">{identityName}</span>
+              <span>·</span>
+              <ChannelBadge channel={channel} />
             </p>
           </div>
           <button

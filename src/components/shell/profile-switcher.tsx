@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { cn } from 'cn'
 import { useActiveIdentity } from '@/components/workspace/active-identity-provider'
-import { channelLabel } from '@/lib/profiles/channel'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import type { RepRole } from '@/lib/domain/types'
 import type { WorkspaceIdentity } from '@/lib/workspace/active-identity'
 
@@ -62,13 +62,9 @@ export function ProfileSwitcher({ role, compact, className }: ProfileSwitcherPro
           {activeIdentity ? (
             <>
               <p className="truncate text-[13px] font-medium text-ink">{activeIdentity.identityName}</p>
-              <p className="truncate text-[10px] text-stone">
-                {[
-                  channelLabel(activeIdentity.channel),
-                  identities.length > 1 ? `${identities.length} profiles assigned` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+              <p className="flex flex-wrap items-center gap-1.5 text-[10px] text-stone">
+                <ChannelBadge channel={activeIdentity.channel} />
+                {identities.length > 1 ? <span>{identities.length} profiles assigned</span> : null}
               </p>
             </>
           ) : (
@@ -109,8 +105,9 @@ export function ProfileSwitcher({ role, compact, className }: ProfileSwitcherPro
                         <span className={cn('size-1.5 shrink-0 rounded-full', selected ? 'bg-orange' : 'bg-stone/40')} />
                         <div className="min-w-0">
                           <p className="truncate text-[12px] font-medium">{identity.identityName}</p>
-                          <p className={cn('truncate text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
-                            {[identity.title, channelLabel(identity.channel)].filter(Boolean).join(' · ')}
+                          <p className={cn('flex flex-wrap items-center gap-1.5 text-[10px]', selected ? 'text-on-solid/70' : 'text-graphite')}>
+                            {identity.title ? <span className="truncate">{identity.title}</span> : null}
+                            <ChannelBadge channel={identity.channel} />
                           </p>
                         </div>
                       </button>

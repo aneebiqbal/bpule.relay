@@ -13,6 +13,7 @@ import Link from 'next/link'
 import { cn } from 'cn'
 import { V4Panel, V4PanelHeader, V4StatStrip, V4Chip, V4Empty, V4PageHeader } from '@/components/v4/primitives'
 import { TimelineTable, InlineError } from '@/components/operations/ops-primitives'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import type { CommandCenterData, CommandMatrixRow } from '@/lib/team/command-center'
 import { AssignmentDrawer } from './assignment-drawer'
 import { SetupAssistant } from './setup-assistant'
@@ -214,7 +215,11 @@ export function TeamCommandCenter({
                           <Link href={`/team/profiles/${assignment.profileId}`} className="truncate text-[12px] font-medium text-ink hover:underline">
                             {assignment.profileName}
                           </Link>
-                          <span className="block truncate text-[10px] text-stone">{assignment.channels.join(' · ') || '—'}</span>
+                          <span className="mt-0.5 flex flex-wrap gap-1">
+                            {assignment.channels.length > 0
+                              ? assignment.channels.map((channel) => <ChannelBadge key={channel} channel={channel} />)
+                              : <span className="text-[10px] text-stone">—</span>}
+                          </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-2">
                           <V4Chip tone={assignment.role === 'PRIMARY' ? 'info' : assignment.role === 'OPERATOR' ? 'neutral' : 'neutral'}>
@@ -365,7 +370,13 @@ function MatrixRow({ row }: { row: CommandMatrixRow }) {
               {assignment.profileName}
             </Link>
           </td>
-          <td className="py-2.5 pr-3 text-[12px] text-graphite">{assignment.channels.join(' · ') || '—'}</td>
+          <td className="py-2.5 pr-3">
+            <span className="flex flex-wrap gap-1">
+              {assignment.channels.length > 0
+                ? assignment.channels.map((channel) => <ChannelBadge key={channel} channel={channel} />)
+                : <span className="text-[12px] text-graphite">—</span>}
+            </span>
+          </td>
           <td className="py-2.5 pr-3">
             <V4Chip tone={assignment.role === 'PRIMARY' ? 'info' : assignment.role === 'OPERATOR' ? 'neutral' : 'neutral'}>
               {assignment.role === 'PRIMARY' ? 'Primary' : assignment.role === 'OPERATOR' ? 'Operator' : 'Backup'}

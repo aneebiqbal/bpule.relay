@@ -14,6 +14,7 @@ import { useSearchParams } from 'next/navigation'
 import { cn } from 'cn'
 import { V4Chip, V4Empty, V4StatStrip } from '@/components/v4/primitives'
 import { ChannelLogo } from '@/components/ui/channel-logo'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 import { ManagePeopleDialog } from '@/components/coverage/manage-people-dialog'
 import { TeamProfilesTable } from './team-profiles-table'
 import { AddProfileWizard } from './add-profile-wizard'
@@ -286,10 +287,12 @@ function PersonCard({
               <Link href={`/team/profiles/${profile.profileId}`} className="truncate text-[15px] font-medium text-ink hover:underline">
                 {profile.profileName}
               </Link>
-              <p className="mt-0.5 text-[11px] text-stone">
-                {profile.channels.length > 0 ? profile.channels.join(' · ') : 'No channel'}
-                {' · '}
-                {profile.primaryRepName ? `Primary ${profile.primaryRepName}` : 'No primary'}
+              <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-stone">
+                {profile.channels.length > 0
+                  ? profile.channels.map((channel) => <ChannelBadge key={channel} channel={channel} />)
+                  : <span>No channel</span>}
+                <span>·</span>
+                <span>{profile.primaryRepName ? `Primary ${profile.primaryRepName}` : 'No primary'}</span>
               </p>
             </div>
           </div>
