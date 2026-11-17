@@ -1,6 +1,6 @@
 # Relay — Platform Completion Release Report
 
-Branch `feat/relay-completion-program` · not pushed · not deployed.
+Branch `feat/relay-completion-program` · pushed for review · not merged · not deployed.
 Companion docs: audit, ledger, acceptance matrix.
 
 ## 1. Routes audited
@@ -16,16 +16,17 @@ review/confirm (fixed here); knowledge scope merged account data (fixed earlier,
 merged).
 
 **P1** — `/team/eval` orphaned; coverage API is `isAdmin`-only while sibling
-assignment APIs accept `MANAGE_REVENUE_IDENTITIES`; cold-start latency on first
-authenticated load.
+assignment APIs accept `MANAGE_REVENUE_IDENTITIES` (fixed here); cold-start
+latency on first authenticated load.
 
 **P2** — Admin deep pages rely on the System / Quality hub rather than the rail.
 
 ## 3. Resolved vs remaining
 
 Resolved this branch: Assign People rebuild (edit → review → confirm, search,
-bulk, before/after diff, preserved canonical writer).
-Remaining: the three P1s, plus the broader 200-hour program (Sales/LinkedIn/
+bulk, before/after diff, preserved canonical writer); coverage capability parity
+(managers no longer see an action that 403s).
+Remaining: the remaining P1s, plus the broader 200-hour program (Sales/LinkedIn/
 Upwork/Inbox AI, Content/Growth, reporting, Playwright journeys) which this
 branch does not claim.
 
@@ -39,6 +40,9 @@ dialog still calls the canonical `configureCoverage` writer.
 
 - Assign People: current-state panel, searchable operators, bulk select/clear,
   exact diff review, explicit confirm, no-change short-circuit, saved state.
+- Coverage capability parity: writer accepts `MANAGE_REVENUE_IDENTITIES`; every
+  identity write (assign people, add account/profile) is hidden from roles that
+  cannot write.
 
 ## 6. Design / navigation
 
@@ -75,12 +79,12 @@ mutation path found. No schema or migration change.
 |---|---|
 | TypeScript | clean |
 | ESLint (changed source) | 0 errors |
-| Unit | **391 files / 5,745 passed** |
-| Live-DB | **19 files / 136 passed, 12 skipped** |
+| Unit | **391 files / 5,747 passed** |
+| Live-DB | **19 files / 136 passed, 12 skipped**; one run had a transient 180s timeout in `v611-multi-operator-acceptance` (a DB-bound test that does not touch this branch); it passed on isolated re-run |
 | Build | exit 0, standalone present |
 
-New: `tests/people-chain-diff.test.ts` (8 tests) covering the diff and the
-dialog's write contract.
+New: `tests/people-chain-diff.test.ts` (10 tests) covering the diff, the
+dialog's write contract, and coverage capability parity.
 
 ## 12. Performance
 
@@ -97,7 +101,9 @@ visual claim is made.
 ## 14. Limitations
 
 - Rep/manager browser journeys and mobile/tablet checks not performed.
-- Live-DB suite is slow (~12 min) against the shared host; it passed, not failed.
+- Live-DB suite is slow (~12 min) against the shared host; one DB-bound test
+  timed out once and passed on isolated re-run (transient, unrelated to this
+  branch).
 - The full 200-hour program is far from complete; this is one verified slice.
 
 ## 15. Decision

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthContext } from '@/lib/auth/organization'
+import { getAuthContext, can } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { configureCoverage } from '@/lib/coverage/actions'
 
@@ -17,7 +17,12 @@ export async function POST(
 ) {
   const ctx = await getAuthContext()
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!ctx.isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // Same capability as the bulk assignment and knowledge writers: a manager
+  // granted MANAGE_REVENUE_IDENTITIES manages its assignments. Admin-only here
+  // was a visible 403 for exactly those managers.
+  if (!ctx.isAdmin && !can(ctx, 'MANAGE_REVENUE_IDENTITIES')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { profileId } = await params
   const body = (await req.json().catch(() => ({}))) as {

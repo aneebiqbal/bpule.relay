@@ -52,6 +52,31 @@ describe('PEOPLE_CHAIN_DIFF', () => {
   })
 })
 
+describe('COVERAGE_CAPABILITY_PARITY', () => {
+  const coverage = readFileSync(
+    'src/app/api/team/profiles/[profileId]/coverage/route.ts',
+    'utf8',
+  )
+  const workspace = readFileSync(
+    'src/components/team/person-profiles-workspace.tsx',
+    'utf8',
+  )
+
+  it('the per-profile writer accepts the same capability as the bulk writer', () => {
+    expect(coverage).toContain("can(ctx, 'MANAGE_REVENUE_IDENTITIES')")
+    expect(coverage).not.toMatch(/if \(!ctx\.isAdmin\) return NextResponse/)
+  })
+
+  it('identity write actions are hidden from roles that cannot write', () => {
+    expect(workspace).toContain('canManageIdentities')
+    expect(workspace).toContain('{canManageIdentities && (')
+    expect(workspace).toContain('Add account')
+    expect(readFileSync('src/components/team/team-profiles-table.tsx', 'utf8')).toContain(
+      'canManageIdentities',
+    )
+  })
+})
+
 describe('MANAGE_PEOPLE_DIALOG_CONTRACT', () => {
   const source = readFileSync('src/components/coverage/manage-people-dialog.tsx', 'utf8')
 

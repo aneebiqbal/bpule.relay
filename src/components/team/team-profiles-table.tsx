@@ -65,6 +65,7 @@ export function TeamProfilesTable(props: {
   businessDate: string
   error?: boolean
   reps: RepOption[]
+  canManageIdentities: boolean
 }) {
   return (
     <Suspense fallback={<TeamProfilesTableInner {...props} />}>
@@ -78,11 +79,13 @@ function TeamProfilesTableInner({
   businessDate,
   error = false,
   reps,
+  canManageIdentities,
 }: {
   profiles: TeamProfileDirectoryRow[]
   businessDate: string
   error?: boolean
   reps: RepOption[]
+  canManageIdentities: boolean
 }) {
   const searchParams = useSearchParams()
   const [view, setView] = useState<View>(() =>
@@ -154,13 +157,15 @@ function TeamProfilesTableInner({
           >
             Assign profile
           </button>
-          <button
-            type="button"
-            onClick={() => setWizardOpen(true)}
-            className="rounded-lg bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
-          >
-            Add profile
-          </button>
+          {canManageIdentities && (
+            <button
+              type="button"
+              onClick={() => setWizardOpen(true)}
+              className="rounded-lg bg-solid px-3.5 py-2 text-[13px] font-medium text-on-solid transition-transform active:scale-[0.98]"
+            >
+              Add profile
+            </button>
+          )}
         </div>
       </div>
 
@@ -240,7 +245,7 @@ function TeamProfilesTableInner({
             </thead>
             <tbody>
               {filtered.map((profile) => (
-                <PersonRow key={profile.profileId} profile={profile} reps={reps} />
+                <PersonRow key={profile.profileId} profile={profile} reps={reps} canManageIdentities={canManageIdentities} />
               ))}
             </tbody>
           </table>
@@ -248,7 +253,7 @@ function TeamProfilesTableInner({
 
         <div className="space-y-2 p-3 md:hidden">
           {filtered.map((profile) => (
-            <MobilePersonCard key={profile.profileId} profile={profile} reps={reps} />
+            <MobilePersonCard key={profile.profileId} profile={profile} reps={reps} canManageIdentities={canManageIdentities} />
           ))}
         </div>
 
@@ -276,7 +281,7 @@ function TeamProfilesTableInner({
 }
 
 /** One person: header row plus their channels as children. */
-function PersonRow({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: RepOption[] }) {
+function PersonRow({ profile, reps, canManageIdentities }: { profile: TeamProfileDirectoryRow; reps: RepOption[]; canManageIdentities: boolean }) {
   const [manageChannel, setManageChannel] = useState<TeamProfileChannelDetail | null>(null)
   const repNameById = new Map(reps.map((rep) => [rep.id, rep.name]))
   const unavailableNames = reps
@@ -352,13 +357,15 @@ function PersonRow({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: 
                   )}
                   <span className="flex shrink-0 items-center gap-2">
                     <span className="tabular-nums text-ink">{channel.completed} / {channel.target}</span>
-                    <button
-                      type="button"
-                      onClick={() => setManageChannel(channel)}
-                      className="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink"
-                    >
-                      Manage people
-                    </button>
+                    {canManageIdentities && (
+                      <button
+                        type="button"
+                        onClick={() => setManageChannel(channel)}
+                        className="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink"
+                      >
+                        Manage people
+                      </button>
+                    )}
                   </span>
                 </li>
               ))}
@@ -393,7 +400,7 @@ function PersonRow({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: 
 }
 
 /** Mobile card for one person, with the same per-channel management action. */
-function MobilePersonCard({ profile, reps }: { profile: TeamProfileDirectoryRow; reps: RepOption[] }) {
+function MobilePersonCard({ profile, reps, canManageIdentities }: { profile: TeamProfileDirectoryRow; reps: RepOption[]; canManageIdentities: boolean }) {
   const [manageChannel, setManageChannel] = useState<TeamProfileChannelDetail | null>(null)
   const repNameById = new Map(reps.map((rep) => [rep.id, rep.name]))
   const unavailableNames = reps
@@ -436,13 +443,15 @@ function MobilePersonCard({ profile, reps }: { profile: TeamProfileDirectoryRow;
                     : ''}
                 </p>
               )}
-              <button
-                type="button"
-                onClick={() => setManageChannel(channel)}
-                className="mt-1 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink"
-              >
-                Manage people
-              </button>
+              {canManageIdentities && (
+                <button
+                  type="button"
+                  onClick={() => setManageChannel(channel)}
+                  className="mt-1 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink"
+                >
+                  Manage people
+                </button>
+              )}
             </li>
           ))}
         </ul>

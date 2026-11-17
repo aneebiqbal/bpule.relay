@@ -1,11 +1,24 @@
 # Relay — Completion Ledger
 
 Branch: `feat/relay-completion-program` (from `main` at `e0ef467f`).
-Nothing pushed, nothing deployed.
+Pushed for review; not merged; not deployed.
 
 ## Committed on this branch
 
-### 1. Assign People rebuilt (`src/components/coverage/manage-people-dialog.tsx`)
+### 1. Coverage capability parity (visible-control 403)
+
+`/team/profiles` is reachable by managers, and it rendered “Assign operators”
+for them, but `POST /api/team/profiles/[profileId]/coverage` returned 403
+because it required `isAdmin` while the sibling bulk-assignment, knowledge and
+history writers accept `MANAGE_REVENUE_IDENTITIES`.
+
+- the coverage writer now accepts `can(ctx, 'MANAGE_REVENUE_IDENTITIES')`;
+- `PersonProfilesWorkspace` / `TeamProfilesTable` take `canManageIdentities` and
+  hide every identity write (assign people, add account/profile) from roles that
+  cannot write;
+- `/team/profiles` computes the flag from the organization role + capability.
+
+### 2. Assign People rebuilt (`src/components/coverage/manage-people-dialog.tsx`)
 
 Replaces the flat checkbox grid with the required flow:
 
@@ -45,8 +58,6 @@ No production write was performed during verification.
 ## Remaining (not done on this branch)
 
 - P1-1 `/team/eval` has no inbound link.
-- P1-2 coverage API is `isAdmin`-only while sibling assignment APIs accept
-  `MANAGE_REVENUE_IDENTITIES`.
 - P1-3 cold-start latency on first authenticated page load.
 - Full role-based Playwright journey across admin/manager/rep (browser DOM
   checks done; no persistent Playwright suite added).

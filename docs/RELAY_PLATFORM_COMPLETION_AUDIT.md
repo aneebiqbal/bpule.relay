@@ -79,11 +79,11 @@ rep.
 
 ## 5. P1 register
 
-| ID | Issue | Status |
-|---|---|---|
-| P1-1 | `/team/eval` has no inbound link | Open — orphaned manager harness |
-| P1-2 | Coverage API requires `isAdmin` while sibling assignment APIs accept `MANAGE_REVENUE_IDENTITIES` | Open — authorization inconsistency |
-| P1-3 | First-load latency: `/admin` 20.4s, `/admin/people` 16.3s local cold | Open — cold compile + ~1s/query; production `/team` 2.72s |
+| ID | Issue | Status | Evidence |
+|---|---|---|---|
+| P1-1 | `/team/eval` has no inbound link | Open — orphaned manager harness | orphan analysis §7 |
+| P1-2 | Coverage API required `isAdmin` while sibling assignment APIs accept `MANAGE_REVENUE_IDENTITIES` — managers saw “Assign operators” and got a 403 | **Fixed this branch** | coverage route uses `can(ctx, …)`; UI gated by `canManageIdentities` |
+| P1-3 | First-load latency: `/admin` 20.4s, `/admin/people` 16.3s local cold | Open — cold compile + ~1s/query; production `/team` 2.72s | dev-server timings |
 
 ## 6. Duplicate-feature analysis
 

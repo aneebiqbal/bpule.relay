@@ -14,6 +14,8 @@ how each row was checked; “not run” is never counted as pass.
 | 7 | Assign People: bulk + review | exact before/after diff | PASS | browser: added-operator list |
 | 8 | Assign People: no-change | explicit no-write confirm | PASS | browser: “No changes…” |
 | 9 | Assign People: save | canonical write + audit | PASS (code) | `configureCoverage()`; API validates + dedupes |
+| 9a | Manager without the capability opens Profiles | no identity write action | PASS (code) | `canManageIdentities` gate in workspace + table |
+| 9b | Coverage write with `MANAGE_REVENUE_IDENTITIES` | accepted | PASS (code) | route uses `can(ctx, …)` |
 | 10 | Knowledge scope | shared vs account-specific | PASS (code) | per-profile `accountKnowledge` (`47f822d7`) |
 | 11 | Claims provenance | never machine evidence | PASS (code) | `authority='human_verified'`, `user_corrected=true` |
 | 12 | API auth posture | no unauthenticated mutation | PASS (code) | `createScoutStore` throws without a session |
@@ -26,4 +28,4 @@ how each row was checked; “not run” is never counted as pass.
 | 19 | Screenshots | captured | BLOCKED | desktop window not visible; DOM/HTTP used |
 
 **Open P0:** none known.
-**Open P1:** `/team/eval` orphaned; coverage capability inconsistency; cold-start latency.
+**Open P1:** `/team/eval` orphaned; cold-start latency.
