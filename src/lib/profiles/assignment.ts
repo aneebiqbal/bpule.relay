@@ -591,7 +591,7 @@ async function notifyAssigned(
         link: `/team/profiles/${input.profileId}`,
         dedupe_key: `responsibility_assigned:${input.subject}:${input.repId}:${input.identityId}:${businessDate}`,
       },
-      { onConflict: 'recipient_id,dedupe_key' },
+      { onConflict: 'organization_id,recipient_id,dedupe_key' },
     )
     if (error) console.warn('[assignment] notification failed', error.message)
   } catch (error) {

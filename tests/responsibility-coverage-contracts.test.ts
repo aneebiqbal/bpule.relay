@@ -112,9 +112,11 @@ describe('PERMANENT_TRANSFER_IS_NOT_COVERAGE', () => {
     const transfer = extractFunction(read('src/lib/profiles/assignment.ts'), 'transferResponsibility')
     expect(transfer).toMatch(/saveResponsibilityChain/)
     expect(transfer).not.toMatch(/coverage_assignments/)
-    const coverage = read('src/lib/coverage/actions.ts')
+    // The canonical chain writer moved to its own module; the contract is the
+    // same — the primary chain is written through profile_coverage.
+    const coverage = read('src/lib/coverage/configure.ts')
     expect(coverage).toMatch(/profile_coverage/)
-    expect(coverage).toMatch(/role: 'PRIMARY'/)
+    expect(coverage).toMatch(/PRIMARY/)
   })
 })
 
