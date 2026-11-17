@@ -8566,43 +8566,6 @@ export class SupabaseStore implements ScoutStore {
     })
   }
 
-  async getRepAssignments(repId: string): Promise<Array<{
-    assignmentId: string
-    revenueIdentityId: string
-    identityName: string
-    title: string | null
-    channel: string
-  }>> {
-    const { data, error } = await this.client
-      .from('identity_assignments')
-      .select('id, revenue_identity_id')
-      .eq('rep_id', repId)
-      .eq('organization_id', this.orgId)
-    if (error) throw error
-
-    // The identity rows are a second read rather than a PostgREST embed
-    // (`identity:revenue_identities`), which the Neon adapter cannot translate.
-    const ids = (data ?? []).map((a) => a.revenue_identity_id as string)
-    const identityById = new Map<string, Record<string, unknown>>()
-    if (ids.length > 0) {
-      const { data: identityRows } = await this.client
-        .from('revenue_identities')
-        .select('id, identity_name, title, channel')
-        .in('id', ids)
-      for (const row of identityRows ?? []) identityById.set(row.id as string, row)
-    }
-    return (data ?? []).map((a: any) => {
-      const identity = identityById.get(a.revenue_identity_id as string) ?? {}
-      return {
-        assignmentId: a.id,
-        revenueIdentityId: a.revenue_identity_id,
-        identityName: (identity.identity_name as string) ?? 'Unknown',
-        title: (identity.title as string | null) ?? null,
-        channel: (identity.channel as string) ?? 'other',
-      }
-    })
-  }
-
   async getRepInfo(repId: string): Promise<{ id: string; name: string; role: string } | null> {
     const { data, error } = await this.client
       .from('reps')

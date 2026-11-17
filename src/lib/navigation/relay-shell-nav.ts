@@ -176,10 +176,12 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
   {
     id: 'admin',
     label: 'Admin',
-    href: '/admin/people',
+    href: '/admin/control-center',
     icon: ShieldCheck,
     visible: adminUp,
     secondary: [
+      // One control surface for people, channels, operators, targets and data.
+      { id: 'control-center', label: 'Control Center', href: '/admin/control-center', group: 'Operations' },
       { id: 'people-roles', label: 'People & Roles', href: '/admin/people', group: 'Operations' },
       // Admin configures targets; Team reviews target progress. One surface each.
       { id: 'admin-targets', label: 'Daily Targets', href: '/admin/targets', group: 'Operations' },

@@ -9,5 +9,5 @@ export const dynamic = "force-dynamic";
  */
 export default async function AdminPage() {
   await requireProductAdmin();
-  redirect("/admin/people");
+  redirect("/admin/control-center");
 }

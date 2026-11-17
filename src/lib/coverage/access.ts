@@ -326,6 +326,92 @@ export async function listExecutableIdentitiesForRep(
 }
 
 /**
+ * Organisation-wide canonical execution scope — the same rules as
+ * `listExecutableIdentitiesForRep`, computed once for manager/admin aggregates
+ * instead of per rep.
+ */
+export async function listExecutableIdentitiesForOrg(
+  client: DbClient,
+  orgId: string,
+  businessDate: string,
+): Promise<Array<{ repId: string; id: string; profileId: string | null; access: ExecutableIdentity['access'] }>> {
+  const [{ data: seatRows, error: seatError }, { data: eligibilityRows, error: eligibilityError }, { data: coverageRows, error: coverageError }] =
+    await Promise.all([
+      client.from('profile_coverage').select('profile_id, rep_id, role').eq('organization_id', orgId).eq('active', true).limit(5000),
+      client.from('identity_assignments').select('revenue_identity_id, rep_id').eq('organization_id', orgId).limit(5000),
+      client.from('coverage_assignments').select(COVERAGE_COLUMNS).eq('organization_id', orgId).eq('status', 'ACTIVE').limit(1000),
+    ])
+  if (seatError) throw seatError
+  if (eligibilityError) throw eligibilityError
+  if (coverageError) throw coverageError
+
+  const seats = (seatRows ?? []) as Array<{ profile_id: string; rep_id: string; role: string }>
+  const eligibility = (eligibilityRows ?? []) as Array<{ revenue_identity_id: string; rep_id: string }>
+  const coverage = ((coverageRows ?? []) as CoverageAssignmentRow[]).filter((row) =>
+    isCoverageActiveOn(
+      { effectiveFrom: row.effective_from, effectiveUntil: row.effective_until, status: row.status, revokedAt: row.revoked_at },
+      businessDate,
+    ),
+  )
+
+  const activeCoverageByRep = new Map<string, CoverageAssignmentRow[]>()
+  for (const row of coverage) {
+    const list = activeCoverageByRep.get(row.covering_rep_id) ?? []
+    list.push(row)
+    activeCoverageByRep.set(row.covering_rep_id, list)
+  }
+
+  // REPLACE coverage excludes the primary of that profile.
+  const replacedProfileIds = new Set(coverage.filter((row) => row.coverage_mode === 'REPLACE').map((row) => row.profile_id))
+
+  const { data: identityRows, error: identityError } = await client
+    .from('revenue_identities')
+    .select('id, profile_id, status')
+    .eq('organization_id', orgId)
+    .limit(5000)
+  if (identityError) throw identityError
+  const identities = ((identityRows ?? []) as Array<{ id: string; profile_id: string | null; status: string }>)
+    .filter((row) => row.status === 'active')
+
+  const out: Array<{ repId: string; id: string; profileId: string | null; access: ExecutableIdentity['access'] }> = []
+  const seen = new Set<string>()
+
+  // Seats.
+  const seatsByRep = new Map<string, Array<{ profile_id: string; role: string }>>()
+  for (const seat of seats) {
+    const list = seatsByRep.get(seat.rep_id) ?? []
+    list.push(seat)
+    seatsByRep.set(seat.rep_id, list)
+  }
+  for (const [repId, repSeats] of seatsByRep) {
+    for (const identity of identities) {
+      if (!identity.profile_id) continue
+      const seat = repSeats.find((row) => row.profile_id === identity.profile_id)
+      if (!seat) continue
+      if (seat.role === 'PRIMARY' && replacedProfileIds.has(identity.profile_id)) continue
+      const key = `${repId}:${identity.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ repId, id: identity.id, profileId: identity.profile_id, access: seat.role === 'PRIMARY' ? 'primary' : 'operator' })
+    }
+  }
+
+  // Temporary coverage.
+  for (const [repId, rows] of activeCoverageByRep) {
+    const profileIds = [...new Set(rows.map((row) => row.profile_id))]
+    for (const identity of identities) {
+      if (!identity.profile_id || !profileIds.includes(identity.profile_id)) continue
+      const key = `${repId}:${identity.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ repId, id: identity.id, profileId: identity.profile_id, access: 'coverage' })
+    }
+  }
+
+  return out
+}
+
+/**
  * Thin scope view over `listExecutableIdentitiesForRep`, for callers that only
  * need the identity ids (Inbox queue, Manager/Admin team views).
  */
