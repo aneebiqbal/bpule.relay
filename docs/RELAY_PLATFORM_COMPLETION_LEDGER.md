@@ -53,6 +53,24 @@ the mark.
 Native `<select>` options (Upwork profile picker, target manager, channel
 filter) keep text labels — options cannot render SVG consistently.
 
+### 4. Setup Assistant rebuilt around presets and a builder
+
+The Describe screen was a single textarea and produced "Nothing" for real
+requests. It now opens with **one-tap presets** (Assign operators, Split targets
+60/40, Set primary, Weekday schedule, Full setup) and a **structured builder**
+(account, include-operators/primary/targets/schedule, searchable reps, split
+presets, day presets). Presets and the builder compose a **deterministic**
+preview — no model in the loop — showing before → after for the chain, target
+and schedule. Free text still goes through the model.
+
+Backend fixes:
+- profile/rep resolution now strips the `[id]` / `(full name)` annotations the
+  model echoes, matches full names to short display names, and uses the channel
+  in the sentence to disambiguate same-named accounts;
+- the model is told a 60/40 split means 60%/40% of the target and not to invent
+  schedules;
+- the apply path now writes parsed schedules (previously parsed but dropped).
+
 ## Verified
 
 | Gate | Result |
