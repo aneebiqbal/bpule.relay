@@ -15,7 +15,7 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
-import { addOperatorResponsibility, removeOperatorResponsibility, readResponsibilityChain } from '@/lib/profiles/assignment'
+import { addOperatorResponsibility, removeOperatorResponsibility, transferResponsibility, readResponsibilityChain, assignPrimaryResponsibility } from '@/lib/profiles/assignment'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
@@ -116,6 +116,26 @@ describeLive('OPERATOR_VISIBILITY', () => {
         const seen = await listExecutableIdentitiesForRep(client, ORG, repId, date)
         expect(seen.some((row) => row.id === identityId), repId).toBe(true)
       }
+    } finally {
+      await cleanupFixture(client, profileId, identityId)
+    }
+  }, 180_000)
+
+  it('a transfer opened from an operator never strips the real owner', async () => {
+    const client = serviceDbClient()
+    const date = await businessDate(client)
+    const { profileId, identityId } = await seedFixture(client)
+    try {
+      await assignPrimaryResponsibility(client, { orgId: ORG, identityId, repId: AHMAD, actorRepId: ACTOR, ensureTargets: false })
+      await addOperatorResponsibility(client, { orgId: ORG, identityId, repId: DAWOOD, actorRepId: ACTOR })
+      await transferResponsibility(client, { orgId: ORG, identityId, fromRepId: DAWOOD, toRepId: MADIHA, actorRepId: ACTOR })
+
+      const chain = await readResponsibilityChain(client, ORG, profileId)
+      expect(chain.primaryRepId).toBe(MADIHA)
+      // Ahmad was the owner and is unrelated to the transfer source: kept.
+      expect(chain.operators.map((seat) => seat.repId)).toContain(AHMAD)
+      const ownerStillSees = await listExecutableIdentitiesForRep(client, ORG, AHMAD, date)
+      expect(ownerStillSees.some((row) => row.id === identityId)).toBe(true)
     } finally {
       await cleanupFixture(client, profileId, identityId)
     }

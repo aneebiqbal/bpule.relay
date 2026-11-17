@@ -194,16 +194,18 @@ describeLive('MULTI_OPERATOR_ACCEPTANCE', () => {
       expect(ids(await listExecutableIdentitiesForRep(client, ORG, HASSAN, TODAY))).toContain(IDENTITY)
       expect(ids(await listExecutableIdentitiesForRep(client, ORG, MADIHA, TODAY))).not.toContain(IDENTITY)
 
-      // The plan is unchanged: one requirement, not one per operator.
+      // The plan is unchanged: one shared requirement per channel lane, never
+      // one per operator. The exact number is the organization's own target,
+      // not a test constant.
       const { data: plans } = await client.raw<{ activity_type: string; target_count: number }>(
         `select activity_type, target_count from daily_target_plans
          where organization_id = $1 and revenue_identity_id = $2 and active order by activity_type`,
         [ORG, IDENTITY],
       )
-      expect(plans).toEqual([
-        { activity_type: 'application', target_count: 10 },
-        { activity_type: 'proposal', target_count: 2 },
-      ])
+      expect(plans.map((row) => row.activity_type).sort()).toEqual(['application', 'proposal'])
+      expect(new Set(plans.map((row) => row.activity_type)).size).toBe(plans.length)
+      const applicationTarget = plans.find((row) => row.activity_type === 'application')?.target_count
+      expect(applicationTarget).toBeGreaterThan(0)
 
       // 2. Hassan completes 4, Ahmad completes 3.
       for (let i = 0; i < 4; i += 1) {
@@ -253,10 +255,11 @@ describeLive('MULTI_OPERATOR_ACCEPTANCE', () => {
       expect(fiza?.profileCompleted).toBe(7)
       expect(fiza?.completed).toBe(3)
       const applicationLane = fiza?.targets.find((row) => row.activityType === 'application')
-      expect(applicationLane?.targetCount).toBe(10)
+      expect(applicationLane?.targetCount).toBe(applicationTarget)
       expect(applicationLane?.profileCompletedCount).toBe(7)
       expect(applicationLane?.completedCount).toBe(3)
-      expect(Math.max(0, (applicationLane?.targetCount ?? 0) - (applicationLane?.profileCompletedCount ?? 0))).toBe(3)
+      expect(Math.max(0, (applicationLane?.targetCount ?? 0) - (applicationLane?.profileCompletedCount ?? 0)))
+        .toBe(Math.max(0, (applicationTarget ?? 0) - 7))
 
       // Hassan sees the same profile as PRIMARY.
       const hassanPlan = await loadRepOperatingPlan(client, { orgId: ORG, repId: HASSAN, repName: 'Hassan' })
@@ -302,7 +305,7 @@ describeLive('MULTI_OPERATOR_ACCEPTANCE', () => {
          where organization_id = $1 and revenue_identity_id = $2 and active and activity_type = 'application'`,
         [ORG, IDENTITY],
       )
-      expect(plansAfterLeave?.[0]?.target_count).toBe(10)
+      expect(plansAfterLeave?.[0]?.target_count).toBe(applicationTarget)
 
       const { data: progressAfterLeave } = await client.raw<{ total: number }>(
         `select sum(completed_count)::int as total from daily_accountability

@@ -108,7 +108,6 @@ The broader 12-phase programme is not complete. Still open:
   one panel, and the Playwright journey are not built.
 
 ## 7. Data-hygiene note (disclosed)
-
 An early version of the live regression test used `BEGIN`/`ROLLBACK` on the
 service client. That pool does not bind the transaction to later queries, so
 the fixture rows committed: 13 `ZZ%` profiles and 14 `zz-%` identities plus
@@ -116,3 +115,43 @@ their coverage, eligibility, target, audit and acknowledgement rows. They were
 **not** user records. All of them were deleted (verified: 0 `ZZ%` profiles, 0
 `zz-%` identities remain), and the test now creates a uniquely-labelled fixture
 and deletes it explicitly in a `finally`. No user assignment was altered.
+
+## 8. Sprint 2 — follow-up repairs
+
+### 8.1 Transfer no longer strips an unrelated owner
+
+`transferResponsibility` rebuilt the chain as `primary = toRepId` and carried
+only the existing operators, so a transfer opened from an **operator's** plan
+silently dropped the real PRIMARY. Reproduced on a fixture (owner vanished) and
+on the live Aneeb·Upwork channel (owner Ahmad dropped when transferring from
+operator Dawood).
+
+Fix: if the current primary is neither the transfer source nor the target, it
+is carried forward as an operator. `previousPrimaryRepId` now reports the real
+previous owner. Regression test added to `tests/operator-visibility.live.test.ts`.
+
+### 8.2 v611 test drift removed without touching the real target
+
+`v611-multi-operator-acceptance` and `v611-multi-operator-contracts` hardcoded
+`application = 10`. The organization's real target is 5. Both now assert the
+**invariant** — one shared lane per activity, no per-operator duplication, and a
+positive target — and derive the remaining-work assertion from the live value.
+The production target is untouched. Both files pass.
+
+### 8.3 Responsibility failures are now diagnosable
+
+The assign / transfer / remove dialogs showed their own fallback text whenever
+the response body had no `error` (for example a proxy 502/504 under load), which
+read as "failed to add / transfer / remove". They now surface
+`Request failed (<status>). Please retry.` when the body carries no reason, so a
+server/timeout failure is distinguishable from a validation error.
+
+Direct measurement: the canonical remove and transfer both **succeed** against
+the live Aneeb·Upwork channel (verified, then restored to PRIMARY Ahmad /
+OPERATOR Dawood / BACKUP Hassan). The generic 500s were not reproducible through
+the canonical service; they are consistent with database timeouts under the
+machine load observed during the session (load average 70–120, ~1.5 s/query, and
+previous fixture writes committing). The three assignment actions issue roughly a
+dozen sequential writes each; under pool contention that exceeds the client's
+10 s connection timeout. The fix is to reduce those round trips and/or the pool
+contention — not yet done.

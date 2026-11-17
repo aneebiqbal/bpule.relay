@@ -351,8 +351,8 @@ function AssignDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identityId, repId, role, ensureTargets: role === 'primary' }),
       })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not assign the responsibility.')
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status}). Please retry.`)
       // Apply the edited target pack on top of the seeded defaults.
       if (role === 'primary') {
         for (const row of pack) {
@@ -597,8 +597,8 @@ function TransferDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identityId: row.identityId, repId: targetRepId, fromRepId: repId }),
       })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not transfer the responsibility.')
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status}). Please retry.`)
       router.refresh()
       onClose()
     } catch (err) {
@@ -700,8 +700,8 @@ function RemoveDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identityId: row.identityId, repId }),
       })
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error ?? 'Could not remove the responsibility.')
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status}). Please retry.`)
       router.refresh()
       onClose()
     } catch (err) {

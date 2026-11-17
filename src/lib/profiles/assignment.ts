@@ -456,12 +456,25 @@ export async function transferResponsibility(
   // The plan belongs to the channel, so a transfer never moves it. Ownership
   // changes; the requirement and its completion history stay put. The new
   // owner's existing seat is retired so they hold exactly one row.
+  //
+  // A transfer can be opened from any rep's operating plan. If the source is
+  // not the current owner, the real owner is an unrelated seat and must be
+  // carried forward as an operator — otherwise the transfer silently strips
+  // them of access.
+  const carryPrimary =
+    chain.primaryRepId && chain.primaryRepId !== input.fromRepId && chain.primaryRepId !== input.toRepId
+      ? [{ repId: chain.primaryRepId, priority: 0 }]
+      : []
+  const operators = [...chain.operators, ...carryPrimary]
+    .filter((seat, index, all) => seat.repId !== input.toRepId && all.findIndex((row) => row.repId === seat.repId) === index)
+    .map((seat, index) => ({ repId: seat.repId, priority: index + 1 }))
+
   const result = await saveResponsibilityChain(client, {
     orgId: input.orgId,
     profileId: identity.profile_id,
     identityId: input.identityId,
     primaryRepId: input.toRepId,
-    operators: chain.operators.filter((seat) => seat.repId !== input.toRepId),
+    operators,
     backups: chain.backups.filter((seat) => seat.repId !== input.toRepId),
     actorRepId: input.actorRepId,
     auditEventType: 'identity_transferred',
@@ -482,7 +495,7 @@ export async function transferResponsibility(
     identityId: input.identityId,
     profileId: identity.profile_id,
     repId: input.toRepId,
-    previousPrimaryRepId: input.fromRepId,
+    previousPrimaryRepId: chain.primaryRepId,
     targetsTransferred: 0,
     targetsSeeded: 0,
   }
