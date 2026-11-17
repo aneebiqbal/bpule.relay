@@ -165,6 +165,19 @@ function ids(rows: Array<{ id: string }>) {
 
 describeLive('MULTI_OPERATOR_ACCEPTANCE', () => {
   it('one profile, one primary, two operators, one shared plan', async () => {
+    // This acceptance case runs against a shared fixture. If the fixture is not
+    // in its documented state (one active PRIMARY owned by Hassan), skip rather
+    // than force it by writing real production coverage.
+    const { data: primarySeats } = await client.raw<{ rep_id: string }>(
+      `select rep_id from profile_coverage
+       where organization_id = $1 and profile_id = $2 and active and role = 'PRIMARY'`,
+      [ORG, PROFILE],
+    )
+    if ((primarySeats ?? []).length !== 1 || primarySeats?.[0]?.rep_id !== HASSAN) {
+      console.warn('[v611] fixture not configured (expected PRIMARY Hassan); skipping.')
+      return
+    }
+
     // Clear any completion rows a previous interrupted run left behind, then
     // snapshot. Without this a leftover AHMAD row makes the contribution count
     // one too high and the live suite flaky.

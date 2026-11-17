@@ -95,3 +95,12 @@ covered by Playwright in this sprint.
 3. Add archive/restore/delete with a dependency preview and server-side
    eligibility checks.
 4. Add the Playwright journey on disposable fixtures.
+
+## 12. Fixture drift (found, not repaired)
+
+The shared Fizza·Upwork acceptance fixture is no longer in its documented
+state: `profile_coverage` has **no active PRIMARY** (only an active BACKUP for
+Madiha). The v611 acceptance case now verifies that precondition and **skips**
+rather than writing real production coverage to force it. The target itself is
+untouched (5 applications). Repairing the fixture chain is a production-data
+decision for the operator, not something the test should do.
