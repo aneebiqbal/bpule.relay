@@ -3,11 +3,11 @@
 import { use } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ExternalLink } from 'lucide-react'
-import { cn } from 'cn'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DailyJobs, jobsFromTargets } from '@/components/rep/daily-jobs'
 import { normalizeExternalUrl } from '@/lib/profiles/display'
-import { channelLabel } from '@/lib/profiles/channel'
+import { ChannelLogo } from '@/components/ui/channel-logo'
+import { ChannelBadge } from '@/components/ui/channel-badge'
 
 interface TargetView {
   targetId: string
@@ -44,20 +44,6 @@ interface WorkspaceDetailData {
   today: string
 }
 
-function channelIcon(channel: string): string {
-  if (channel === 'linkedin') return 'in'
-  if (channel === 'email') return '@'
-  if (channel === 'upwork') return 'U'
-  return '•'
-}
-
-function channelColor(channel: string): string {
-  if (channel === 'linkedin') return 'bg-cobalt/10 text-cobalt-ink'
-  if (channel === 'email') return 'bg-status-warning/10 text-status-warning'
-  if (channel === 'upwork') return 'bg-status-success/10 text-status-success'
-  return 'bg-graphite/10 text-graphite'
-}
-
 export function ResponsibilityWorkspaceDetail({
   dataPromise,
 }: {
@@ -92,18 +78,17 @@ export function ResponsibilityWorkspaceDetail({
       </div>
 
       <header className="flex items-start gap-4">
-        <div className={cn(
-          'flex size-12 shrink-0 items-center justify-center rounded-lg text-sm font-medium',
-          channelColor(identity.channel),
-        )}>
-          {channelIcon(identity.channel)}
+        <div className="flex size-12 shrink-0 items-center justify-center">
+          <ChannelLogo channel={identity.channel} className="size-10" />
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-[24px] font-light tracking-[-0.02em] text-ink">
             {identity.identityName}
           </h1>
-          <p className="text-[13px] text-graphite">
-            {identity.title || 'No title set'} · {channelLabel(identity.channel)}
+          <p className="flex flex-wrap items-center gap-1.5 text-[13px] text-graphite">
+            <span>{identity.title || 'No title set'}</span>
+            <span>·</span>
+            <ChannelBadge channel={identity.channel} />
           </p>
           <p className="mt-0.5 text-[11px] text-stone">Assigned to you</p>
           {profileUrl && (

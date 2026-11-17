@@ -486,7 +486,7 @@ function ChannelBlock({
         <ManagePeopleDialog
           profileId={channel.profileId}
           identityName={channel.identityName}
-          channel={channelLabel(channel.channel)}
+          channel={channel.channel}
           primaryRepId={channel.primaryRepId}
           operators={channel.operators}
           backups={channel.backups}
@@ -983,7 +983,7 @@ function ExecutionTab({ model, canManage, onConfigure }: { model: ProfileOperati
               href={`/workspace/${channel.identityId}`}
               className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid transition-transform active:scale-[0.98]"
             >
-              Open {channelLabel(channel.channel)} workspace
+              Open <ChannelBadge channel={channel.channel} /> workspace
             </Link>
           </div>
         </V4Panel>

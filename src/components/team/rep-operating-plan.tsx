@@ -263,15 +263,17 @@ function ResponsibilityRow({
 
 function Dialog({
   title,
+  ariaLabel,
   onClose,
   children,
 }: {
-  title: string
+  title: React.ReactNode
+  ariaLabel?: string
   onClose: () => void
   children: React.ReactNode
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-label={ariaLabel ?? 'Dialog'}>
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-line bg-bone-raised p-4 shadow-xl">
         <div className="flex items-center justify-between">
           <h3 className="text-[14px] font-medium text-ink">{title}</h3>
@@ -607,7 +609,15 @@ function TransferDialog({
   }
 
   return (
-    <Dialog title={`Transfer ${row.personName} · ${channelLabel(row.channel)}`} onClose={onClose}>
+    <Dialog
+      ariaLabel="Transfer responsibility"
+      title={
+        <span className="inline-flex items-center gap-2">
+          Transfer {row.personName} · <ChannelBadge channel={row.channel} />
+        </span>
+      }
+      onClose={onClose}
+    >
       <div className="space-y-3">
         <p className="text-[13px] text-graphite">
           Primary moves from this rep to the selected rep. The daily plan for the channel and its
@@ -702,7 +712,15 @@ function RemoveDialog({
   }
 
   return (
-    <Dialog title={`Remove ${row.personName} · ${channelLabel(row.channel)}`} onClose={onClose}>
+    <Dialog
+      ariaLabel="Remove responsibility"
+      title={
+        <span className="inline-flex items-center gap-2">
+          Remove {row.personName} · <ChannelBadge channel={row.channel} />
+        </span>
+      }
+      onClose={onClose}
+    >
       <div className="space-y-3">
         <p className="text-[13px] text-graphite">
           Remove this responsibility from {repId ? 'the rep' : 'the rep'}? This ends execution ownership.

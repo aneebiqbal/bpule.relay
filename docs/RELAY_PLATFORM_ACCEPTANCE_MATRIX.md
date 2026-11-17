@@ -17,6 +17,7 @@ how each row was checked; “not run” is never counted as pass.
 | 9a | Manager without the capability opens Profiles | no identity write action | PASS (code) | `canManageIdentities` gate in workspace + table |
 | 9b | Coverage write with `MANAGE_REVENUE_IDENTITIES` | accepted | PASS (code) | route uses `can(ctx, …)` |
 | 10 | Knowledge scope | shared vs account-specific | PASS (code) | per-profile `accountKnowledge` (`47f822d7`) |
+| 10a | Profile/channel mentions | real LinkedIn/Upwork marks | PASS (browser) | Profiles 10, Command Center 50, detail 14 brand SVGs |
 | 11 | Claims provenance | never machine evidence | PASS (code) | `authority='human_verified'`, `user_corrected=true` |
 | 12 | API auth posture | no unauthenticated mutation | PASS (code) | `createScoutStore` throws without a session |
 | 13 | TypeScript | clean | PASS | `tsc --noEmit` |
