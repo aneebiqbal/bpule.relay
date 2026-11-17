@@ -75,7 +75,7 @@ and in the read scope.
 
 ## 5. Tests
 
-- `tests/operator-visibility.live.test.ts` (live, rolled back): seat-only
+- `tests/operator-visibility.live.test.ts` (live, self-cleaning fixture): seat-only
   visibility, add-preserves-seats, remove-only-affects-that-rep.
 - `tests/assignment-writers.test.ts`: the admin routes funnel through the
   canonical service, never write `identity_assignments` directly, and do not
@@ -96,3 +96,13 @@ The broader 12-phase programme is not complete. Still open:
 - Channel lifecycle (inactive/suspended/archived) is not centrally manageable;
   deletion/archive controls, duplicate reconciliation, task/target admin from
   one panel, and the Playwright journey are not built.
+
+## 7. Data-hygiene note (disclosed)
+
+An early version of the live regression test used `BEGIN`/`ROLLBACK` on the
+service client. That pool does not bind the transaction to later queries, so
+the fixture rows committed: 13 `ZZ%` profiles and 14 `zz-%` identities plus
+their coverage, eligibility, target, audit and acknowledgement rows. They were
+**not** user records. All of them were deleted (verified: 0 `ZZ%` profiles, 0
+`zz-%` identities remain), and the test now creates a uniquely-labelled fixture
+and deletes it explicitly in a `finally`. No user assignment was altered.

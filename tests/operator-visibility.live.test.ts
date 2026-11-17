@@ -8,8 +8,9 @@
  *   2. the admin revenue-identity assign route wrote eligibility only, never a
  *      profile_coverage seat.
  *
- * Every case runs inside a transaction that is rolled back, so no production
- * assignment is touched.
+ * The service pool does not bind a `begin` transaction to later queries, so a
+ * rollback is not reliable here. Each case creates a uniquely-labelled fixture
+ * and deletes it (and every row that references it) in a `finally`.
  */
 import { afterAll, describe, expect, it } from 'vitest'
 import { closeDbPool, serviceDbClient } from '@/lib/db/client'
@@ -29,38 +30,59 @@ const describeLive = liveDb ? describe : describe.skip
 
 afterAll(async () => { await closeDbPool() })
 
-async function businessDate(client: ReturnType<typeof serviceDbClient>): Promise<string> {
+type Client = ReturnType<typeof serviceDbClient>
+
+async function businessDate(client: Client): Promise<string> {
   const policy = await loadOperatingPolicy(ORG, client)
   return orgDate(currentInstant(), policy.timezone)
 }
 
-async function seedFixture(client: ReturnType<typeof serviceDbClient>) {
+async function seedFixture(client: Client) {
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const label = `ZZ Visibility ${stamp}`
   const { data: profile } = await client.from('profiles').insert({
     organization_id: ORG,
     rep_id: ACTOR,
     platform: 'upwork',
-    full_name: 'ZZ Visibility Fixture',
-    display_name: 'ZZ Visibility Fixture',
-    label: 'ZZ Visibility Fixture',
+    full_name: label,
+    display_name: label,
+    label,
   }).select('id').single()
   const { data: identity } = await client.from('revenue_identities').insert({
     organization_id: ORG,
     profile_id: profile.id,
-    identity_name: 'ZZ Visibility',
+    identity_name: label,
     channel: 'upwork',
     status: 'active',
-    slug: `zz-visibility-${Date.now()}`,
+    slug: `zz-visibility-${stamp}`,
   }).select('id').single()
   return { profileId: profile.id as string, identityId: identity.id as string }
+}
+
+/** Delete the fixture and every row that references it. */
+async function cleanupFixture(client: Client, profileId: string, identityId: string) {
+  await client.from('accountability_audit_log').delete().eq('revenue_identity_id', identityId)
+  await client.from('responsibility_acknowledgements').delete().eq('profile_id', profileId)
+  await client.from('coverage_events').delete().eq('profile_id', profileId)
+  await client.from('identity_assignments').delete().eq('revenue_identity_id', identityId)
+  await client.from('daily_accountability').delete().eq('revenue_identity_id', identityId)
+  await client.from('daily_target_plans').delete().eq('revenue_identity_id', identityId)
+  await client.from('profile_coverage').delete().eq('profile_id', profileId)
+  await client.from('portfolio_projects').delete().eq('profile_id', profileId)
+  await client.from('proof_cards').delete().eq('profile_id', profileId)
+  await client.from('profile_experience').delete().eq('profile_id', profileId)
+  await client.from('profile_reviews').delete().eq('profile_id', profileId)
+  await client.from('notifications').delete().like('link', `/team/profiles/${profileId}%`)
+  await client.from('revenue_identities').delete().eq('id', identityId)
+  await client.from('profiles').delete().eq('id', profileId)
 }
 
 describeLive('OPERATOR_VISIBILITY', () => {
   it('a seated operator sees the channel even without an eligibility row', async () => {
     const client = serviceDbClient()
     const date = await businessDate(client)
-    await client.raw('begin')
+    const { profileId, identityId } = await seedFixture(client)
     try {
-      const { profileId, identityId } = await seedFixture(client)
       // Seat only: no identity_assignments row (the state a non-canonical
       // writer used to leave behind).
       await client.from('profile_coverage').insert({
@@ -75,37 +97,35 @@ describeLive('OPERATOR_VISIBILITY', () => {
       const seen = await listExecutableIdentitiesForRep(client, ORG, MADIHA, date)
       expect(seen.some((row) => row.id === identityId)).toBe(true)
     } finally {
-      await client.raw('rollback')
+      await cleanupFixture(client, profileId, identityId)
     }
   }, 180_000)
 
   it('adding an operator preserves every existing seat', async () => {
     const client = serviceDbClient()
     const date = await businessDate(client)
-    await client.raw('begin')
+    const { profileId, identityId } = await seedFixture(client)
     try {
-      const { profileId, identityId } = await seedFixture(client)
       await addOperatorResponsibility(client, { orgId: ORG, identityId, repId: MADIHA, actorRepId: ACTOR })
       await addOperatorResponsibility(client, { orgId: ORG, identityId, repId: DAWOOD, actorRepId: ACTOR })
 
       const chain = await readResponsibilityChain(client, ORG, profileId)
       expect(chain.operators.map((seat) => seat.repId).sort()).toEqual([DAWOOD, MADIHA].sort())
 
-      for (const repId of [ MADIHA, DAWOOD ]) {
+      for (const repId of [MADIHA, DAWOOD]) {
         const seen = await listExecutableIdentitiesForRep(client, ORG, repId, date)
         expect(seen.some((row) => row.id === identityId), repId).toBe(true)
       }
     } finally {
-      await client.raw('rollback')
+      await cleanupFixture(client, profileId, identityId)
     }
   }, 180_000)
 
   it('removing one operator does not affect the other', async () => {
     const client = serviceDbClient()
     const date = await businessDate(client)
-    await client.raw('begin')
+    const { profileId, identityId } = await seedFixture(client)
     try {
-      const { profileId, identityId } = await seedFixture(client)
       await addOperatorResponsibility(client, { orgId: ORG, identityId, repId: MADIHA, actorRepId: ACTOR })
       await addOperatorResponsibility(client, { orgId: ORG, identityId, repId: DAWOOD, actorRepId: ACTOR })
       await removeOperatorResponsibility(client, { orgId: ORG, identityId, repId: MADIHA, actorRepId: ACTOR })
@@ -115,7 +135,7 @@ describeLive('OPERATOR_VISIBILITY', () => {
       const kept = await listExecutableIdentitiesForRep(client, ORG, DAWOOD, date)
       expect(kept.some((row) => row.id === identityId)).toBe(true)
     } finally {
-      await client.raw('rollback')
+      await cleanupFixture(client, profileId, identityId)
     }
   }, 180_000)
 })
