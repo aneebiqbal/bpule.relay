@@ -81,6 +81,16 @@ and in the read scope.
   canonical service, never write `identity_assignments` directly, and do not
   seed targets while assigning.
 
+Gates on the final tree:
+
+| Gate | Result |
+|---|---|
+| `tsc --noEmit` | clean |
+| `npm run build` | exit 0 |
+| Unit | 392/395 files green; the 3 `hardening-regression-*` AI files timed out under a machine load average of 70–120 (Spotlight reindex) and pass 43/43 in isolation |
+| Live-DB | **137 passed, 12 skipped, 2 failed** — both are the pre-existing Fizza·Upwork plan drift (application target is 5, the tests hardcode 10; `updated_at` 11:27 UTC, before this work) |
+| Operator-visibility live test | 3/3 passed, zero fixture rows left behind |
+
 ## 6. Not addressed in this increment (remaining risk)
 
 The broader 12-phase programme is not complete. Still open:
