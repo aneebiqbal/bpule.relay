@@ -261,10 +261,28 @@ export async function listExecutableIdentitiesForRep(
     (assignments ?? []).map((row) => [row.revenue_identity_id as string, row]),
   )
 
+  // A seated rep works every active channel of their profiles. Their seats are
+  // the authority, so those identities must be candidates even when the
+  // eligibility row is missing (a legacy/non-canonical write, or a sync that
+  // has not run yet) — otherwise the owner sees nothing at all.
+  const seatedProfileIds = [...new Set([...primaryProfileIds, ...operatorProfileIds])]
+  const seatedIdentityIds: string[] = []
+  if (seatedProfileIds.length > 0) {
+    const { data: seatedRows, error: seatedError } = await client
+      .from('revenue_identities')
+      .select('id')
+      .eq('organization_id', orgId)
+      .in('profile_id', seatedProfileIds)
+      .limit(500)
+    if (seatedError) throw seatedError
+    seatedIdentityIds.push(...((seatedRows ?? []) as Array<{ id: string }>).map((row) => row.id))
+  }
+
   const ids = [
     ...new Set([
       ...(assignments ?? []).map((row) => row.revenue_identity_id as string).filter(Boolean),
       ...covered.map((row) => row.revenueIdentityId),
+      ...seatedIdentityIds,
     ]),
   ]
   if (ids.length === 0) return []

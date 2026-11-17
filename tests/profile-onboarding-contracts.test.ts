@@ -98,10 +98,15 @@ describe('PROFILE_PARTIAL_FAILURE_SAFE', () => {
     expect(source).toContain("result.failed = 'assign'")
   })
 
-  it('the canonical assign route never fails a committed assignment on audit or notification', () => {
+  it('the canonical assign route funnels through the responsibility service', () => {
     const source = read('src/app/api/admin/revenue-identities/[id]/assign/route.ts')
-    expect(source).toContain('Audit — best effort')
-    expect(source).toContain('Notify the rep — best effort')
+    expect(source).toContain('addOperatorResponsibility')
+    expect(source).toContain('removeOperatorResponsibility')
+  })
+
+  it('the canonical service never fails a committed assignment on audit or notification', () => {
+    const source = read('src/lib/profiles/assignment.ts')
+    expect(source).toContain('notification failed')
   })
 })
 
@@ -116,9 +121,9 @@ describe('PROFILE_ASSIGNMENT_END_TO_END_PARITY', () => {
 })
 
 describe('PROFILE_UNASSIGNMENT_PRESERVES_HISTORY', () => {
-  it('unassign deletes only the assignment row', () => {
+  it('unassign goes through the canonical service and never deletes the identity', () => {
     const source = read('src/app/api/admin/revenue-identities/[id]/assign/route.ts')
-    expect(source).toContain("from('identity_assignments')")
+    expect(source).toContain('removeOperatorResponsibility')
     expect(source).not.toContain("from('revenue_identities')\n      .delete()")
   })
 

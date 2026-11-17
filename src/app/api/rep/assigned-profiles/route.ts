@@ -2,6 +2,9 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/current'
 import { safeErrorResponse } from '@/lib/errors'
+import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -11,28 +14,19 @@ export async function GET() {
   const org = user.organization
   const rep = user.rep
 
-  // Reps see only identities explicitly assigned to them
-  const { data: assignments, error } = await supabase
-    .from('identity_assignments')
-    .select('id, assigned_by, created_at, revenue_identity_id')
-    .eq('rep_id', rep.id)
-    .eq('organization_id', org.id)
-    .order('created_at', { ascending: false })
+  // The canonical execution scope is the single authority for "what can this
+  // rep work". Reading `identity_assignments` directly also surfaced eligibility
+  // with no coverage seat — assignments the rep could see but not execute.
+  const policy = await loadOperatingPolicy(org.id, supabase)
+  const businessDate = orgDate(currentInstant(), policy.timezone)
+  const executable = await listExecutableIdentitiesForRep(supabase, org.id, rep.id, businessDate)
 
-  if (error) return safeErrorResponse(error, 500, 'Failed to load assigned profiles.', 'rep/assigned-profiles')
-
-  // The identity rows are a second read rather than a PostgREST embed
-  // (`identity:revenue_identities`), which the Neon adapter cannot translate.
-  const identityIds = (assignments ?? []).map((a) => a.revenue_identity_id).filter(Boolean)
+  const identityIds = executable.map((row) => row.id).filter(Boolean)
   const identityById = new Map<string, Record<string, unknown>>()
   if (identityIds.length > 0) {
     const { data: identityRows } = await supabase.from('revenue_identities').select('*').in('id', identityIds)
     for (const row of identityRows ?? []) identityById.set(row.id as string, row)
   }
-  const assignmentsWithIdentity = (assignments ?? []).map((a) => ({
-    ...a,
-    identity: identityById.get(a.revenue_identity_id as string) ?? null,
-  }))
 
   const inferChannel = (slug: string | undefined, profileUrl: string | undefined): string => {
     const haystack = `${slug ?? ''} ${profileUrl ?? ''}`.toLowerCase()
@@ -41,43 +35,43 @@ export async function GET() {
     return 'other'
   }
 
-  const profiles = assignmentsWithIdentity
-    .filter((a) => {
-      const row = Array.isArray(a.identity) ? a.identity[0] : a.identity
-      return row && typeof row === 'object'
-    })
-    .map((a) => {
-      const row = (Array.isArray(a.identity) ? a.identity[0] : a.identity) as Record<string, unknown>
-      const slug = row.slug as string | undefined
-      const profileUrl = row.profile_url as string | undefined
-      const rawChannel = row.channel as string | undefined
+  const profiles = executable
+    .map((row) => {
+      const identity = identityById.get(row.id)
+      if (!identity) return null
+      const slug = identity.slug as string | undefined
+      const profileUrl = identity.profile_url as string | undefined
+      const rawChannel = identity.channel as string | undefined
       const channel = rawChannel && rawChannel !== 'other' ? rawChannel : inferChannel(slug, profileUrl)
       return {
-        assignmentId: a.id,
-        assignedBy: a.assigned_by,
-        assignedAt: a.created_at,
+        assignmentId: row.assignmentId,
+        assignedBy: row.assignedBy,
+        assignedAt: row.assignedAt,
+        // `access` is the rep's precise seat: primary, operator or coverage.
+        access: row.access,
         identity: {
-          id: row.id,
+          id: identity.id,
           slug,
-          identityName: row.identity_name,
-          title: row.title,
-          positioning: row.positioning,
+          identityName: identity.identity_name,
+          title: identity.title,
+          positioning: identity.positioning,
           profileUrl,
-          skills: row.skills,
-          expertise: row.expertise,
-          industries: row.industries,
-          technologies: row.technologies,
-          allowedFirstPersonClaims: row.allowed_first_person_claims,
-          forbiddenClaims: row.forbidden_claims,
-          channelRules: row.channel_rules,
-          voiceTone: row.voice_tone,
-          preferredOpportunityTypes: row.preferred_opportunity_types,
-          proposalPositioning: row.proposal_positioning,
+          skills: identity.skills,
+          expertise: identity.expertise,
+          industries: identity.industries,
+          technologies: identity.technologies,
+          allowedFirstPersonClaims: identity.allowed_first_person_claims,
+          forbiddenClaims: identity.forbidden_claims,
+          channelRules: identity.channel_rules,
+          voiceTone: identity.voice_tone,
+          preferredOpportunityTypes: identity.preferred_opportunity_types,
+          proposalPositioning: identity.proposal_positioning,
           channel,
-          status: row.status ?? 'active',
+          status: identity.status ?? 'active',
         },
       }
     })
+    .filter((row): row is NonNullable<typeof row> => row !== null)
 
   return NextResponse.json({ profiles })
 }

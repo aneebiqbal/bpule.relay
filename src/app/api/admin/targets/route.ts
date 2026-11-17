@@ -5,6 +5,7 @@ import { safeErrorResponse } from '@/lib/errors'
 import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { personNameFromProfile } from '@/lib/profiles/person-name'
 import { isCoverageActiveOn } from '@/lib/coverage/access'
+import { addOperatorResponsibility } from '@/lib/profiles/assignment'
 import type { ActivityType } from '@/lib/domain/types'
 
 const ACTIVITY_TYPES: ActivityType[] = [
@@ -178,7 +179,14 @@ export async function POST(request: Request) {
       const assignments = await auth.store.listIdentityAssignmentsAdmin()
       const already = assignments.some((assignment) => assignment.repId === repId && assignment.revenueIdentityId === revenueIdentityId)
       if (!already) {
-        await auth.store.assignIdentityAdmin(revenueIdentityId, repId)
+        // Canonical write: a real OPERATOR seat plus eligibility. Writing
+        // eligibility alone left the rep unable to see the channel.
+        await addOperatorResponsibility(auth.store.getSupabaseClient(), {
+          orgId: auth.authCtx.orgId,
+          identityId: revenueIdentityId,
+          repId,
+          actorRepId: auth.authCtx.repId,
+        })
       }
     }
 

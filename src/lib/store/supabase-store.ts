@@ -4,6 +4,7 @@ import { currentInstant, orgDate, orgTodayRange, type OperatingPolicy } from '@/
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { addOperatorResponsibility, removeOperatorResponsibility } from '@/lib/profiles/assignment'
 import { opportunityKey } from '@/lib/scoring-v4/opportunity-key'
 import { determineFollowup } from '@/lib/relay/followup-engine'
 import { isTerminalStoredStage, isTerminalLeadStatus, checkOutreachAllowed } from '@/lib/conversation/terminal'
@@ -6504,36 +6505,41 @@ export class SupabaseStore implements ScoutStore {
 
   async assignIdentityAdmin(identityId: string, repId: string): Promise<IdentityAssignment> {
     if (!this.isAdmin) throw new Error('Admin only')
-    // Cross-org boundary: both the identity and the rep must belong to this
-    // organization. The upsert carries org scope, but it cannot verify it.
-    const [identity, rep] = await Promise.all([
-      this.client.from('revenue_identities').select('id').eq('id', identityId).eq('organization_id', this.orgId).maybeSingle(),
-      this.client.from('reps').select('id').eq('id', repId).eq('organization_id', this.orgId).maybeSingle(),
-    ])
-    if (!identity || !rep) throw new Error('Identity or rep not found in this organization')
-    const { data, error } = await this.client
-      .from('identity_assignments')
-      .upsert({ organization_id: this.orgId, revenue_identity_id: identityId, rep_id: repId, assigned_by: this.rep.id }, { onConflict: 'revenue_identity_id,rep_id' })
-      .select('*').single()
-    if (error) throw error
-    await this.client.from('accountability_audit_log').insert({
-      organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: identityId,
-      event_type: 'identity_assigned', detail: { rep_id: repId },
+    // Canonical write: a real OPERATOR seat on the identity's profile plus its
+    // eligibility. Writing `identity_assignments` alone left the assignee with
+    // eligibility but no seat, and execution visibility is decided by the seat.
+    await addOperatorResponsibility(this.client, {
+      orgId: this.orgId,
+      identityId,
+      repId,
+      actorRepId: this.rep.id,
     })
-    const assignment = { id: data.id as string, organizationId: data.organization_id as string, revenueIdentityId: data.revenue_identity_id as string, repId: data.rep_id as string, assignedBy: (data.assigned_by as string) ?? null, createdAt: data.created_at as string }
-    await this.ensureDefaultDailyTargetsAdmin({ repId, revenueIdentityId: identityId })
-    return assignment
+    const { data } = await this.client
+      .from('identity_assignments')
+      .select('*')
+      .eq('organization_id', this.orgId)
+      .eq('revenue_identity_id', identityId)
+      .eq('rep_id', repId)
+      .maybeSingle()
+    return {
+      id: (data?.id ?? '') as string,
+      organizationId: (data?.organization_id ?? this.orgId) as string,
+      revenueIdentityId: (data?.revenue_identity_id ?? identityId) as string,
+      repId: (data?.rep_id ?? repId) as string,
+      assignedBy: (data?.assigned_by as string) ?? null,
+      createdAt: (data?.created_at as string) ?? new Date().toISOString(),
+    }
   }
 
   async unassignIdentityAdmin(identityId: string, repId: string): Promise<void> {
     if (!this.isAdmin) throw new Error('Admin only')
-    const { error } = await this.client
-      .from('identity_assignments').delete()
-      .eq('revenue_identity_id', identityId).eq('rep_id', repId).eq('organization_id', this.orgId)
-    if (error) throw error
-    await this.client.from('accountability_audit_log').insert({
-      organization_id: this.orgId, rep_id: this.rep.id, revenue_identity_id: identityId,
-      event_type: 'identity_unassigned', detail: { rep_id: repId },
+    // Canonical write: the seat and the eligibility end together. Deleting the
+    // eligibility row alone left the seat active, so the rep kept executing.
+    await removeOperatorResponsibility(this.client, {
+      orgId: this.orgId,
+      identityId,
+      repId,
+      actorRepId: this.rep.id,
     })
   }
 

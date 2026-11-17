@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
+import { addOperatorResponsibility } from '@/lib/profiles/assignment'
 
 async function requireCapabilityStore(capability: string) {
   const authCtx = await getAuthContext()
   if (!authCtx) return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
   if (!can(authCtx, capability)) return { error: NextResponse.json({ error: 'Not authorized.' }, { status: 403 }) }
   try {
-    return { store: await createScoutStore() }
+    return { ctx: authCtx, store: await createScoutStore() }
   } catch {
     return { error: NextResponse.json({ error: 'Not signed in.' }, { status: 401 }) }
   }
@@ -51,8 +53,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const assignment = await auth.store.assignIdentityAdmin(identityId, repId)
-    return NextResponse.json({ assignment }, { status: 201 })
+    // Canonical write: appends the rep as an active OPERATOR on the identity's
+    // profile and preserves every other seat. Eligibility alone is not enough —
+    // execution visibility is decided by the coverage seat.
+    const supabase = await createServerSupabase()
+    await addOperatorResponsibility(supabase, {
+      orgId: auth.ctx.orgId,
+      identityId,
+      repId,
+      actorRepId: auth.ctx.repId,
+    })
+    return NextResponse.json({ ok: true, identityId, repId }, { status: 201 })
   } catch (error) {
     return safeErrorResponse(error, 500, 'Failed to assign identity.', 'admin/assignments')
   }
