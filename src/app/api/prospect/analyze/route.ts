@@ -9,7 +9,6 @@ import { loadSenderProfiles, routeLead } from '@/lib/relay/routing-context'
 import { recordShadowDecisions } from '@/lib/scoring-v4/shadow'
 import type { RoutingResult } from '@/lib/relay/sender-routing-engine'
 import { deriveRecommendedAction, ROUTING_MISMATCH_DELTA, type DeriveActionOutput, type RecommendedAction } from '@/lib/intelligence-v3/action/recommended-action'
-import { opportunityVersionTag } from '@/lib/intelligence-v3/versions'
 import { qualifyCanonicalScore, displayScoreForCanonical } from '@/lib/scoring/qualification'
 import { getAuthContext } from '@/lib/auth/organization'
 import { resolveAccessibleIdentity } from '@/lib/workspace/resolve-active-identity'
@@ -22,6 +21,8 @@ import { selectFewShotExamples } from '@/lib/ai/few-shot'
 import { mergeProofMatches } from '@/lib/ai/proof-match'
 import { classifyLeadFact } from '@/lib/relay/profile-intelligence'
 import { buildConnectionNoteStrategy } from '@/lib/prospect/strategy'
+import { resolveAnalysisSender, SENDER_SELECTION_MESSAGES } from '@/lib/prospect/sender-selection'
+import { analysisFingerprint } from '@/lib/prospect/analysis-fingerprint'
 import { validateAndRepair, normalizeGreeting, CONNECTION_NOTE_MAX_CHARS } from '@/lib/prospect/connection-note'
 import { evaluateProspectQualification } from '@/lib/prospect/qualification-gate'
 import { normalizeProspectPaste } from '@/lib/prospect/paste-normalize'
@@ -163,17 +164,10 @@ function fitLabelFor(level: string | null | undefined): 'HIGH' | 'MEDIUM' | 'LOW
 // consistent with a reported production-only symptom.
 export const maxDuration = 120
 
-// In-memory cache: content hash → analyze result. Avoids re-running the
-// full AI pipeline when the same paste is analyzed twice (common during
-// "Try Another Angle" or page refresh). TTL 5 minutes.
+// In-memory cache: analysis fingerprint → result. Avoids re-running the full AI
+// pipeline when the same prospect is analyzed twice (BUG-39).
 const analyzeCache = new Map<string, { data: Record<string, unknown>; ts: number }>()
 const CACHE_TTL_MS = 5 * 60 * 1000
-
-function cacheKey(rawText: string, profileId: string | null, generateNote: boolean = false): string {
-  // Every opportunity version is in the key so a deploy never serves a
-  // decision computed under older scoring rules.
-  return `${opportunityVersionTag()}:${rawText.slice(0, 200).toLowerCase().replace(/\s+/g, ' ').trim()}:${rawText.length}:${profileId ?? ''}:${generateNote ? 'note' : 'analyze'}`
-}
 
 // Periodic cache cleanup to prevent memory leaks
 function cleanupCache() {
@@ -263,6 +257,7 @@ async function handlePost(request: Request) {
     }
   }
   const requestedWorkspaceId = requestedWorkspace?.id ?? null
+  const orgId = (await getAuthContext().catch(() => null))?.orgId ?? null
 
   const minimumExtracted: ExtractedLead = {
     name: null,
@@ -285,17 +280,25 @@ async function handlePost(request: Request) {
   }
   const precheck = evaluateProspectQualification({ rawText, extracted: minimumExtracted })
 
-  // Cache check: same content already analyzed recently.
+  // Cache check: same prospect, same account, same rules, analyzed recently.
   // BUG-17: generateNote requests always bypass cache — the cached analyze
   // result has no connection note, so returning it would show an empty note.
+  // `forceReanalyze` is the explicit "Re-analyze" action: it must never be
+  // answered from the cache (BUG-39).
   cleanupCache()
-  const ck = cacheKey(rawText, typeof body.profileId === 'string' ? body.profileId : null, false)
-  if (!generateNote) {
+  const ck = analysisFingerprint({
+    rawText,
+    profileId: typeof body.profileId === 'string' ? body.profileId : null,
+    identityId: requestedWorkspaceId,
+    orgId,
+    generateNote: false,
+  })
+  if (!generateNote && body.forceReanalyze !== true) {
     const cached = analyzeCache.get(ck)
     if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
       return sseStream(async (emit) => {
         emit({ type: 'status', message: 'Using cached analysis' })
-        emit({ type: 'done', ...cached.data })
+        emit({ type: 'done', ...cached.data, reused: true, reusedAt: new Date(cached.ts).toISOString() })
       })
     }
   }
@@ -585,21 +588,32 @@ async function handlePost(request: Request) {
 
     // The explicitly selected profile is authoritative: it decides the channel
     // this analysis runs on AND the revenue identity the lead is attributed
-    // to. The active workspace is only a fallback, never an override (BUG-32).
-    // A selection outside the LinkedIn candidate set is not a LinkedIn sender.
-    const explicitProfile = explicitProfileId && profileById.has(explicitProfileId)
-      ? profileById.get(explicitProfileId) ?? null
-      : null
-    const explicitAssigned = explicitProfile ? assignedById.get(explicitProfile.id) ?? null : null
-    const selectedIdentity = explicitAssigned
-      ? (explicitAssigned.identities.find((row) => row.channel === normalizeChannel(explicitProfile?.platform ?? ''))
-        ?? explicitAssigned.identities[0]
-        ?? null)
-      : null
-    const effectiveIdentityId = selectedIdentity?.id ?? requestedWorkspaceId
-    const senderChannel = selectedIdentity?.channel
-      ?? (explicitProfile ? normalizeChannel(explicitProfile.platform) : null)
-      ?? 'linkedin'
+    // to. The active workspace is only a fallback when nothing was selected,
+    // never an override (BUG-32).
+    //
+    // A selection the rep cannot execute is an ERROR, never a silent fallback
+    // to a default profile: falling back made Analyzer run as Mehak while the
+    // rep had Aneeb selected (BUG-38).
+    const senderSelection = resolveAnalysisSender({
+      requestedProfileId: explicitProfileId,
+      requestedIdentityId: requestedWorkspaceId,
+      candidates: profiles.map((profile) => ({
+        profileId: profile.id,
+        platform: normalizeChannel(profile.platform),
+        identities: (assignedById.get(profile.id)?.identities ?? []).map((row) => ({
+          id: row.id,
+          channel: row.channel,
+        })),
+      })),
+    })
+    if (senderSelection.error) {
+      emit({ type: 'error', message: SENDER_SELECTION_MESSAGES[senderSelection.error] })
+      return
+    }
+    const selectedSender = senderSelection.sender
+    const explicitProfile = selectedSender ? profileById.get(selectedSender.profileId) ?? null : null
+    const effectiveIdentityId = selectedSender?.identityId ?? null
+    const senderChannel = normalizeChannel(selectedSender?.channel ?? 'linkedin')
 
     let senderRouting: RoutingResult | null = null
     try {
@@ -738,10 +752,6 @@ async function handlePost(request: Request) {
       } catch {
         // Non-fatal: captured prospect must not block analysis
       }
-    }
-
-    if (explicitProfileId && !explicitProfile && profiles.length > 0) {
-      emit({ type: 'status', message: 'Requested profile unavailable, using best match.' })
     }
 
     const connectionStrategy = buildConnectionNoteStrategy(
@@ -1046,6 +1056,10 @@ async function handlePost(request: Request) {
       extractionCompleteness: canonical.extractionCompleteness,
       bestSender,
       bestSenderProof,
+      // Provenance: the account this analysis actually ran as. Surfaces must
+      // show this, never the active workspace (BUG-38).
+      selectedProfileId: explicitProfile?.id ?? null,
+      selectedIdentityId: effectiveIdentityId,
       connectionNote: qualityResult.text,
       charCount: qualityResult.charCount,
       maxChars: CONNECTION_NOTE_MAX_CHARS,
@@ -1084,6 +1098,7 @@ async function handlePost(request: Request) {
       repairAttempted: canonicalResult.repairAttempted,
       repairImproved: canonicalResult.repairImproved,
       reused: canonicalResult.reused,
+      reusedAt: null,
     }
 
     // Cache & emit

@@ -98,6 +98,8 @@ type AnalyzeEvent =
   senderSuggestion?: { profileId: string; name: string | null; role: string | null; platform: string | null; score: number; currentBestScore: number; currentSenderName: string | null; matchedTerms: string[]; topProof: string | null; holders: string[]; reason: string } | null
       qualification: ProspectQualificationAssessment
       revenue?: RevenueLoopSnapshot
+      reused?: boolean
+      reusedAt?: string | null
     } & DecisionDetail
 
 export interface AnalysisState {
@@ -138,6 +140,9 @@ export interface AnalysisState {
   qualification: ProspectQualificationAssessment
   revenue: RevenueLoopSnapshot | null
   decision: DecisionDetail
+  /** True when this result came from the server's reuse cache (BUG-39). */
+  reused?: boolean
+  reusedAt?: string | null
 }
 
 function prospectCanBeSaved(
@@ -365,7 +370,7 @@ export function ProspectAnalyze() {
     return () => { cancelled = true }
   }, [])
 
-  async function analyze(mode: 'analyze' | 'try-another-angle' | 'generate' = 'analyze', profileIdOverride?: string) {
+  async function analyze(mode: 'analyze' | 'try-another-angle' | 'generate' = 'analyze', profileIdOverride?: string, forceReanalyze = false) {
     if (analyzingRef.current) return
     const guard = pasteGuard(rawInput)
     if (guard) {
@@ -401,6 +406,8 @@ export function ProspectAnalyze() {
           profileId: effectiveProfileId,
           revenueIdentityId,
           generateNote: mode === 'generate',
+          // Explicit "Re-analyze" bypasses the reuse cache (BUG-39).
+          forceReanalyze: forceReanalyze || undefined,
           ...(existingCanonical ? { existingCanonical } : {}),
         }),
         signal: abortRef.current.signal,
@@ -464,6 +471,8 @@ export function ProspectAnalyze() {
                   versions: event.versions ?? null,
                   decisionRunId: event.decisionRunId ?? null,
                 },
+                reused: event.reused === true,
+                reusedAt: event.reusedAt ?? null,
               })
               // Track completed analysis
               const durationMs = Math.round(performance.now() - analysisTiming)
@@ -773,7 +782,7 @@ export function ProspectAnalyze() {
                 Check another
               </Button>
             ) : null}
-            <Button variant="orange" onClick={() => void analyze()} loading={analyzing}>
+            <Button variant="orange" onClick={() => void analyze('analyze', undefined, Boolean(result))} loading={analyzing}>
               <Sparkles className="size-4" aria-hidden="true" />
               {analyzing ? 'Analyzing' : result ? 'Re-analyze' : 'Analyze'}
             </Button>
@@ -794,6 +803,12 @@ export function ProspectAnalyze() {
         />
       ) : null}
 
+      {result?.reused ? (
+        <p className="text-xs text-graphite">
+          Previously analyzed{result.reusedAt ? ` · ${new Date(result.reusedAt).toLocaleString()}` : ''} · Re-analyze runs it again.
+        </p>
+      ) : null}
+
       {result && result.extracted && !createdLead ? (
         <ProspectResult
           result={result}
@@ -804,7 +819,7 @@ export function ProspectAnalyze() {
           showSource={showSource}
           activeSenderId={selectedProfileId ?? result.bestSender?.id ?? null}
           onPrimaryAction={handlePrimaryAction}
-          onReanalyze={() => void analyze('analyze')}
+          onReanalyze={() => void analyze('analyze', undefined, true)}
           onTryAnotherAngle={() => void analyze('analyze')}
           onToggleDetails={() => setShowDetails((value) => !value)}
           onToggleSource={() => setShowSource((value) => !value)}
