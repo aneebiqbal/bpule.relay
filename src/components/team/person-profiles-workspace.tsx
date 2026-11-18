@@ -16,6 +16,7 @@ import { V4Chip, V4Empty, V4StatStrip } from '@/components/v4/primitives'
 import { ChannelLogo } from '@/components/ui/channel-logo'
 import { ChannelBadge } from '@/components/ui/channel-badge'
 import { ManagePeopleDialog } from '@/components/coverage/manage-people-dialog'
+import { LifecycleDialog } from './lifecycle-dialog'
 import { TeamProfilesTable } from './team-profiles-table'
 import { AddProfileWizard } from './add-profile-wizard'
 import type { TeamProfileDirectoryRow, TeamProfileChannelDetail } from '@/lib/team/profiles'
@@ -269,6 +270,7 @@ function PersonCard({
   onAssign: (channel: TeamProfileChannelDetail) => void
   canManageIdentities: boolean
 }) {
+  const [lifecycle, setLifecycle] = useState<{ identityId: string; identityName: string; channel: string; status: string } | null>(null)
   const issues: string[] = []
   if (!profile.primaryRepName) issues.push('No primary')
   if (profile.pendingAcknowledgementRepIds.length > 0) issues.push(`${profile.pendingAcknowledgementRepIds.length} unconfirmed`)
@@ -314,9 +316,14 @@ function PersonCard({
                 aria-expanded={expanded}
                 className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left transition-colors hover:bg-bone"
               >
-                <span className="flex min-w-0 items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                   <ChannelLogo channel={channel.channel} />
                   <span className="truncate text-[13px] font-medium text-ink">{channel.identityName}</span>
+                  {channel.status !== 'active' && (
+                    <span className="rounded-full border border-status-warning/40 bg-status-warning/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-status-warning">
+                      {channel.status}
+                    </span>
+                  )}
                   <span className="truncate text-[11px] text-stone">{channel.channel}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
@@ -354,6 +361,22 @@ function PersonCard({
                         Assign operators
                       </button>
                     )}
+                    {canManageIdentities && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLifecycle({
+                            identityId: channel.identityId,
+                            identityName: channel.identityName,
+                            channel: channel.channel,
+                            status: channel.status,
+                          })
+                        }
+                        className="rounded-md border border-line px-2.5 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink"
+                      >
+                        Status
+                      </button>
+                    )}
                     <Link href={`/team/profiles/${profile.profileId}?tab=execution`} className="rounded-md border border-line px-2.5 py-1 text-[11px] font-medium text-graphite transition-colors hover:text-ink">
                       Configure target
                     </Link>
@@ -387,6 +410,16 @@ function PersonCard({
           </button>
         </div>
       </div>
+
+      {lifecycle && (
+        <LifecycleDialog
+          identityId={lifecycle.identityId}
+          identityName={lifecycle.identityName}
+          channel={lifecycle.channel}
+          status={lifecycle.status}
+          onClose={() => setLifecycle(null)}
+        />
+      )}
     </section>
   )
 }

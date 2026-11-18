@@ -14,9 +14,10 @@
  */
 import { afterAll, describe, expect, it } from 'vitest'
 import { closeDbPool, serviceDbClient } from '@/lib/db/client'
-import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { listExecutableIdentitiesForRep, listExecutableIdentitiesForOrg } from '@/lib/coverage/access'
 import { addOperatorResponsibility, removeOperatorResponsibility, transferResponsibility, assignPrimaryResponsibility, readResponsibilityChain } from '@/lib/profiles/assignment'
 import { scanAssignmentDrift, repairAssignmentDrift } from '@/lib/profiles/reconcile'
+import { setIdentityLifecycle } from '@/lib/profiles/lifecycle'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
@@ -139,6 +140,53 @@ describeLive('OPERATOR_VISIBILITY', () => {
       expect(ownerStillSees.some((row) => row.id === identityId)).toBe(true)
     } finally {
       await cleanupFixture(client, profileId, identityId)
+    }
+  }, 180_000)
+
+  it('a suspended channel is not executable and can be restored', async () => {
+    const client = serviceDbClient()
+    const stamp = `${Date.now()}-life`
+    const label = `ZZ Lifecycle ${stamp}`
+    const { data: profile } = await client.from('profiles').insert({
+      organization_id: ORG, rep_id: ACTOR, platform: 'upwork', full_name: label, display_name: label, label,
+    }).select('id').single()
+    const { data: identity } = await client.from('revenue_identities').insert({
+      organization_id: ORG, profile_id: profile.id, identity_name: label, channel: 'upwork', status: 'active', slug: `zz-life-${stamp}`,
+    }).select('id').single()
+    try {
+      await addOperatorResponsibility(client, { orgId: ORG, identityId: identity.id, repId: AHMAD, actorRepId: ACTOR })
+      const before = await listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client))
+      expect(before.some((row) => row.id === identity.id)).toBe(true)
+
+      const suspended = await setIdentityLifecycle(client, {
+        organizationId: ORG, identityId: identity.id, to: 'SUSPENDED', reason: 'Credentials expired', actorRepId: ACTOR,
+      })
+      expect(suspended.ok).toBe(true)
+      const afterSuspend = await listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client))
+      expect(afterSuspend.some((row) => row.id === identity.id)).toBe(false)
+      const orgScope = await listExecutableIdentitiesForOrg(client, ORG, await businessDate(client))
+      expect(orgScope.some((row) => row.id === identity.id)).toBe(false)
+
+      const restored = await setIdentityLifecycle(client, {
+        organizationId: ORG, identityId: identity.id, to: 'ACTIVE', reason: '', actorRepId: ACTOR,
+      })
+      expect(restored.ok).toBe(true)
+      const afterRestore = await listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client))
+      expect(afterRestore.some((row) => row.id === identity.id)).toBe(true)
+
+      // Invalid transition: archived cannot jump to inactive.
+      await setIdentityLifecycle(client, { organizationId: ORG, identityId: identity.id, to: 'ARCHIVED', reason: 'cleanup', actorRepId: ACTOR })
+      const invalid = await setIdentityLifecycle(client, {
+        organizationId: ORG, identityId: identity.id, to: 'INACTIVE', reason: 'nope', actorRepId: ACTOR,
+      })
+      expect(invalid.ok).toBe(false)
+      // A reason is mandatory for anything other than reactivation.
+      const noReason = await setIdentityLifecycle(client, {
+        organizationId: ORG, identityId: identity.id, to: 'SUSPENDED', reason: '   ', actorRepId: ACTOR,
+      })
+      expect(noReason.ok).toBe(false)
+    } finally {
+      await cleanupFixture(client, profile.id, identity.id)
     }
   }, 180_000)
 
