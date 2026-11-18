@@ -265,6 +265,49 @@ export async function loadTeamProfileDirectory(
     }
   }
 
+  // A person row is keyed by their canonical profile, which may itself carry no
+  // channel identity (`Fizza iqbal` — her linkedin/upwork identities live on
+  // child profiles). Merge the canonical facts of the whole person group so the
+  // person card still shows its ownership instead of "ambiguous".
+  const coverageRank: Record<string, number> = { EXPLICIT: 3, DERIVED: 2, AMBIGUOUS: 1, UNASSIGNED: 0 }
+  const canonicalByPersonKey = new Map<string, CanonicalProfileAssignment>()
+  const mergeCanonical = (into: CanonicalProfileAssignment, from: CanonicalProfileAssignment) => {
+    const winner = into.primarySource === 'coverage' ? into : from.primarySource === 'coverage' ? from : into.primaryRepId ? into : from
+    const repIds = new Set(into.assignedReps.map((rep) => rep.repId))
+    for (const rep of from.assignedReps) {
+      if (repIds.has(rep.repId)) continue
+      into.assignedReps.push(rep)
+      repIds.add(rep.repId)
+    }
+    const operatorIds = new Set(into.operators.map((rep) => rep.repId))
+    for (const rep of from.operators) {
+      if (operatorIds.has(rep.repId)) continue
+      into.operators.push(rep)
+      operatorIds.add(rep.repId)
+    }
+    const backupIds = new Set(into.backups.map((rep) => rep.repId))
+    for (const rep of from.backups) {
+      if (backupIds.has(rep.repId)) continue
+      into.backups.push(rep)
+      backupIds.add(rep.repId)
+    }
+    into.channels = [...new Set([...into.channels, ...from.channels])].sort()
+    into.identityIds = [...new Set([...into.identityIds, ...from.identityIds])]
+    into.primaryRepId = winner.primaryRepId
+    into.primaryRepName = winner.primaryRepName
+    into.primarySource = winner.primarySource
+    into.primaryReason = winner.primaryReason
+    if ((coverageRank[from.coverageState] ?? 0) > (coverageRank[into.coverageState] ?? 0)) into.coverageState = from.coverageState
+    into.needsReview = into.needsReview || from.needsReview
+    into.reviewReasons = [...new Set([...into.reviewReasons, ...from.reviewReasons])]
+  }
+  for (const entry of canonical.profiles) {
+    const key = personKeyByProfile.get(entry.profileId) ?? entry.profileId
+    const existing = canonicalByPersonKey.get(key)
+    if (!existing) canonicalByPersonKey.set(key, { ...entry, profileId: key })
+    else mergeCanonical(existing, entry)
+  }
+
   const identityRes = await supabase
     .from('revenue_identities')
     .select('id, identity_name, channel, profile_id, status')
@@ -384,7 +427,7 @@ export async function loadTeamProfileDirectory(
     if (assignedKeys.has(key)) continue
     let row = byProfile.get(key)
     if (!row) {
-      const canonical = identity.profile_id ? canonicalByProfile.get(key) : undefined
+      const canonical = identity.profile_id ? canonicalByPersonKey.get(key) : undefined
       row = {
         profileId: key,
         profileName: profileNameById.get(key) ?? identity.identity_name,
@@ -417,7 +460,7 @@ export async function loadTeamProfileDirectory(
   }
 
   const assignedDirectory: TeamProfileDirectoryRow[] = assignedRows.map((row) => {
-    const canonical = canonicalByProfile.get(row.profileId)
+    const canonical = canonicalByPersonKey.get(row.profileId)
     return {
       ...row,
       assignmentCount: row.assignedReps.length,
