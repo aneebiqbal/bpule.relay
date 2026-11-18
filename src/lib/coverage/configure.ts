@@ -32,15 +32,60 @@ export interface ConfigureCoverageStatementInput {
   now: Date
 }
 
+type Seat = { repId: string; role: 'PRIMARY' | 'OPERATOR' | 'BACKUP'; priority: number }
+
+/** One seat per rep — PRIMARY wins, then lowest priority. Mirrors the SQL `uniq`. */
+export function uniqueSeats(seats: Seat[]): Seat[] {
+  const rank = (seat: Seat) => (seat.role === 'PRIMARY' ? 0 : 1)
+  const byRep = new Map<string, Seat>()
+  for (const seat of seats) {
+    const existing = byRep.get(seat.repId)
+    if (!existing || rank(seat) < rank(existing) || (rank(seat) === rank(existing) && seat.priority < existing.priority)) {
+      byRep.set(seat.repId, seat)
+    }
+  }
+  return [...byRep.values()]
+}
+
+export function sameSeatSet(
+  current: Array<{ rep_id?: string | null; role?: string | null; priority?: number | null }>,
+  desired: Seat[],
+): boolean {
+  if (current.length !== desired.length) return false
+  const key = (repId: string, role: string, priority: number) => `${repId}|${role}|${priority}`
+  const want = new Set(desired.map((seat) => key(seat.repId, seat.role, seat.priority)))
+  for (const row of current) {
+    if (!row.rep_id) return false
+    if (!want.has(key(row.rep_id, String(row.role), Number(row.priority)))) return false
+  }
+  return true
+}
+
 export async function configureCoverageStatement(
   client: DbClient,
   input: ConfigureCoverageStatementInput,
-): Promise<{ ok: boolean; error?: string }> {
-  const seats = [
-    ...(input.primaryRepId ? [{ repId: input.primaryRepId, role: 'PRIMARY', priority: 1 }] : []),
-    ...input.operators.map((row) => ({ repId: row.repId, role: 'OPERATOR', priority: row.priority })),
-    ...input.backups.map((row) => ({ repId: row.repId, role: 'BACKUP', priority: row.priority })),
+): Promise<{ ok: boolean; error?: string; unchanged?: boolean }> {
+  const seats: Seat[] = [
+    ...(input.primaryRepId ? [{ repId: input.primaryRepId, role: 'PRIMARY' as const, priority: 1 }] : []),
+    ...input.operators.map((row) => ({ repId: row.repId, role: 'OPERATOR' as const, priority: row.priority })),
+    ...input.backups.map((row) => ({ repId: row.repId, role: 'BACKUP' as const, priority: row.priority })),
   ]
+
+  if (!client.raw) return { ok: false, error: 'Raw query is not available on this client.' }
+
+  // Idempotence guard (BUG-42). The statement below always inserted a fresh set
+  // of coverage rows, and ack_arm re-arms an acknowledgement whenever
+  // source_row_id changes — so re-saving an unchanged chain silently reset
+  // every operator's "I have this" for the day and re-created the assignment.
+  // An unchanged chain must be a no-op.
+  const desired = uniqueSeats(seats)
+  const { data: current, error: readError } = await client.raw(
+    `SELECT rep_id, role, priority FROM profile_coverage
+     WHERE organization_id = $1 AND profile_id = $2 AND active = true`,
+    [input.organizationId, input.profileId],
+  )
+  if (readError) return { ok: false, error: readError.message }
+  if (sameSeatSet(current ?? [], desired)) return { ok: true, unchanged: true }
 
   const sql = `
 WITH params AS (
@@ -124,8 +169,6 @@ event AS (
          (SELECT primary_rep FROM params), (SELECT reason FROM params), (SELECT actor FROM params)
 )
 SELECT (SELECT count(*)::int FROM ins) AS seats`
-
-  if (!client.raw) return { ok: false, error: 'Raw query is not available on this client.' }
 
   // Deactivate the previous chain first. A data-modifying CTE cannot see its
   // sibling's changes, so inserting a seat that reuses an active
