@@ -122,6 +122,22 @@ describe('NO_DEFAULT_PROFILE_OVERRIDE', () => {
   })
 })
 
+describe('ANALYZER_DEFAULTS_TO_A_SENDER_IT_CAN_USE', () => {
+  it('falls back to an offered sender when the active workspace is not one', () => {
+    const client = read('src', 'components', 'prospect', 'prospect-analyze.tsx')
+    // The active workspace can be an Upwork account while this surface offers
+    // LinkedIn senders only; defaulting to it made the page claim the wrong
+    // sender and the analyze call then fail.
+    expect(client).toMatch(/profiles\.some\(\(profile\) => profile\.id === selectedProfileId\)/)
+    expect(client).toMatch(/setSelectedProfileId\(profiles\[0\]\.id\)/)
+  })
+
+  it('offers LinkedIn senders only on this surface', () => {
+    const client = read('src', 'components', 'prospect', 'prospect-analyze.tsx')
+    expect(client).toMatch(/fetch\('\/api\/profiles\?assigned=1&channel=linkedin'\)/)
+  })
+})
+
 describe('LINKEDIN_ANALYZER_NEVER_USES_UPWORK_IDENTITY', () => {
   it('propagates the selected channel into routing and the recommended action', () => {
     const source = read('src', 'app', 'api', 'prospect', 'analyze', 'route.ts')
