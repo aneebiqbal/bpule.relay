@@ -5,6 +5,7 @@ import { getAuthProvider } from '@/lib/auth/provider'
 import { getDbClient } from '@/lib/db/provider'
 import { getDemoStore } from '@/lib/store/demo-registry'
 import { perfTrace } from '@/lib/perf-trace'
+import { requestMemo } from '@/lib/request-scope'
 
 export interface CurrentUser {
   rep: Rep
@@ -239,4 +240,4 @@ async function resolveCurrentUser(): Promise<CurrentUser | null> {
   }
 }
 
-export const getCurrentUser = cache(resolveCurrentUser)
+export const getCurrentUser = cache(() => requestMemo('auth.currentUser', () => resolveCurrentUser()))

@@ -1,6 +1,7 @@
 import type { DbClient } from '@/lib/db/types'
 import type { Profile, RevenueIdentityChannel } from '@/lib/domain/types'
 import { normalizeChannel } from '@/lib/profiles/channel'
+import { requestMemo } from '@/lib/request-scope'
 
 /**
  * Temporary coverage → execution access.
@@ -205,6 +206,17 @@ export interface ExecutableIdentity {
  * operator seat never moves ownership.
  */
 export async function listExecutableIdentitiesForRep(
+  client: DbClient,
+  orgId: string,
+  repId: string,
+  businessDate: string,
+): Promise<ExecutableIdentity[]> {
+  return requestMemo(`coverage.executable:${orgId}:${repId}:${businessDate}`, () =>
+    computeExecutableIdentitiesForRep(client, orgId, repId, businessDate),
+  )
+}
+
+async function computeExecutableIdentitiesForRep(
   client: DbClient,
   orgId: string,
   repId: string,

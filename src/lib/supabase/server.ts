@@ -6,6 +6,8 @@ import { supabaseDbClient } from '@/lib/db/supabase'
 import { neonDbClient } from '@/lib/db/neon'
 import { postgresDbClient } from '@/lib/db/postgres'
 import { resolveDbProvider } from '@/lib/db/types'
+import { ensureRequestScope } from '@/lib/request-scope'
+import '@/lib/request-scope.node'
 import type { DbClient } from '@/lib/db/types'
 
 /**
@@ -66,6 +68,9 @@ export const getSupabaseAuthClient = cachedClient
  * the Neon provider there is no Supabase session to read.
  */
 export const createServerSupabase = cache(async (): Promise<DbClient> => {
+  // Establish the request scope for every data path. Without this, auth and
+  // user resolution re-run for each caller (see request-scope.ts).
+  ensureRequestScope()
   const provider = resolveDbProvider()
   if (provider === 'neon' || provider === 'postgres') {
     const { getAuthProvider } = await import('@/lib/auth/provider')
