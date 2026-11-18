@@ -240,14 +240,18 @@ export async function loadTeamProfileDirectory(
 
   // Person grouping: a duplicate/orphan profile renders under its canonical
   // person, so the directory is one row per human, never one per channel.
-  const allProfiles = ((allProfilesRes.data ?? []) as Array<{
+  const fetchedProfiles = (allProfilesRes.data ?? []) as Array<{
     id: string
     display_name: string | null
     full_name: string | null
     label: string | null
     person_id: string | null
     archived_at: string | null
-  }>).filter((profile) => opts.includeArchived || !profile.archived_at)
+  }>
+  // Archived profiles (and their channels) are retired: hidden from the
+  // operating directory, opt back in for admin inspection.
+  const archivedProfileIds = new Set(fetchedProfiles.filter((profile) => profile.archived_at).map((profile) => profile.id))
+  const allProfiles = fetchedProfiles.filter((profile) => opts.includeArchived || !profile.archived_at)
   const personKeyByProfile = new Map<string, string>()
   const canonicalNameById = new Map<string, string>()
   for (const profile of allProfiles) {
@@ -267,7 +271,11 @@ export async function loadTeamProfileDirectory(
     .eq('organization_id', orgId)
     .limit(2000)
 
-  const identities = (identityRes.data ?? []) as DirectoryIdentity[]
+  const identities = ((identityRes.data ?? []) as DirectoryIdentity[]).filter(
+    (identity) =>
+      (opts.includeArchived || identity.status !== 'archived') &&
+      (opts.includeArchived || !archivedProfileIds.has(identity.profile_id ?? '')),
+  )
 
   // The plan is channel-owned and SHARED: the profile's completion is the sum of
   // every operator's contribution, never just the primary's. `live` attributes
@@ -303,6 +311,7 @@ export async function loadTeamProfileDirectory(
   }
 
   const assignedRows = buildTeamProfiles(live, personKeyByProfile)
+    .filter((row) => opts.includeArchived || !archivedProfileIds.has(row.profileId))
     .map((row) => {
       const completed = completedByPersonKey.get(row.profileId)
       const profileName = canonicalNameById.get(row.profileId) ?? row.profileName
