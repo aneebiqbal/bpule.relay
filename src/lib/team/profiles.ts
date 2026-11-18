@@ -195,7 +195,10 @@ export interface TeamProfileDirectoryRow extends TeamProfileRow {
  * One profile row per `profiles` row — assigned, unassigned, or an orphan with
  * no channel identity at all (surfaced for review, never silently dropped).
  */
-export async function loadTeamProfileDirectory(orgId: string): Promise<{
+export async function loadTeamProfileDirectory(
+  orgId: string,
+  opts: { includeArchived?: boolean } = {},
+): Promise<{
   rows: TeamProfileDirectoryRow[]
   businessDate: string
   timezone: string
@@ -206,7 +209,7 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
     loadCanonicalProfileAssignments(orgId, { client: supabase }),
     supabase
       .from('profiles')
-      .select('id, display_name, full_name, label, person_id')
+      .select('id, display_name, full_name, label, person_id, archived_at')
       .eq('organization_id', orgId)
       .limit(2000),
     supabase
@@ -237,13 +240,14 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
 
   // Person grouping: a duplicate/orphan profile renders under its canonical
   // person, so the directory is one row per human, never one per channel.
-  const allProfiles = (allProfilesRes.data ?? []) as Array<{
+  const allProfiles = ((allProfilesRes.data ?? []) as Array<{
     id: string
     display_name: string | null
     full_name: string | null
     label: string | null
     person_id: string | null
-  }>
+    archived_at: string | null
+  }>).filter((profile) => opts.includeArchived || !profile.archived_at)
   const personKeyByProfile = new Map<string, string>()
   const canonicalNameById = new Map<string, string>()
   for (const profile of allProfiles) {
