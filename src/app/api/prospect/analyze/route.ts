@@ -733,7 +733,7 @@ async function handlePost(request: Request) {
         // on a genuine new capture, never on a reuse/cache hit for input
         // already analyzed, so re-analyzing the same paste can't be farmed
         if (captured.isNewCapture) {
-          await store.recordProspectExtracted(captured.revenueIdentityId)
+          await store.recordProspectExtracted(captured.revenueIdentityId, `prospect_capture:${captured.id}`)
         }
         // Shadow scoring (SCORING_SHADOW_ENGINES): candidate engines beside
         // the production decision. Never shown to the rep, never blocks.

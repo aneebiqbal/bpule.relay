@@ -6029,21 +6029,21 @@ export class SupabaseStore implements ScoutStore {
    * re-analyzing (or "Try Another Angle" on) the same paste would
    * double-credit the same underlying action.
    */
-  async recordProspectExtracted(revenueIdentityId?: string | null): Promise<void> {
+  async recordProspectExtracted(revenueIdentityId?: string | null, sourceEventId?: string | null): Promise<void> {
     try {
       const businessDate = await this.businessDate()
       const executable = await listExecutableIdentitiesForRep(this.client, this.orgId, this.rep.id, businessDate)
       const executableIds = new Set(executable.map((row) => row.id))
-      // The requirement belongs to the channel; a rep's execution scope decides
-      // which of those plans they contribute to.
+      // Credit the account the prospect was actually captured on. A caller
+      // without an identity (legacy) credits every executable lane.
+      const candidates = revenueIdentityId ? [revenueIdentityId] : [...executableIds]
       const { data: plans } = await this.client
         .from('daily_target_plans')
         .select('revenue_identity_id')
         .eq('activity_type', 'prospect_extracted')
         .eq('active', true)
-      const identityIds = (plans ?? [])
-        .map((row) => row.revenue_identity_id as string)
-        .filter((id) => executableIds.has(id))
+      const planned = new Set((plans ?? []).map((row) => row.revenue_identity_id as string))
+      const identityIds = candidates.filter((id) => executableIds.has(id) && planned.has(id))
       if (identityIds.length === 0) return
 
       for (const identityId of identityIds) {
@@ -6053,6 +6053,9 @@ export class SupabaseStore implements ScoutStore {
             p_identity_id: identityId,
             p_activity_type: 'prospect_extracted',
             p_org_id: this.orgId,
+            // Exactly-once per capture: a retry or a double submit of the same
+            // capture must not increment twice (BUG-40).
+            p_source_event_id: sourceEventId ?? null,
             p_date: businessDate,
           })
         } catch {

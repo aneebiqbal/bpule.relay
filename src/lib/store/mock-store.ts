@@ -3078,7 +3078,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       // Demo store never dedupes on rawInput (unlike SupabaseStore), so every
       return { ...entry, isNewCapture: true }
     },
-    async recordProspectExtracted(_revenueIdentityId?: string | null): Promise<void> {
+    async recordProspectExtracted(_revenueIdentityId?: string | null, _sourceEventId?: string | null): Promise<void> {
       // No-op in demo mode — there is no daily_targets/daily_accountability
       // ledger to credit against. Present so callers can call this
       // unconditionally regardless of which store implementation is active.
