@@ -802,7 +802,12 @@ export class NeonDbClient implements DbClient {
   async rpc<T = any>(functionName: string, args: Record<string, unknown> = {}): Promise<DbResult<T>> {
     const keys = Object.keys(args)
     const values = keys.map((k) => args[k])
-    const params = keys.map((_, i) => `$${i + 1}`)
+    // Named notation, never positional: the server binds $n in the order the
+    // caller wrote the keys, so an omitted optional parameter silently shifted
+    // every later argument into the wrong slot (record_prospect_extracted sent
+    // its business date into p_source_event_id, collapsing a whole day of
+    // captures into one). Named binding makes the call site self-describing.
+    const params = keys.map((k, i) => `${ident(k)} => $${i + 1}`)
     const text = `SELECT * FROM ${ident(functionName)}(${params.join(', ')})`
     try {
       const rows = await this.executor.query(text, values)

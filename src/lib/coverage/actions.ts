@@ -665,7 +665,7 @@ async function configureCoverageFast(input: {
   /** Seed the channel's default plan when it has none. The bulk/command-center
    *  assign path opts in; the per-profile dialog keeps its existing behaviour. */
   ensureTargets?: boolean
-}, client: DbClient): Promise<{ ok: boolean; error?: string; seeded?: number }> {
+}, client: DbClient): Promise<{ ok: boolean; error?: string; seeded?: number; unchanged?: boolean }> {
   let seeded = 0
 
   const reason = `${input.operators.length} operator${input.operators.length === 1 ? '' : 's'}, ${input.backups.length} backup${input.backups.length === 1 ? '' : 's'}`
@@ -680,6 +680,9 @@ async function configureCoverageFast(input: {
     now: new Date(),
   })
   if (!result.ok) return { ok: false, error: result.error }
+  // An unchanged chain is a no-op: no new coverage rows, no re-armed
+  // acknowledgements (BUG-42).
+  if (result.unchanged) return { ok: true, unchanged: true }
 
   // The bulk/command-center assign path seeds the channel's default plan when
   // none exists, so a freshly staffed profile is executable immediately. The
@@ -887,7 +890,7 @@ export async function configureCoverage(input: {
   actorRepId: string
   client?: DbClient
   ensureTargets?: boolean
-}): Promise<{ ok: boolean; error?: string; seeded?: number }> {
+}): Promise<{ ok: boolean; error?: string; seeded?: number; unchanged?: boolean }> {
   const client = input.client ?? (await createServerSupabase())
   if (client.raw) return configureCoverageFast(input, client)
   return configureCoverageLegacy(input, client)

@@ -6,8 +6,13 @@ import type { DbClient } from '@/lib/db/types'
  * Accountability Metrics
  *
  * One action = one lead that progressed through a meaningful outreach step.
- * Connection sent, DM sent, follow-up sent, reply received, lead won.
+ * Connection sent, DM sent, follow-up sent, reply received, Upwork proposal
+ * drafted, Upwork application submitted, lead won.
  * Each counts as ONE action toward the rep's daily accountability.
+ *
+ * A draft is real work and counts as an action; it is NOT a submitted
+ * application. The two are counted separately so a draft can never inflate
+ * application conversion (BUG-41).
  */
 
 export interface DailyMetrics {
@@ -21,10 +26,14 @@ export interface DailyMetrics {
   repliesSent: number
   repliesReceived: number
   leadsWon: number
+  /** Upwork proposal versions saved. Never an application. */
+  upworkProposals: number
+  /** Upwork applications actually submitted. */
+  upworkApplications: number
   // Computed
   totalActions: number
-  outreachActions: number // connections + dms + followups + replies sent
-  responseRate: number // replies_received / outreach_sent
+  outreachActions: number // every executed action, Upwork included
+  responseRate: number // replies_received / messages sent
 }
 
 export interface LeadJourney {
@@ -72,6 +81,8 @@ export interface TeamDayView {
     followupsSent: number
     repliesReceived: number
     leadsWon: number
+    upworkProposals: number
+    upworkApplications: number
     totalActions: number
   }
 }
@@ -83,17 +94,25 @@ const EMPTY_METRICS: Omit<DailyMetrics, 'date' | 'repId' | 'repName'> = {
   repliesSent: 0,
   repliesReceived: 0,
   leadsWon: 0,
+  upworkProposals: 0,
+  upworkApplications: 0,
   totalActions: 0,
   outreachActions: 0,
   responseRate: 0,
 }
 
 function withComputed(m: Omit<DailyMetrics, 'date' | 'repId' | 'repName'>): Omit<DailyMetrics, 'date' | 'repId' | 'repName'> {
-  const outreachActions = m.connectionsSent + m.dmsSent + m.followupsSent + m.repliesSent
+  const outreachActions =
+    m.connectionsSent + m.dmsSent + m.followupsSent + m.repliesSent + m.upworkProposals + m.upworkApplications
   const totalActions = outreachActions + m.leadsWon
-  const responseRate = outreachActions > 0 ? Math.round((m.repliesReceived / outreachActions) * 100) : 0
+  // Response rate stays a messaging metric: Upwork drafts are not messages sent.
+  const messagesSent = m.connectionsSent + m.dmsSent + m.followupsSent + m.repliesSent
+  const responseRate = messagesSent > 0 ? Math.round((m.repliesReceived / messagesSent) * 100) : 0
   return { ...m, outreachActions, totalActions, responseRate }
 }
+
+/** The Upwork action types that mean real work, and what each one counts as. */
+const UPWORK_ACTION_TYPES = ['UPWORK_PROPOSAL_PREPARED', 'UPWORK_APPLICATION_SUBMITTED', 'UPWORK_APPLIED'] as const
 
 async function fetchMetricsForPeriod(
   client: DbClient,
@@ -107,6 +126,18 @@ async function fetchMetricsForPeriod(
     .eq('rep_id', repId)
     .gte('sent_at', startDate)
     .lte('sent_at', endDate)
+
+  // Upwork work lives in the action ledger, not in `messages`. Without this
+  // read a saved draft or a submitted application was invisible to the daily
+  // action count (BUG-41).
+  const { data: upworkActions } = await client
+    .from('action_events')
+    .select('action_type, occurred_at')
+    .eq('actor_id', repId)
+    .in('action_type', [...UPWORK_ACTION_TYPES])
+    .gte('occurred_at', startDate)
+    .lte('occurred_at', endDate)
+    .limit(500)
 
   // leads has no updated_at; the win date is the outcome event, and the owner
   // is read from the lead row at query time.
@@ -129,6 +160,8 @@ async function fetchMetricsForPeriod(
   let followupsSent = 0
   let repliesSent = 0
   let repliesReceived = 0
+  let upworkProposals = 0
+  let upworkApplications = 0
 
   for (const m of messages ?? []) {
     const direction = m.direction as string
@@ -145,6 +178,13 @@ async function fetchMetricsForPeriod(
     }
   }
 
+  for (const event of upworkActions ?? []) {
+    if (event.action_type === 'UPWORK_PROPOSAL_PREPARED') upworkProposals++
+    else if (event.action_type === 'UPWORK_APPLICATION_SUBMITTED' || event.action_type === 'UPWORK_APPLIED') {
+      upworkApplications++
+    }
+  }
+
   return withComputed({
     connectionsSent,
     dmsSent,
@@ -152,6 +192,8 @@ async function fetchMetricsForPeriod(
     repliesSent,
     repliesReceived,
     leadsWon: wonLeads?.length ?? 0,
+    upworkProposals,
+    upworkApplications,
     totalActions: 0,
     outreachActions: 0,
     responseRate: 0,
@@ -255,9 +297,20 @@ export async function getTeamDayView(
       followupsSent: acc.followupsSent + r.followupsSent,
       repliesReceived: acc.repliesReceived + r.repliesReceived,
       leadsWon: acc.leadsWon + r.leadsWon,
+      upworkProposals: acc.upworkProposals + r.upworkProposals,
+      upworkApplications: acc.upworkApplications + r.upworkApplications,
       totalActions: acc.totalActions + r.totalActions,
     }),
-    { connectionsSent: 0, dmsSent: 0, followupsSent: 0, repliesReceived: 0, leadsWon: 0, totalActions: 0 },
+    {
+      connectionsSent: 0,
+      dmsSent: 0,
+      followupsSent: 0,
+      repliesReceived: 0,
+      leadsWon: 0,
+      upworkProposals: 0,
+      upworkApplications: 0,
+      totalActions: 0,
+    },
   )
 
   return { date, reps, teamTotal }
@@ -278,7 +331,16 @@ export async function getTeamCalendar(
     cursor = addDays(cursor, 1)
   }
 
-  const emptyTotal = () => ({ connectionsSent: 0, dmsSent: 0, followupsSent: 0, repliesReceived: 0, leadsWon: 0, totalActions: 0 })
+  const emptyTotal = () => ({
+    connectionsSent: 0,
+    dmsSent: 0,
+    followupsSent: 0,
+    repliesReceived: 0,
+    leadsWon: 0,
+    upworkProposals: 0,
+    upworkApplications: 0,
+    totalActions: 0,
+  })
   const repFilter = repIds.length ? repIds : []
   if (repFilter.length === 0) {
     return days.map((date) => ({ date, reps: [], teamTotal: emptyTotal() }))
@@ -287,7 +349,7 @@ export async function getTeamCalendar(
   // One batched read for the whole range (was 252 queries for 18 reps x 7 days).
   const startIso = `${startDate}T00:00:00.000Z`
   const endIso = `${endDate}T23:59:59.999Z`
-  const [{ data: messages }, { data: wonOutcomes }, { data: leads }] = await Promise.all([
+  const [{ data: messages }, { data: wonOutcomes }, { data: leads }, { data: upworkActions }] = await Promise.all([
     client.from('messages')
       .select('rep_id, type, direction, sent_at')
       .in('rep_id', repFilter)
@@ -301,6 +363,13 @@ export async function getTeamCalendar(
     client.from('leads')
       .select('id, owner_rep_id')
       .in('owner_rep_id', repFilter),
+    client.from('action_events')
+      .select('actor_id, action_type, occurred_at')
+      .in('actor_id', repFilter)
+      .in('action_type', [...UPWORK_ACTION_TYPES])
+      .gte('occurred_at', startIso)
+      .lte('occurred_at', endIso)
+      .limit(2000),
   ])
 
   const ownerByLead = new Map<string, string>()
@@ -330,6 +399,18 @@ export async function getTeamCalendar(
     acc.set(k, cur)
   }
 
+  for (const e of (upworkActions ?? []) as Array<{ actor_id: string; action_type: string; occurred_at: string }>) {
+    const rep = e.actor_id
+    if (!repFilter.includes(rep)) continue
+    const k = `${rep}|${String(e.occurred_at).slice(0, 10)}`
+    const cur = acc.get(k) ?? { ...EMPTY_METRICS }
+    if (e.action_type === 'UPWORK_PROPOSAL_PREPARED') cur.upworkProposals++
+    else if (e.action_type === 'UPWORK_APPLICATION_SUBMITTED' || e.action_type === 'UPWORK_APPLIED') {
+      cur.upworkApplications++
+    }
+    acc.set(k, cur)
+  }
+
   return days.map((date) => {
     const reps: DailyMetrics[] = repFilter.map((repId) => {
       const cur = acc.get(`${repId}|${date}`) ?? { ...EMPTY_METRICS }
@@ -343,6 +424,8 @@ export async function getTeamCalendar(
       teamTotal.followupsSent += r.followupsSent
       teamTotal.repliesReceived += r.repliesReceived
       teamTotal.leadsWon += r.leadsWon
+      teamTotal.upworkProposals += r.upworkProposals
+      teamTotal.upworkApplications += r.upworkApplications
       teamTotal.totalActions += r.totalActions
     }
     return { date, reps, teamTotal }

@@ -98,6 +98,8 @@ type AnalyzeEvent =
   senderSuggestion?: { profileId: string; name: string | null; role: string | null; platform: string | null; score: number; currentBestScore: number; currentSenderName: string | null; matchedTerms: string[]; topProof: string | null; holders: string[]; reason: string } | null
       qualification: ProspectQualificationAssessment
       revenue?: RevenueLoopSnapshot
+      reused?: boolean
+      reusedAt?: string | null
     } & DecisionDetail
 
 export interface AnalysisState {
@@ -138,6 +140,9 @@ export interface AnalysisState {
   qualification: ProspectQualificationAssessment
   revenue: RevenueLoopSnapshot | null
   decision: DecisionDetail
+  /** True when this result came from the server's reuse cache (BUG-39). */
+  reused?: boolean
+  reusedAt?: string | null
 }
 
 function prospectCanBeSaved(
@@ -278,14 +283,19 @@ export function ProspectAnalyze() {
     }
   }, [])
 
-  // Auto-analyze if paste param provided
+  // Auto-analyze if paste param provided. It must wait for the sender list: the
+  // deep link otherwise fires with the active workspace profile, which is not a
+  // sender on this surface, and the analyze call fails before the user has seen
+  // anything.
   useEffect(() => {
     const paste = searchParams?.get('paste')
-    if (paste && !analyzing && !result) {
+    const selectionReady =
+      profiles.length > 0 && (!selectedProfileId || profiles.some((profile) => profile.id === selectedProfileId))
+    if (paste && !analyzing && !result && selectionReady) {
       void analyze()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
+  }, [searchParams, profiles, selectedProfileId, analyzing, result])
 
   // Clicking "Create lead" happens near the bottom of a long results panel,
   // but the error banner renders at the top of the page — without this, a
@@ -316,6 +326,17 @@ export function ProspectAnalyze() {
     setSelectedProfileId(nextProfileId)
     resetResult()
   }, [workspace.active?.id, workspace.active?.profileId, resetResult])
+
+  // The workspace is not always a sender on this surface: the LinkedIn analyzer
+  // offers only LinkedIn senders, but the active workspace can be an Upwork
+  // account. Defaulting to it made the page claim "Prospecting as <Upwork
+  // account>" and the analyze call then fail with an unusable selection.
+  // Fall back to a profile this surface can actually send as.
+  useEffect(() => {
+    if (profiles.length === 0) return
+    if (selectedProfileId && profiles.some((profile) => profile.id === selectedProfileId)) return
+    setSelectedProfileId(profiles[0].id)
+  }, [profiles, selectedProfileId])
 
   // The sender list backs the "Working as" selector. Best-effort: without it
   // the selector falls back to the active workspace identity.
@@ -365,7 +386,7 @@ export function ProspectAnalyze() {
     return () => { cancelled = true }
   }, [])
 
-  async function analyze(mode: 'analyze' | 'try-another-angle' | 'generate' = 'analyze', profileIdOverride?: string) {
+  async function analyze(mode: 'analyze' | 'try-another-angle' | 'generate' = 'analyze', profileIdOverride?: string, forceReanalyze = false) {
     if (analyzingRef.current) return
     const guard = pasteGuard(rawInput)
     if (guard) {
@@ -374,6 +395,17 @@ export function ProspectAnalyze() {
       return
     }
     setValidationError(null)
+
+    const effectiveProfileId = profileIdOverride ?? selectedProfileId ?? workspace.active?.profileId ?? null
+
+    // Never send a selection this surface cannot send as. Without this the
+    // analyze call reaches the server with the active workspace profile (which
+    // may be an Upwork account) and fails as inaccessible.
+    if (profiles.length > 0 && !profiles.some((profile) => profile.id === effectiveProfileId)) {
+      setError('Choose one of your assigned profiles to prospect as.')
+      return
+    }
+
     analyzingRef.current = true
 
     // "Try Another Angle" must never re-derive canonical evidence/score/
@@ -383,7 +415,6 @@ export function ProspectAnalyze() {
     // entirely. See BUG_LEDGER — TEAM-005.
     const existingCanonical = mode === 'try-another-angle' ? result?.canonical ?? null : null
 
-    const effectiveProfileId = profileIdOverride ?? selectedProfileId ?? workspace.active?.profileId ?? null
     const revenueIdentityId = identityForProfile(effectiveProfileId)
 
     resetResult()
@@ -401,6 +432,8 @@ export function ProspectAnalyze() {
           profileId: effectiveProfileId,
           revenueIdentityId,
           generateNote: mode === 'generate',
+          // Explicit "Re-analyze" bypasses the reuse cache (BUG-39).
+          forceReanalyze: forceReanalyze || undefined,
           ...(existingCanonical ? { existingCanonical } : {}),
         }),
         signal: abortRef.current.signal,
@@ -464,6 +497,8 @@ export function ProspectAnalyze() {
                   versions: event.versions ?? null,
                   decisionRunId: event.decisionRunId ?? null,
                 },
+                reused: event.reused === true,
+                reusedAt: event.reusedAt ?? null,
               })
               // Track completed analysis
               const durationMs = Math.round(performance.now() - analysisTiming)
@@ -773,7 +808,7 @@ export function ProspectAnalyze() {
                 Check another
               </Button>
             ) : null}
-            <Button variant="orange" onClick={() => void analyze()} loading={analyzing}>
+            <Button variant="orange" onClick={() => void analyze('analyze', undefined, Boolean(result))} loading={analyzing}>
               <Sparkles className="size-4" aria-hidden="true" />
               {analyzing ? 'Analyzing' : result ? 'Re-analyze' : 'Analyze'}
             </Button>
@@ -794,6 +829,12 @@ export function ProspectAnalyze() {
         />
       ) : null}
 
+      {result?.reused ? (
+        <p className="text-xs text-graphite">
+          Previously analyzed{result.reusedAt ? ` · ${new Date(result.reusedAt).toLocaleString()}` : ''} · Re-analyze runs it again.
+        </p>
+      ) : null}
+
       {result && result.extracted && !createdLead ? (
         <ProspectResult
           result={result}
@@ -804,7 +845,7 @@ export function ProspectAnalyze() {
           showSource={showSource}
           activeSenderId={selectedProfileId ?? result.bestSender?.id ?? null}
           onPrimaryAction={handlePrimaryAction}
-          onReanalyze={() => void analyze('analyze')}
+          onReanalyze={() => void analyze('analyze', undefined, true)}
           onTryAnotherAngle={() => void analyze('analyze')}
           onToggleDetails={() => setShowDetails((value) => !value)}
           onToggleSource={() => setShowSource((value) => !value)}

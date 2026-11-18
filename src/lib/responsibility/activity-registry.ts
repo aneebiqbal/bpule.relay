@@ -6,8 +6,9 @@
  * this file.
  *
  * TRACKED ≠ TARGETABLE. An action may appear in activity history and still not
- * form a daily plan — generating a draft is real work, but it is not the same
- * as submitting an application.
+ * form a daily plan. Generating a draft is real work — it counts as one action
+ * (BUG-41) — but it is not the same as submitting an application, so it stays
+ * out of the application target.
  */
 
 export type ActivityKey =
@@ -133,7 +134,7 @@ export const ACTIVITY_REGISTRY: Record<ActivityKey, ActivityDefinition> = {
     shortLabel: 'Drafts',
     // Real work, but it is NOT a submitted application.
     targetable: false,
-    defaultWeight: 0,
+    defaultWeight: 1,
     completionAuthority: 'action_events.action_type=UPWORK_PROPOSAL_PREPARED',
     sourceEventTypes: ['UPWORK_PROPOSAL_PREPARED'],
   },

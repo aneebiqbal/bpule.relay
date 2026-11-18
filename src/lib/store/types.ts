@@ -1090,7 +1090,7 @@ export interface ScoutStore {
    * reuse/cache hit, or a re-analyze of the same paste would double-credit.
    * Non-fatal: implementations must never let this throw into the caller.
    */
-  recordProspectExtracted(revenueIdentityId?: string | null): Promise<void>
+  recordProspectExtracted(revenueIdentityId?: string | null, sourceEventId?: string | null): Promise<void>
   // content journey
   createContentJourneyEntry(input: {
     personaId: string

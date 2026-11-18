@@ -13,11 +13,12 @@ import { cn } from 'cn'
 import { PersonProfilesWorkspace } from '@/components/team/person-profiles-workspace'
 import { PeopleWorkspace } from '@/components/team/people-workspace'
 import { IssuesData } from './issues-data'
+import { DataManagement } from './data-management'
 import type { ReconcileReport } from '@/lib/profiles/reconcile'
 import type { PeopleDirectory } from '@/lib/operations/people'
 import type { TeamProfileDirectoryRow } from '@/lib/team/profiles'
 
-type Tab = 'profiles' | 'team' | 'issues'
+type Tab = 'profiles' | 'team' | 'issues' | 'data'
 
 export function ControlCenter({
   profiles,
@@ -52,6 +53,7 @@ export function ControlCenter({
             { key: 'profiles', label: 'Profiles' },
             { key: 'team', label: 'Team' },
             { key: 'issues', label: `Issues & Data${openIssues ? ` (${openIssues})` : ''}` },
+            { key: 'data', label: 'Data' },
           ] as Array<{ key: Tab; label: string }>).map((item) => (
             <button
               key={item.key}
@@ -83,6 +85,7 @@ export function ControlCenter({
       )}
 
       {tab === 'issues' && <IssuesData report={report} isAdmin={isAdmin} />}
+      {tab === 'data' && <DataManagement profiles={profiles} />}
     </div>
   )
 }

@@ -1,172 +1,206 @@
 # Production Operations
 
-This document is the single source of truth for running Relay in production.
-It assumes the app is deployed to Vercel and the database is Supabase.
+This is the single source of truth for running Relay in production.
+
+**Architecture (actual).** InterServer Ubuntu VPS (`162.35.45.37`) · Next.js
+**standalone** build under **PM2** on `127.0.0.1:3000` · **Caddy** reverse
+proxy · **Cloudflare** in front · **Aiven PostgreSQL** · Better Auth in-app
+(`neon_auth` schema) · GitHub Actions deploying from `main`.
+
+Domain: `https://relay.bpulse.dev`.
+
+> There is no Vercel deployment and no Supabase project. Any document or runbook
+> that says otherwise is stale — this file replaces it.
 
 ---
 
-## CI / CD
+## 1. CI / CD
 
-Every pull request runs:
-1. `pnpm lint` — ESLint
-2. `pnpm exec tsc --noEmit` — TypeScript type check
-3. `pnpm build` — Next.js production build
+**CI** (`.github/workflows/ci.yml`) runs on every push and PR:
+`pnpm lint` · `pnpm exec tsc --noEmit` · `pnpm build`. All three must pass.
 
-All three must pass before merge. The workflow is in `.github/workflows/ci.yml`.
+**CD** (`.github/workflows/deploy.yml`) runs on every push to `main` and on
+`workflow_dispatch`:
 
-**Preview deployments**: Vercel generates a preview URL for every branch
-automatically. Stakeholders review there before merging to `main`.
+1. Check out, `pnpm install --frozen-lockfile`, `pnpm build`.
+2. Verify `.next/standalone/server.js` exists.
+3. Package standalone + `.next/static` + `public` into a tarball. Build-time
+   `.env*` files are deleted so the build environment never ships.
+4. `scp` the tarball to `/home/deploy/apps/relay-releases/<SHA>/release.tar.gz`.
+5. On the VPS: extract, symlink `/home/deploy/apps/relay/.env.production` into
+   the release, atomically move `relay-current` to the new release.
+6. `pm2 delete relay` → `pm2 start server.js --name relay` with
+   `HOSTNAME=127.0.0.1 PORT=3000 RELAY_GIT_SHA=<sha>`.
+7. Health check `http://127.0.0.1:3000/login` for up to 40 s; `pm2 save` on
+   success, fail the workflow otherwise.
+
+**Deployed SHA**: `GET /api/version` reports `sha`, `shortSha`, `ref`,
+`deploymentId`, `buildTime`, `appVersion`, and the live `databaseProvider` /
+`authProvider` names. `RELAY_GIT_SHA` is stamped by the workflow; if `sha` is
+`null` the deployment is unidentified and must not be certified.
+
+**Releases are immutable.** Every release is a directory under
+`relay-releases/<SHA>`; rollback is a symlink swap, not a rebuild.
 
 ---
 
-## Backup and Restore
+## 2. Server layout
 
-### Automated nightly backups
+| Path | Purpose |
+|---|---|
+| `/home/deploy/apps/relay/.env.production` | The only environment file. Never copied into a release. |
+| `/home/deploy/apps/relay-releases/<SHA>/` | One immutable extracted release |
+| `/home/deploy/apps/relay-current` | Symlink to the active release |
+| `/home/deploy/apps/relay-shared/` | Persistent uploads / storage if any |
 
-Supabase projects include daily backups managed by Supabase. Verify the
-backup schedule in the Supabase dashboard (Project Settings → Database →
-Backups).
+Secrets live only in `.env.production` on the VPS and in GitHub Actions secrets
+(`VPS_SSH_HOST`, `VPS_SSH_KEY`, and the build environment). No secret is in the
+repo, the release tarball, or the browser.
 
-### Manual backup (before risky migrations)
+---
+
+## 3. Roles and access
+
+| Principal | Access |
+|---|---|
+| `deploy` SSH user | Releases, PM2, Caddy reload. No database credentials. |
+| App runtime | `DATABASE_URL` → the **restricted application role** (`relay_app`, `rolbypassrls = false`, member of `authenticated`). RLS enforced; `app.current_user_id` set transaction-locally per operation. |
+| Service operations (cron, webhooks) | `SERVICE_DATABASE_URL` → elevated role, used only by explicitly allowlisted server paths (`src/lib/supabase/service-allowlist.ts`). Never reachable from a user request. |
+| Better Auth | Own pool against Aiven (`neon_auth` schema). |
+
+Verify the cutover with `scripts/qa/verify-production-rls-cutover.mjs`: fresh page
+traffic must use `relay_app` with **0** owner-role page connections.
+
+---
+
+## 4. Database
+
+Aiven PostgreSQL. Provider is selected by `RELAY_DB_PROVIDER` (`postgres` in
+production, `neon` is the rollback path).
+
+Migrations live in `supabase/migrations/` and are applied by the operator, not by
+the app. Before any release that adds migrations:
+
+1. Take a dump (§5).
+2. Apply migrations in filename order.
+3. Deploy.
+4. Verify `/api/version` and a real login.
+
+---
+
+## 5. Backup and restore
 
 ```bash
-# Dump the public schema and data
-pg_dump \
-  --host $SUPABASE_DB_HOST \
-  --port 5432 \
-  --username postgres \
-  --dbname postgres \
-  --schema public \
+# Manual dump before any risky migration
+pg_dump --host "$DB_HOST" --port 5432 --username relay_app \
+  --dbname postgres --schema public \
   --file relay-backup-$(date +%Y%m%d-%H%M%S).sql
 ```
 
-Store the dump in a secure location (S3 bucket or password manager attachment).
+Store dumps outside the VPS (encrypted object storage or a password manager).
+Aiven also provides its own automatic backups.
 
-### Restore procedure (tested)
+**Restore**
 
-1. Pause traffic: set the Vercel deployment to maintenance mode or disable
-the production domain.
-2. Create a fresh Supabase project if the existing database is corrupted.
-3. Run the restore:
+1. Stop traffic or deploy a maintenance page.
+2. Restore the dump into the target database.
+3. Confirm migration state matches the code (§4).
+4. Deploy the matching SHA.
+5. Smoke test: login, open the Control Center, run an analysis.
+
+---
+
+## 6. Monitoring
+
+| Signal | Source | Threshold |
+|---|---|---|
+| Uptime | External monitor pinging `/api/me/status` | 2 consecutive failures |
+| Errors | `pm2 logs relay` / stdout | > 5% 5xx in 10 min |
+| DB pool | `pm2 logs` + Aiven console | checkout latency rising |
+| DB health | Aiven console | connections < 80% of limit |
+
+Pools: app `DATABASE_POOL_MAX` (default 3), service (1), Better Auth (2) — one
+client per operation, released immediately. Steady state is far below Aiven's
+limit; starvation is an ownership bug, not a limit problem.
+
+---
+
+## 7. Rollback
+
+Releases are immutable directories and `relay-current` is a symlink, so rollback
+is a swap, not a rebuild:
 
 ```bash
-psql \
-  --host $NEW_SUPABASE_DB_HOST \
-  --port 5432 \
-  --username postgres \
-  --dbname postgres \
-  --file relay-backup-YYYYMMDD-HHMMSS.sql
+cd /home/deploy/apps
+ln -sfn /home/deploy/apps/relay-releases/<last-good-sha> relay-current
+pm2 delete relay
+cd /home/deploy/apps/relay-current
+HOSTNAME=127.0.0.1 PORT=3000 RELAY_GIT_SHA=<last-good-sha> \
+  pm2 start server.js --name relay
+pm2 save
+curl -fsS http://127.0.0.1:3000/login -o /dev/null && echo rollback-ok
 ```
 
-4. Update `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in
-Vercel environment variables if the project changed.
-5. Redeploy the latest successful build from Vercel.
-6. Smoke test: log in, create a test lead, run a draft, check the queue.
-
-**Last tested**: document the date here each time you run a restore drill.
+If the bad release also applied migrations, restore the dump from before them
+**before** swapping back. No data migration is involved in a code-only rollback.
 
 ---
 
-## Monitoring
+## 8. Incident response
 
-### Uptime
+| Severity | Examples | Response |
+|---|---|---|
+| Critical | Cross-org leak, service-role key exposure | < 1 h |
+| High | Auth bypass, unauthorised admin access, provider key leak | < 4 h |
+| Medium | Rate-limit failure, degraded AI provider | < 24 h |
+| Low | UI bug, non-sensitive log leakage | next sprint |
 
-Use Vercel Analytics (included on Pro plans) or an external monitor like
-UptimeRobot pinging `/api/me/status` every 5 minutes.
+1. **Contain** — rotate exposed keys; if a database vulnerability is suspected,
+   rotate the service role and revoke sessions.
+2. **Assess** — scope by organization; inspect Postgres logs and PM2 logs.
+3. **Notify** — affected organizations within 72 h if personal data is involved.
+4. **Remediate** — apply the fix and verify with the adversarial RLS tests
+   (`supabase/tests/rls-adversarial.ts`, `supabase/tests/rpc-isolation-adversarial.ts`).
+5. **Post-incident** — document within 48 h and update this runbook.
 
-**Alert threshold**: 2 consecutive failures (10 minutes down).
+**Key rotation** — rotate the AI provider keys in `.env.production` on the VPS
+and restart PM2. Rotate the database role password in Aiven, then update both
+`DATABASE_URL` and `SERVICE_DATABASE_URL` and restart. No key is stored in the
+repo.
 
-### Error rate
-
-Vercel logs errors automatically. Set up a Log Drain to Datadog or a similar
-service, or check the Vercel dashboard Functions tab daily.
-
-**Alert threshold**: > 5% of requests returning 5xx in a 10-minute window.
-
-### Database health
-
-Check Supabase Dashboard → Database → Health weekly:
-- Connection pool usage < 80%
-- No long-running queries > 30s
-- Storage usage < 80%
-
----
-
-## Rollback Procedure
-
-If a deploy breaks production:
-
-1. **Immediate**: in Vercel, go to the project → Deployments, find the last
-known-good deployment, click the three dots, and select "Promote to Production".
-This takes < 30 seconds.
-
-2. **If the bad deploy mutated the database schema**: restore from the nightly
-backup (see Restore procedure above) **before** promoting the old deployment.
-
-3. **Verify**: after rollback, check `/api/me/status` returns 200, log in as a
-test user, and confirm the queue loads.
-
-4. **Fix forward**: open a new branch from the last good commit, fix the issue,
-open a PR, and have it reviewed in the preview deployment before merging again.
+**Data deletion** — self-service `/api/account/delete`, or an admin
+`/api/organization/delete`. Backups retain data until they rotate.
 
 ---
 
-## Incident Response
+## 9. Environment variables
 
-### Classification
-
-| Severity | Examples | Response time |
-|----------|----------|---------------|
-| **Critical** | Active data breach, cross-org data leak, service role key exposure | Immediate (< 1 hour) |
-| **High** | Auth bypass, unauthorized admin access, credential leak to AI provider | < 4 hours |
-| **Medium** | Rate limit failure, degraded AI provider, analytics misconfiguration | < 24 hours |
-| **Low** | UI bug, non-sensitive log leakage, documentation inaccuracy | Next sprint |
-
-### Breach response procedure
-
-1. **Contain**: If a key or credential is exposed, rotate it immediately in Supabase dashboard and Vercel environment variables. If a database vulnerability is suspected, revoke the service role key and rotate the anon key.
-
-2. **Assess**: Determine scope — which organizations, users, or data types are affected. Check Supabase logs (Dashboard → Logs → Postgres) for unauthorized queries. Check Vercel function logs for suspicious API calls.
-
-3. **Notify**: Contact affected organizations within 72 hours if personal data may be compromised. Email template:
-
-   > We recently identified a security incident that may have affected your Relay organization's data. [Describe scope.] We have [taken these steps] to contain it. We recommend [specific action]. Contact security@relay.bpulse.dev with questions.
-
-4. **Remediate**: Apply the fix, verify with the adversarial RLS test (`supabase/tests/rls-adversarial.ts` and `supabase/tests/rpc-isolation-adversarial.ts`), deploy.
-
-5. **Post-incident**: Document the incident, root cause, and remediation within 48 hours. Update this runbook if gaps were found.
-
-### Key rotation
-
-```bash
-# Rotate service role key:
-# 1. Generate new key in Supabase → Settings → API
-# 2. Update SUPABASE_SERVICE_ROLE_KEY in Vercel environment
-# 3. Redeploy
-# 4. Old key is automatically invalidated
-
-# Rotate anon key:
-# 1. Regenerate in Supabase → Settings → API
-# 2. Update NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel
-# 3. Redeploy
-```
-
-### Data deletion requests
-
-When a user or organization requests data deletion:
-
-1. **Individual user**: Use the self-service `/api/account/delete` endpoint. This removes the user's auth account and rep row. If they are the last member, the organization and all its data are also deleted.
-2. **Organization**: An admin can use `/api/organization/delete`. This cascades to all org data (leads, messages, facts, proof, content, etc.) and removes all member auth accounts.
-3. **Manual/backup**: After deletion, data may persist in Supabase automated backups until those rotate out (typically 7 days). For immediate purging from backups, restore to a temporary project, manually delete, and re-backup.
-
----
-
-## Environment Variables
+Set in `/home/deploy/apps/relay/.env.production` (production) or `.env.local`
+(development). Never commit either.
 
 | Variable | Required | Purpose |
-|----------|----------|---------|
-| `GROQ_API_KEY` | Yes (live models) | AI provider |
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes (supabase mode) | Database |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes (supabase mode) | Auth |
-| `EMBEDDING_API_KEY` | Yes (semantic search) | OpenAI embeddings |
-| `SCOUT_DAILY_SEND_LIMIT` | No | Per-rep ceiling (default 15) |
+|---|---|---|
+| `DATABASE_URL` | yes | Restricted application role (`relay_app`) |
+| `SERVICE_DATABASE_URL` | yes | Elevated role, cron/webhooks only |
+| `RELAY_DB_PROVIDER` | yes | `postgres` (production) |
+| `RELAY_AUTH_PROVIDER` | yes | `aiven` (production) |
+| `NEXT_PUBLIC_APP_URL` | yes | Public origin, used for auth callbacks |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | yes | Comma-separated allowed origins |
+| `BETTER_AUTH_SECRET` | yes | Session signing |
+| `GROQ_API_KEY` / `LONGCAT_API_KEY` / `OPENAI_API_KEY` | live models | AI providers |
+| `EMBEDDING_API_KEY` | semantic search | Embeddings |
+| `RELAY_GIT_SHA` | stamped by CD | Deployed commit identity |
+| `SCOUT_DAILY_SEND_LIMIT` | no | Per-rep send ceiling (default 15) |
+| `DATABASE_POOL_MAX` / `SERVICE_DATABASE_POOL_MAX` / `AUTH_DATABASE_POOL_MAX` | no | Pool sizing |
+
+---
+
+## 10. Verification
+
+After every deploy:
+
+```bash
+curl -s https://relay.bpulse.dev/api/version      # sha must equal the deployed SHA
+curl -s -o /dev/null -w '%{http_code}\n' https://relay.bpulse.dev/api/me/status
+pm2 logs relay --lines 200 | grep -i 'already executing' || echo clean
+```

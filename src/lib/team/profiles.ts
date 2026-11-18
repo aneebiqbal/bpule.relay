@@ -195,7 +195,10 @@ export interface TeamProfileDirectoryRow extends TeamProfileRow {
  * One profile row per `profiles` row — assigned, unassigned, or an orphan with
  * no channel identity at all (surfaced for review, never silently dropped).
  */
-export async function loadTeamProfileDirectory(orgId: string): Promise<{
+export async function loadTeamProfileDirectory(
+  orgId: string,
+  opts: { includeArchived?: boolean } = {},
+): Promise<{
   rows: TeamProfileDirectoryRow[]
   businessDate: string
   timezone: string
@@ -206,7 +209,7 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
     loadCanonicalProfileAssignments(orgId, { client: supabase }),
     supabase
       .from('profiles')
-      .select('id, display_name, full_name, label, person_id')
+      .select('id, display_name, full_name, label, person_id, archived_at')
       .eq('organization_id', orgId)
       .limit(2000),
     supabase
@@ -237,13 +240,18 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
 
   // Person grouping: a duplicate/orphan profile renders under its canonical
   // person, so the directory is one row per human, never one per channel.
-  const allProfiles = (allProfilesRes.data ?? []) as Array<{
+  const fetchedProfiles = (allProfilesRes.data ?? []) as Array<{
     id: string
     display_name: string | null
     full_name: string | null
     label: string | null
     person_id: string | null
+    archived_at: string | null
   }>
+  // Archived profiles (and their channels) are retired: hidden from the
+  // operating directory, opt back in for admin inspection.
+  const archivedProfileIds = new Set(fetchedProfiles.filter((profile) => profile.archived_at).map((profile) => profile.id))
+  const allProfiles = fetchedProfiles.filter((profile) => opts.includeArchived || !profile.archived_at)
   const personKeyByProfile = new Map<string, string>()
   const canonicalNameById = new Map<string, string>()
   for (const profile of allProfiles) {
@@ -257,13 +265,60 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
     }
   }
 
+  // A person row is keyed by their canonical profile, which may itself carry no
+  // channel identity (`Fizza iqbal` — her linkedin/upwork identities live on
+  // child profiles). Merge the canonical facts of the whole person group so the
+  // person card still shows its ownership instead of "ambiguous".
+  const coverageRank: Record<string, number> = { EXPLICIT: 3, DERIVED: 2, AMBIGUOUS: 1, UNASSIGNED: 0 }
+  const canonicalByPersonKey = new Map<string, CanonicalProfileAssignment>()
+  const mergeCanonical = (into: CanonicalProfileAssignment, from: CanonicalProfileAssignment) => {
+    const winner = into.primarySource === 'coverage' ? into : from.primarySource === 'coverage' ? from : into.primaryRepId ? into : from
+    const repIds = new Set(into.assignedReps.map((rep) => rep.repId))
+    for (const rep of from.assignedReps) {
+      if (repIds.has(rep.repId)) continue
+      into.assignedReps.push(rep)
+      repIds.add(rep.repId)
+    }
+    const operatorIds = new Set(into.operators.map((rep) => rep.repId))
+    for (const rep of from.operators) {
+      if (operatorIds.has(rep.repId)) continue
+      into.operators.push(rep)
+      operatorIds.add(rep.repId)
+    }
+    const backupIds = new Set(into.backups.map((rep) => rep.repId))
+    for (const rep of from.backups) {
+      if (backupIds.has(rep.repId)) continue
+      into.backups.push(rep)
+      backupIds.add(rep.repId)
+    }
+    into.channels = [...new Set([...into.channels, ...from.channels])].sort()
+    into.identityIds = [...new Set([...into.identityIds, ...from.identityIds])]
+    into.primaryRepId = winner.primaryRepId
+    into.primaryRepName = winner.primaryRepName
+    into.primarySource = winner.primarySource
+    into.primaryReason = winner.primaryReason
+    if ((coverageRank[from.coverageState] ?? 0) > (coverageRank[into.coverageState] ?? 0)) into.coverageState = from.coverageState
+    into.needsReview = into.needsReview || from.needsReview
+    into.reviewReasons = [...new Set([...into.reviewReasons, ...from.reviewReasons])]
+  }
+  for (const entry of canonical.profiles) {
+    const key = personKeyByProfile.get(entry.profileId) ?? entry.profileId
+    const existing = canonicalByPersonKey.get(key)
+    if (!existing) canonicalByPersonKey.set(key, { ...entry, profileId: key })
+    else mergeCanonical(existing, entry)
+  }
+
   const identityRes = await supabase
     .from('revenue_identities')
     .select('id, identity_name, channel, profile_id, status')
     .eq('organization_id', orgId)
     .limit(2000)
 
-  const identities = (identityRes.data ?? []) as DirectoryIdentity[]
+  const identities = ((identityRes.data ?? []) as DirectoryIdentity[]).filter(
+    (identity) =>
+      (opts.includeArchived || identity.status !== 'archived') &&
+      (opts.includeArchived || !archivedProfileIds.has(identity.profile_id ?? '')),
+  )
 
   // The plan is channel-owned and SHARED: the profile's completion is the sum of
   // every operator's contribution, never just the primary's. `live` attributes
@@ -299,6 +354,7 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   }
 
   const assignedRows = buildTeamProfiles(live, personKeyByProfile)
+    .filter((row) => opts.includeArchived || !archivedProfileIds.has(row.profileId))
     .map((row) => {
       const completed = completedByPersonKey.get(row.profileId)
       const profileName = canonicalNameById.get(row.profileId) ?? row.profileName
@@ -371,7 +427,7 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
     if (assignedKeys.has(key)) continue
     let row = byProfile.get(key)
     if (!row) {
-      const canonical = identity.profile_id ? canonicalByProfile.get(key) : undefined
+      const canonical = identity.profile_id ? canonicalByPersonKey.get(key) : undefined
       row = {
         profileId: key,
         profileName: profileNameById.get(key) ?? identity.identity_name,
@@ -404,7 +460,7 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
   }
 
   const assignedDirectory: TeamProfileDirectoryRow[] = assignedRows.map((row) => {
-    const canonical = canonicalByProfile.get(row.profileId)
+    const canonical = canonicalByPersonKey.get(row.profileId)
     return {
       ...row,
       assignmentCount: row.assignedReps.length,
