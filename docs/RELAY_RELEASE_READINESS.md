@@ -35,9 +35,17 @@ PUBLIC PRODUCTION RELEASE: BLOCKED — BROWSER ACCEPTANCE + DEPLOYED-SHA PROOF
 
 | Gate | Result |
 |---|---|
-| Unit | **402 files / 5,803 tests passed** |
+| Unit | **402 files / 5,805 tests passed** |
 | ESLint | **0 errors** (769 pre-existing warnings) |
 | Standalone build | exit 0 |
+| `qa:contracts` | 4 files / 80 tests passed |
+| `qa:coverage` | **15/15 contracts pass, 0 skipped** |
+| `qa:release` (code portion) | UNIT PASS · BUILD PASS · 5,805/5,805 · 0 skipped |
+| Playwright | Chromium installed; suite running against `http://127.0.0.1:3000` |
+
+Deployment: `origin/main` = `77476c75`. Production `/api/version` reports
+`sha: null`, `databaseProvider: postgres`, `authProvider: aiven`. `deploy.yml`
+now stamps `RELAY_GIT_SHA` so the next deployment is identifiable.
 
 New files this sprint:
 
