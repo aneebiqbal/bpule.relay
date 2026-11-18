@@ -1,6 +1,13 @@
 # Relay — Final Release Gate
 
-Branch `feat/relay-completion-program` · PR #51 · HEAD `250cce25` · not deployed.
+Branch `feat/relay-completion-program` · PR #51 · **merged as `a04afca0` and
+deployed** · this report's perf commit is **not** in that deploy.
+
+> **Status change during this sprint.** PR #51 was merged by another party at
+> `4b155738` and GitHub Actions deployed it. Production now reports
+> `sha = a04afca02a20521e025fd6e0a3fcabba36685c99`. The performance fix below
+> landed on the branch **after** that merge, so it is not yet deployed; it
+> needs its own PR. I did not merge or deploy anything.
 
 ---
 
@@ -69,7 +76,12 @@ to a 502, while `127.0.0.1:3000` and `https://relay.bpulse.dev` both work.
   restarts PM2 and health-checks `/login`.
 - **Deployed SHA was unidentifiable** (`/api/version.sha = null`). The workflow
   now stamps `RELAY_GIT_SHA` and `BUILD_TIME`, and PM2 starts with
-  `RELAY_GIT_SHA=<sha>`, so the next deployment can be tied to a commit.
+  `RELAY_GIT_SHA=<sha>`.
+- **Verified in production after the merge:** `GET /api/version` returns
+  `sha = a04afca02a20521e025fd6e0a3fcabba36685c99`. This blocker is closed.
+- Smoke test on the deployed build: `/login` 200 · `/api/me/status` 401
+  (unauthenticated, correct) · `/team/profiles` 307 → login (protected) ·
+  `/admin/control-center` 307 → login (protected).
 - **Rollback** is a `relay-current` symlink swap to an immutable release
   directory plus a PM2 restart; procedure documented in `OPS.md` §7.
 - `OPS.md` no longer describes Vercel or Supabase.
@@ -145,13 +157,22 @@ branch builds clean (exit 0).
 
 ## 8. Decision
 
-**NO-GO.**
+**NO-GO for the performance follow-up.**
 
-The five reported bugs are fixed and verified, and the performance P0 is fixed
-with measured before/after numbers. What blocks release is not a known product
-defect: the deployed-SHA proof, the production RLS verification, the incomplete
-browser matrix, and the build breakage from concurrent uncommitted WIP.
+PR #51 (the five reported bugs, sprints 7–8, browser fixes, security and data
+review) is merged and deployed, and the deployed SHA is verified.
 
-Recommended sequence: land the other session's `job-discovery` work (or park it),
-merge PR #51, deploy, confirm `/api/version.sha`, run the RLS verifier, then
-re-run the Playwright matrix.
+What remains open:
+
+1. **This performance fix needs its own PR and deploy.** It is committed on
+   `feat/relay-completion-program` (`250cce25`, `913c0f12`) but was written after
+   PR #51 was merged, so production still runs the slow path. Until it ships,
+   the Analyzer sender list is 27–61 s in production.
+2. **Production RLS cutover verifier** and the direct-API authorization matrix
+   still need the VPS.
+3. **Playwright matrix** incomplete (latency).
+4. **Another session's untracked `job-discovery` WIP** currently breaks
+   `next build` type checking.
+
+Recommended sequence: land or park the `job-discovery` WIP, open a PR for the
+performance commit, deploy, then re-run the browser matrix and the RLS verifier.
