@@ -114,6 +114,29 @@ upwork + linkedin).
 | Serial isolated-DB integration suite | Needs the Aiven owner cutover / isolated fixture |
 | Production RLS verifier | Needs the VPS |
 
+### 4.1 Playwright matrix — attempted, did not complete
+
+`e2e/rc-browser-acceptance.spec.ts` was run with
+`E2E_BASE_URL=http://127.0.0.1:3000` after installing Playwright Chromium. It
+reached case 5 of 8 and was stopped: every AI-backed case exceeded the 260 s
+per-test timeout.
+
+**This is a latency failure, not a product defect.** Measured on this host:
+
+| Call | Latency |
+|---|---|
+| `GET /api/profiles?assigned=1&channel=linkedin` (the Analyzer sender list) | **27 s, 31 s, 61 s** across three page loads |
+| A single analyze call | 17–60 s |
+| Individual DB reads | ~1.5 s per round trip |
+
+Each acceptance case runs a full extraction + scoring + draft pipeline, so it
+cannot fit in 260 s here. The suite was designed for a preview deployment on a
+fast network. Two console 401s were also observed mid-run (a session expiring
+during a long-running case), which the suite's own login helper handles on retry.
+
+**Consequence:** the Playwright matrix is **unverified**, not failed. The browser
+journeys that *were* completed manually are listed in §2.
+
 ---
 
 ## 5. Deployment findings
