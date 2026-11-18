@@ -8,6 +8,7 @@ import {
   ensurePrimaryAcknowledgement,
 } from '@/lib/responsibility/load'
 import { syncChannelEligibility } from '@/lib/profiles/assignment'
+import { configureCoverageStatement } from '@/lib/coverage/configure'
 import { notifyOnce } from '@/lib/notifications/deliver'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 import { reassignAssignedTask } from '@/lib/tasks/assigned-tasks'
@@ -651,7 +652,7 @@ export async function revokeCoverage(input: {
  * operator they cannot execute, and revokes eligibility from seats that were
  * removed. The channel's daily plan is never read or written here.
  */
-export async function configureCoverage(input: {
+async function configureCoverageFast(input: {
   organizationId: string
   profileId: string
   /** Null when the caller is adding an operator/backup to a profile that has
@@ -664,8 +665,77 @@ export async function configureCoverage(input: {
   /** Seed the channel's default plan when it has none. The bulk/command-center
    *  assign path opts in; the per-profile dialog keeps its existing behaviour. */
   ensureTargets?: boolean
-}): Promise<{ ok: boolean; error?: string; seeded?: number }> {
-  const client = input.client ?? (await createServerSupabase())
+}, client: DbClient): Promise<{ ok: boolean; error?: string; seeded?: number }> {
+  let seeded = 0
+
+  const reason = `${input.operators.length} operator${input.operators.length === 1 ? '' : 's'}, ${input.backups.length} backup${input.backups.length === 1 ? '' : 's'}`
+  const result = await configureCoverageStatement(client, {
+    organizationId: input.organizationId,
+    profileId: input.profileId,
+    primaryRepId: input.primaryRepId,
+    operators: input.operators,
+    backups: input.backups,
+    actorRepId: input.actorRepId,
+    reason,
+    now: new Date(),
+  })
+  if (!result.ok) return { ok: false, error: result.error }
+
+  // The bulk/command-center assign path seeds the channel's default plan when
+  // none exists, so a freshly staffed profile is executable immediately. The
+  // per-profile dialog leaves the plan exactly as it was.
+  if (input.ensureTargets) {
+    const { data: identityRows } = await client
+      .from('revenue_identities')
+      .select('id, channel')
+      .eq('organization_id', input.organizationId)
+      .eq('profile_id', input.profileId)
+      .eq('status', 'active')
+      .limit(10)
+    for (const identity of (identityRows ?? []) as Array<{ id: string; channel: string }>) {
+      const { data: existingPlans } = await client
+        .from('daily_target_plans')
+        .select('id')
+        .eq('organization_id', input.organizationId)
+        .eq('revenue_identity_id', identity.id)
+        .eq('active', true)
+        .limit(1)
+      if (existingPlans && existingPlans.length > 0) continue
+      const pack = defaultTargetsForChannel(normalizeChannel(identity.channel))
+      const { data: seededRows, error: seedError } = await client.from('daily_target_plans').insert(
+        pack.map((row) => ({
+          organization_id: input.organizationId,
+          revenue_identity_id: identity.id,
+          activity_type: row.activityType,
+          target_count: row.targetCount,
+          targetable: row.activityType !== 'proposal',
+          active: true,
+          created_by: input.actorRepId,
+        })),
+      ).select('id')
+      if (seedError) return { ok: false, error: seedError.message }
+      seeded += seededRows?.length ?? 0
+    }
+  }
+
+  return { ok: true, seeded }
+}
+
+export type { CoverageMode }
+
+/**
+ * Builder-based fallback for clients without a raw query (the in-memory test
+ * harness). Production always uses the single-statement path above.
+ */
+async function configureCoverageLegacy(input: {
+  organizationId: string
+  profileId: string
+  primaryRepId: string | null
+  operators: Array<{ repId: string; priority: number }>
+  backups: Array<{ repId: string; priority: number }>
+  actorRepId: string
+  ensureTargets?: boolean
+}, client: DbClient): Promise<{ ok: boolean; error?: string; seeded?: number }> {
   const now = new Date().toISOString()
   let seeded = 0
 
@@ -808,4 +878,17 @@ export async function configureCoverage(input: {
   return { ok: true, seeded }
 }
 
-export type { CoverageMode }
+export async function configureCoverage(input: {
+  organizationId: string
+  profileId: string
+  primaryRepId: string | null
+  operators: Array<{ repId: string; priority: number }>
+  backups: Array<{ repId: string; priority: number }>
+  actorRepId: string
+  client?: DbClient
+  ensureTargets?: boolean
+}): Promise<{ ok: boolean; error?: string; seeded?: number }> {
+  const client = input.client ?? (await createServerSupabase())
+  if (client.raw) return configureCoverageFast(input, client)
+  return configureCoverageLegacy(input, client)
+}

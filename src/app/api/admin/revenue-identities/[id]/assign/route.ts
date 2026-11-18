@@ -1,12 +1,23 @@
 import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { createScoutStore } from '@/lib/store'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
+import { addOperatorResponsibility, removeOperatorResponsibility } from '@/lib/profiles/assignment'
+
+/**
+ * Assign / unassign a rep on one revenue identity.
+ *
+ * Both directions funnel through the canonical responsibility service, which
+ * reconciles the whole profile chain (PRIMARY + OPERATOR seats + BACKUP),
+ * writes identity_assignments eligibility, arms acknowledgements and audits
+ * the change. Writing identity_assignments directly left the rep with
+ * eligibility but no coverage seat, and execution visibility is decided by the
+ * seat, so the assignee could not see the channel they were given.
+ */
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
   const authCtx = await getAuthContext()
@@ -25,104 +36,48 @@ export async function POST(
 
   const supabase = await createServerSupabase()
 
-  const { data: identity } = await supabase
+  const { data: identity, error: identityError } = await supabase
     .from('revenue_identities')
-    .select('id, identity_name')
+    .select('id, identity_name, profile_id')
     .eq('id', id)
     .eq('organization_id', authCtx.orgId)
     .maybeSingle()
-
+  if (identityError) return safeErrorResponse(identityError, 500, 'Failed to load identity.', 'admin/revenue-identities/[id]/assign')
   if (!identity) return NextResponse.json({ error: 'Identity not found.' }, { status: 404 })
+  if (!identity.profile_id) {
+    return NextResponse.json({ error: 'This channel is not linked to a profile. Link it before assigning people.' }, { status: 400 })
+  }
 
-  const { data: rep } = await supabase
+  const { data: rep, error: repError } = await supabase
     .from('reps')
     .select('id, name')
     .eq('id', repId)
     .eq('organization_id', authCtx.orgId)
     .maybeSingle()
-
+  if (repError) return safeErrorResponse(repError, 500, 'Failed to load rep.', 'admin/revenue-identities/[id]/assign')
   if (!rep) return NextResponse.json({ error: 'Rep not found.' }, { status: 404 })
 
-  // Upsert assignment (idempotent)
-  const { data: assignment, error } = await supabase
-    .from('identity_assignments')
-    .upsert(
-      {
-        organization_id: authCtx.orgId,
-        revenue_identity_id: id,
-        rep_id: repId,
-        assigned_by: authCtx.repId,
-      },
-      { onConflict: 'revenue_identity_id,rep_id' },
-    )
-    .select('*')
-    .single()
-
-  if (error) return safeErrorResponse(error, 500, 'Failed to assign identity.', 'admin/revenue-identities/[id]/assign')
-
-  // Audit — best effort. The assignment is already committed; a logging
-  // failure must never report the assignment as failed.
   try {
-    await supabase.from('accountability_audit_log').insert({
-      organization_id: authCtx.orgId,
-      rep_id: authCtx.repId,
-      revenue_identity_id: id,
-      event_type: 'identity_assigned',
-      detail: { rep_id: repId, rep_name: rep.name },
-    })
-  } catch {
-    // Audit is not a reason to fail a committed assignment.
-  }
-
-  try {
-    await supabase.rpc('emit_relay_event', {
-      p_org_id: authCtx.orgId,
-      p_event_type: 'WORK_ASSIGNED',
-      p_entity_type: 'revenue_identity',
-      p_entity_id: id,
-      p_actor_type: 'admin',
-      p_actor_id: authCtx.repId,
-      p_revenue_identity_id: id,
-      p_source: 'app',
-      p_source_event_id: `work_assigned:${repId}:${id}`,
-      p_payload: { rep_id: repId, rep_name: rep.name, identity_name: identity.identity_name },
-      p_metadata: {},
-    })
-  } catch {
-    // Event emission must never break the assignment operation
-  }
-
-  // Notify the rep — best effort, same reason as the audit log.
-  try {
-    await supabase.from('notifications').insert({
-      organization_id: authCtx.orgId,
-      recipient_id: repId,
-      notification_type: 'identity_assigned',
-      title: 'New identity assigned',
-      body: `You have been assigned the "${identity.identity_name}" revenue identity.`,
-      link: `/rep/assigned-profiles`,
-      dedupe_key: `identity_assigned:${repId}:${id}:${new Date().toISOString().slice(0, 10)}`,
-    })
-  } catch {
-    // Notification is not a reason to fail a committed assignment.
-  }
-
-  try {
-    const store = await createScoutStore()
-    const targets = await store.ensureDefaultDailyTargetsAdmin({
+    // Canonical write: appends the rep as an active OPERATOR and preserves every
+    // other seat. Never seeds targets; those stay an explicit admin action.
+    await addOperatorResponsibility(supabase, {
+      orgId: authCtx.orgId,
+      identityId: id,
       repId,
-      revenueIdentityId: id,
+      actorRepId: authCtx.repId,
     })
-    return NextResponse.json({ assignment, targets })
+    return NextResponse.json({ ok: true, identityId: id, repId })
   } catch (error) {
-    console.error('[admin/revenue-identities/assign] failed to seed daily pack:', error)
-    return NextResponse.json({ assignment, targets: [] })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Assign failed' },
+      { status: 500 },
+    )
   }
 }
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
   const authCtx = await getAuthContext()
@@ -135,29 +90,20 @@ export async function DELETE(
 
   const supabase = await createServerSupabase()
 
-  const { error } = await supabase
-    .from('identity_assignments')
-    .delete()
-    .eq('revenue_identity_id', id)
-    .eq('rep_id', repId)
-    .eq('organization_id', authCtx.orgId)
-
-  if (error) return safeErrorResponse(error, 500, 'Failed to unassign identity.', 'admin/revenue-identities/[id]/assign')
-
-  // The channel's plan and its completion history stay: unassigning an operator
-  // never rewrites what the profile still owes or has already done.
-
   try {
-    await supabase.from('accountability_audit_log').insert({
-      organization_id: authCtx.orgId,
-      rep_id: authCtx.repId,
-      revenue_identity_id: id,
-      event_type: 'identity_unassigned',
-      detail: { rep_id: repId },
+    // Canonical write: removes the seat AND the eligibility together. Deleting
+    // only identity_assignments left the seat active, so the removed rep kept
+    // executing the channel.
+    await removeOperatorResponsibility(supabase, {
+      orgId: authCtx.orgId,
+      identityId: id,
+      repId,
+      actorRepId: authCtx.repId,
     })
-  } catch {
-    // Audit is not a reason to fail a committed unassignment.
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unassign failed'
+    // Removing the primary is an ownership change, not an unassign.
+    return NextResponse.json({ error: message }, { status: message === 'CANNOT_REMOVE_PRIMARY' ? 409 : 500 })
   }
-
-  return NextResponse.json({ ok: true })
 }

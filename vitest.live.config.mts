@@ -14,6 +14,7 @@ export const LIVE_TEST_FILES = [
   'tests/lead-sender-profile-visibility.test.ts',
   'tests/migration-version-contracts.test.ts',
   'tests/neon-adapter-contracts.test.ts',
+  'tests/operator-visibility.live.test.ts',
   'tests/plan-progress-contracts.test.ts',
   'tests/profile-ownership-contracts.test.ts',
   'tests/profile-truth-parity.test.ts',

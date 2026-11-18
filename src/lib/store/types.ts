@@ -1519,14 +1519,6 @@ export interface ScoutStore {
 
   getRepInfo(repId: string): Promise<{ id: string; name: string; role: string } | null>
 
-  getRepAssignments(repId: string): Promise<Array<{
-    assignmentId: string
-    revenueIdentityId: string
-    identityName: string
-    title: string | null
-    channel: string
-  }>>
-
 
   listTrendSources(): Promise<TrendSource[]>
   getTrendSource(sourceKey: string): Promise<TrendSource | null>

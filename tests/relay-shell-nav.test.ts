@@ -162,7 +162,7 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
     expect(domainLabel('/leads')).toBe('Sales')
     expect(domainLabel('/content')).toBe('Content')
     expect(domainLabel('/reports/sales')).toBe('Insights')
-    expect(domainLabel('/admin/people')).toBe('Admin')
+    expect(domainLabel('/admin/control-center')).toBe('Admin')
     const adminItem = (href: string) =>
       NAV_DOMAINS.find((d) => d.id === 'admin')!.secondary.find((i) => i.href === href)?.label
     expect(byHref('/leads')).toBe('Leads')
@@ -171,6 +171,7 @@ describe('V3_NAV_CANONICAL_LABELS', () => {
     expect(byHref('/content')).toBe('Studio')
     expect(byHref('/team')).toBe('Today')
     expect(byHref('/team/people')).toBe('People')
+    expect(adminItem('/admin/control-center')).toBe('Control Center')
     expect(adminItem('/admin/people')).toBe('People & Roles')
     expect(adminItem('/admin/system')).toBe('System / Quality')
     expect(byHref('/team/profiles')).toBe('Profiles')
@@ -484,7 +485,7 @@ describe('ADMIN_ENTRY_IS_REACHABLE', () => {
   it('the Admin domain points at a real admin page, not a redirect into Team', () => {
     const adminDomain = NAV_DOMAINS.find((domain) => domain.id === 'admin')
     expect(adminDomain).toBeTruthy()
-    expect(adminDomain!.href).toBe('/admin/people')
+    expect(adminDomain!.href).toBe('/admin/control-center')
     expect(domainForPathname(adminDomain!.href)).toBe('admin')
   })
 

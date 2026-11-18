@@ -109,7 +109,7 @@ export function buildTeamProfiles(
 
 export type CoverageState = 'EXPLICIT' | 'DERIVED' | 'AMBIGUOUS' | 'UNASSIGNED'
 
-type DirectoryIdentity = { id: string; profile_id: string | null; channel: string; identity_name: string }
+type DirectoryIdentity = { id: string; profile_id: string | null; channel: string; identity_name: string; status: string | null }
 
 /**
  * Per-channel execution for one person. The channels are children of the
@@ -131,6 +131,7 @@ function buildChannelDetails(
       profileId: identity.profile_id,
       channel: identity.channel,
       identityName: identity.identity_name,
+      status: identity.status ?? 'active',
       primaryRepId: canonical?.primaryRepId ?? null,
       primaryRepName: canonical?.primaryRepName ?? null,
       operatorRepIds: canonical?.operators.map((operator) => operator.repId) ?? [],
@@ -152,6 +153,7 @@ export interface TeamProfileChannelDetail {
   profileId: string | null
   channel: string
   identityName: string
+  status: string
   primaryRepId: string | null
   primaryRepName: string | null
   operators: string[]
@@ -257,9 +259,8 @@ export async function loadTeamProfileDirectory(orgId: string): Promise<{
 
   const identityRes = await supabase
     .from('revenue_identities')
-    .select('id, identity_name, channel, profile_id')
+    .select('id, identity_name, channel, profile_id, status')
     .eq('organization_id', orgId)
-    .eq('status', 'active')
     .limit(2000)
 
   const identities = (identityRes.data ?? []) as DirectoryIdentity[]

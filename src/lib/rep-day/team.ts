@@ -1,5 +1,5 @@
 import { createServerSupabase } from '@/lib/supabase/server'
-import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
+import { listExecutableIdentitiesForRep, listExecutableIdentitiesForOrg } from '@/lib/coverage/access'
 import { getInboxCountsForRepIds } from '@/lib/operations/inbox-counts'
 /**
  * Team day — the canonical server-side contract for the Command Centre.
@@ -187,10 +187,6 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
     .select('rep_id, state, check_in_at, closed_at, commitment_progress, required_remaining, minutes_remaining, exception_state')
     .eq('organization_id', ctx.orgId)
     .eq('business_date', businessDate)
-  const assignmentQuery = supabase
-    .from('identity_assignments')
-    .select('rep_id, revenue_identity_id')
-    .eq('organization_id', ctx.orgId)
   const pipelineQuery = supabase
     .from('leads')
     .select('owner_rep_id')
@@ -206,10 +202,9 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
     .lt('occurred_at', range.end)
     .limit(SCAN_LIMIT)
 
-  const [repsResult, daysResult, assignmentsResult, pipelineResult, actionsResult] = await Promise.all([
+  const [repsResult, daysResult, pipelineResult, actionsResult] = await Promise.all([
     scope === 'all' ? repQuery : repQuery.in('id', [...scope]),
     scope === 'all' ? dayQuery : dayQuery.in('rep_id', [...scope]),
-    scope === 'all' ? assignmentQuery : assignmentQuery.in('rep_id', [...scope]),
     pipelineQuery,
     actionsQuery,
   ])
@@ -223,6 +218,14 @@ export async function loadTeamDay(options: { date?: string } = {}): Promise<Team
   if (daysResult.error && !isMissingRelation(daysResult.error)) throw daysResult.error
   const dayRows = (daysResult.data ?? []) as Array<Record<string, unknown>>
   const dayByRep = new Map(dayRows.map((row) => [row.rep_id as string, row]))
+
+  // Canonical execution scope for the scoped reps — a seat (or active coverage)
+  // is what makes a channel workable, not a bare eligibility row.
+  const scopedRepIdSet = new Set((repsResult.data ?? []).map((row) => row.id as string))
+  const executableOrg = (
+    await listExecutableIdentitiesForOrg(supabase, ctx.orgId, businessDate)
+  ).filter((row) => scopedRepIdSet.has(row.repId))
+  const assignmentsResult = { data: executableOrg.map((row) => ({ rep_id: row.repId, revenue_identity_id: row.id })) }
 
   const identitiesByRep = new Map<string, TeamIdentity[]>()
   // The identity rows are a second read rather than a PostgREST embed

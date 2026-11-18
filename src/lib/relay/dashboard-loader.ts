@@ -11,6 +11,7 @@ import {
   type OperatingPolicy,
 } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { listExecutableIdentitiesForRep, listExecutableIdentitiesForOrg } from '@/lib/coverage/access'
 
 /**
  * Canonical data loader for the Accountability Control Plane.
@@ -430,13 +431,11 @@ async function load(): Promise<AccountabilityDashboardData | null> {
 
   const role: 'rep' | 'manager' | 'admin' = ctx.isOwner || ctx.isAdmin ? 'admin' : ctx.isManager ? 'manager' : 'rep'
 
-  // Assignments and availability are independent.
-  const [{ data: assignments }, { data: availability }] = await Promise.all([
-    supabase
-      .from('identity_assignments')
-      .select('revenue_identity_id')
-      .eq('rep_id', ctx.repId)
-      .eq('organization_id', ctx.orgId),
+  // Execution scope and availability are independent. The canonical execution
+  // scope is the authority: eligibility alone also surfaces assignments the rep
+  // cannot actually work (eligibility without a seat).
+  const [executable, { data: availability }] = await Promise.all([
+    listExecutableIdentitiesForRep(supabase, ctx.orgId, ctx.repId, today),
     supabase
       .from('operator_availability')
       .select('status')
@@ -445,7 +444,7 @@ async function load(): Promise<AccountabilityDashboardData | null> {
       .maybeSingle(),
   ])
 
-  const identityIds = (assignments ?? []).map((a: any) => a.revenue_identity_id)
+  const identityIds = executable.map((row) => row.id)
 
   // Everything below depends on identityIds but not on each other: one wave.
   const [
@@ -624,19 +623,23 @@ async function load(): Promise<AccountabilityDashboardData | null> {
     // sequential round-trips on every Command Center load (BUG-001).
     const [
       { data: allReps },
-      { data: allAssignments },
+      executableOrg,
       { data: allTargets },
       { data: allAccountability },
       { data: allDayCloses },
     ] = await Promise.all([
       supabase.from('reps').select('id, name').eq('organization_id', ctx.orgId),
-      supabase.from('identity_assignments').select('rep_id, revenue_identity_id').eq('organization_id', ctx.orgId),
+      // Canonical execution scope, not raw eligibility: a seat is what makes a
+      // channel workable, and coverage counts too.
+      listExecutableIdentitiesForOrg(supabase, ctx.orgId, today),
       supabase.from('daily_target_plans').select('*').eq('organization_id', ctx.orgId).eq('active', true),
       supabase.from('daily_accountability').select('*').eq('organization_id', ctx.orgId).eq('target_date', today),
       // day_closes is best-effort enrichment only — an org that has never
       // provisioned contracts must not lose the rest of this view over it.
       supabase.from('day_closes').select('person_id, status').eq('organization_id', ctx.orgId).eq('date', today),
     ])
+
+    const allAssignments = executableOrg.map((row) => ({ rep_id: row.repId, revenue_identity_id: row.id }))
 
     const assignedIdentityIds = [...new Set((allAssignments ?? []).map((a: any) => a.revenue_identity_id))]
     const { data: allIdentities } = assignedIdentityIds.length > 0

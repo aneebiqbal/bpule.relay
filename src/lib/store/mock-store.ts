@@ -3713,7 +3713,6 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
     async getOrganizationRoles(): Promise<any[]> { return [] },
     async getActiveTeamMemberships(): Promise<any[]> { return [] },
     async getRepInfo(_repId: string): Promise<any> { return null },
-    async getRepAssignments(_repId: string): Promise<any[]> { return [] },
 
 
     async listTrendSources(): Promise<TrendSource[]> { return [] },
