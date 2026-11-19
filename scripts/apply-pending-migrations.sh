@@ -12,11 +12,13 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-URL="$(grep -E '^SERVICE_DATABASE_URL=' "$ROOT/.env.local" | head -1 | cut -d= -f2-)"
+# An explicit environment variable wins, so an operator can point the runner
+# at the Aiven avnadmin connection without editing .env.local.
+URL="${SERVICE_DATABASE_URL:-$(grep -E '^SERVICE_DATABASE_URL=' "$ROOT/.env.local" | head -1 | cut -d= -f2-)}"
 PSQL="${PSQL:-/opt/homebrew/opt/postgresql@17/bin/psql}"
 
 if [ -z "$URL" ]; then
-  echo "SERVICE_DATABASE_URL is not set in .env.local" >&2
+  echo "SERVICE_DATABASE_URL is not set in the environment or .env.local" >&2
   exit 1
 fi
 if [ ! -x "$PSQL" ]; then

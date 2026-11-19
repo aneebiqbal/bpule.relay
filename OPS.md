@@ -79,7 +79,16 @@ Aiven PostgreSQL. Provider is selected by `RELAY_DB_PROVIDER` (`postgres` in
 production, `neon` is the rollback path).
 
 Migrations live in `supabase/migrations/` and are applied by the operator, not by
-the app. Before any release that adds migrations:
+the app. `relay_app` and `relay_service` are DML-only on Aiven; DDL requires the
+`avnadmin` connection string. Use the tracked runner (it records versions in
+`supabase_migrations.schema_migrations` and rolls each migration back on failure):
+
+```bash
+SERVICE_DATABASE_URL='<Aiven avnadmin connection string>' \
+  bash scripts/apply-pending-migrations.sh
+```
+
+Before any release that adds migrations:
 
 1. Take a dump (§5).
 2. Apply migrations in filename order.
@@ -189,9 +198,41 @@ Set in `/home/deploy/apps/relay/.env.production` (production) or `.env.local`
 | `BETTER_AUTH_SECRET` | yes | Session signing |
 | `GROQ_API_KEY` / `LONGCAT_API_KEY` / `OPENAI_API_KEY` | live models | AI providers |
 | `EMBEDDING_API_KEY` | semantic search | Embeddings |
+| `CRON_SECRET` | yes (job discovery) | Bearer secret for `/api/cron/job-discovery` |
 | `RELAY_GIT_SHA` | stamped by CD | Deployed commit identity |
 | `SCOUT_DAILY_SEND_LIMIT` | no | Per-rep send ceiling (default 15) |
 | `DATABASE_POOL_MAX` / `SERVICE_DATABASE_POOL_MAX` / `AUTH_DATABASE_POOL_MAX` | no | Pool sizing |
+
+---
+
+## 9b. Job discovery worker
+
+A systemd timer calls `GET /api/cron/job-discovery` with `CRON_SECRET`. It is a
+bounded, lock-protected ingestion tick (default 4 sources, 8 s HTTP timeout,
+120 s route ceiling, 220 MB / 30% CPU systemd ceiling). It never runs a second
+always-on service and never marks jobs closed because a source failed.
+
+Install: `bash deploy/install-job-discovery.sh`
+Units: `deploy/job-discovery.timer`, `deploy/job-discovery.service`
+Migrations: `20261119120000_job_intelligence_v2.sql`, `20261119130000_job_intelligence_v3_sources.sql`, `20261119140000_job_intelligence_v3_filters.sql`, `20261119150000_fix_reps_auth_fk.sql`
+Enabled sources: RemoteOK, Remotive, Greenhouse · Airbnb, Greenhouse · Stripe, Ashby · Ramp, Ashby · Linear
+Admin health: `/jobs?view=sources`
+Full record: `docs/RELAY_JOB_INTELLIGENCE_V3.md` (activation) and `docs/RELAY_JOB_INTELLIGENCE_V2.md` (design)
+
+**Staging:** `relay_staging` on the same Aiven project is an isolated schema-clone database used for browser acceptance. Never point the production app at it.
+
+```bash
+sudo systemctl start job-discovery.service   # manual tick
+journalctl -u job-discovery.service -e
+```
+
+Removal:
+
+```bash
+sudo systemctl disable --now job-discovery.timer
+sudo rm /etc/systemd/system/job-discovery.{service,timer}
+sudo systemctl daemon-reload
+```
 
 ---
 

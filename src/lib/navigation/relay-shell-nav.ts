@@ -19,6 +19,7 @@ import {
   BarChart3,
   Settings,
   ShieldCheck,
+  Briefcase,
   type LucideIcon,
 } from 'lucide-react'
 import { INBOX_PRIMARY_VIEWS, inboxViewHref } from '@/lib/navigation/inbox-nav'
@@ -28,6 +29,7 @@ export type RelayNavDomain =
   | 'sales'
   | 'inbox'
   | 'work'
+  | 'jobs'
   | 'team'
   | 'content'
   | 'insights'
@@ -88,6 +90,22 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
       { id: 'import', label: 'Import Leads', href: '/leads/import', group: 'Prospecting' },
       { id: 'upwork', label: 'Upwork', href: '/upwork', group: 'Channels' },
       { id: 'email', label: 'Email', href: '/revenue/email', group: 'Channels' },
+    ],
+  },
+  {
+    id: 'jobs',
+    label: 'Jobs',
+    href: '/jobs',
+    icon: Briefcase,
+    visible: everyone,
+    secondary: [
+      { id: 'for-you', label: 'For You', href: '/jobs?view=for-you', group: 'Discover' },
+      { id: 'latest', label: 'Latest', href: '/jobs?view=latest', group: 'Discover' },
+      { id: 'verified-remote', label: 'Verified Remote', href: '/jobs?view=verified-remote', group: 'Discover' },
+      { id: 'saved', label: 'Saved', href: '/jobs?view=saved', group: 'Pipeline' },
+      { id: 'applications', label: 'Applications', href: '/jobs?view=applications', group: 'Pipeline' },
+      { id: 'documents', label: 'Documents', href: '/jobs?view=documents', group: 'Pipeline' },
+      { id: 'sources', label: 'Sources & Health', href: '/jobs?view=sources', visible: adminUp, group: 'System' },
     ],
   },
   {
@@ -194,7 +212,7 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
 ]
 
 /** Primary domains shown above the divider; Settings and Admin sit below it. */
-export const PRIMARY_MAIN_IDS: RelayNavDomain[] = ['home', 'sales', 'inbox', 'work', 'team', 'content', 'insights']
+export const PRIMARY_MAIN_IDS: RelayNavDomain[] = ['home', 'sales', 'jobs', 'inbox', 'work', 'team', 'content', 'insights']
 export const PRIMARY_UTILITY_IDS: RelayNavDomain[] = ['settings', 'admin']
 
 // ─── Domain resolution ──────────────────────────────────────────────────────
@@ -206,6 +224,7 @@ export const PRIMARY_UTILITY_IDS: RelayNavDomain[] = ['settings', 'admin']
 export function domainForPathname(pathname: string): RelayNavDomain | null {
   if (pathname === '/dashboard') return 'home'
   if (pathname === '/chats' || pathname.startsWith('/chats/')) return 'inbox'
+  if (pathname === '/jobs' || pathname.startsWith('/jobs/')) return 'jobs'
   if (pathname === '/tasks' || pathname.startsWith('/tasks/')) return 'work'
   // Profiles and identities are Team capabilities; /profile-intelligence is the
   // implementation route behind Team → Identities, and the legacy /profiles and
@@ -255,6 +274,8 @@ const PAGE_OWNED_SUB_NAV: RegExp[] = [
   /^\/accounts\/[^/]+/,
   // A team group owns its own section tabs (overview / people / leads / ...).
   /^\/team\/groups\/[^/]+/,
+  // Job detail owns its own match/document/application workflow.
+  /^\/jobs\/[^/]+/,
   // Record details own tabs only when the segment is a record, not a list page.
   /^\/leads\/(?!import$|new$)[^/]+/,
   /^\/team\/(?!people$|profiles$|coverage$|workload$|targets$|activity$|performance$|groups$|eval$|fixture-)[^/]+/,
@@ -401,11 +422,10 @@ export function mobileNavItems(role: RelayNavRoleFlags): MobileNavItem[] {
   const items: MobileNavItem[] = [
     { id: 'home', label: 'Home', href: '/dashboard' },
     { id: 'sales', label: 'Sales', href: '/leads' },
+    { id: 'jobs', label: 'Jobs', href: '/jobs' },
     { id: 'inbox', label: 'Inbox', href: '/chats' },
+    { id: 'more', label: 'More', href: '' },
   ]
-  if (managerUp(role)) items.push({ id: 'team', label: 'Team', href: '/team' })
-  else items.push({ id: 'work', label: 'Work', href: '/tasks' })
-  items.push({ id: 'more', label: 'More', href: '' })
   return items
 }
 

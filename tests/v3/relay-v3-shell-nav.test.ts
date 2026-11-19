@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   domainForPathname,
   mobileNavItems,
+  moreSheetSections,
   resolvePrimaryActiveId,
   resolveSecondaryActiveId,
   secondaryItems,
@@ -49,6 +50,7 @@ describe('RELAY_V3_SINGLE_ACTIVE_NAV_ITEM', () => {
     expect(visibleDomains(rep).map((i) => i.id)).toEqual([
       'home',
       'sales',
+      'jobs',
       'inbox',
       'work',
       'content',
@@ -127,8 +129,10 @@ describe('V3_ROLE_NAV', () => {
   })
 
   it('managers see team; reps do not', () => {
-    expect(mobileNavItems(manager).some((i) => i.id === 'team')).toBe(true)
-    expect(mobileNavItems(rep).some((i) => i.id === 'team')).toBe(false)
+    expect(visibleDomains(manager).map((i) => i.id)).toContain('team')
+    expect(visibleDomains(rep).map((i) => i.id)).not.toContain('team')
+    expect(moreSheetSections(manager).map((s) => s.id)).toContain('team')
+    expect(moreSheetSections(rep).map((s) => s.id)).not.toContain('team')
   })
 })
 

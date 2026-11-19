@@ -101,6 +101,14 @@ export function CommandPalette({
     },
     {
       id: 'find-jobs',
+      label: 'Open Jobs',
+      description: 'Discover verified remote jobs matched to your profile',
+      icon: Briefcase,
+      group: 'Relay',
+      action: () => { router.push('/jobs'); onOpenChange(false) },
+    },
+    {
+      id: 'open-upwork',
       label: 'Open Upwork',
       description: 'Open Upwork opportunities',
       icon: Briefcase,

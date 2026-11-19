@@ -14,6 +14,8 @@ export const SERVICE_CLIENT_ALLOWLIST: ReadonlyArray<{ prefix: string; reason: s
   { prefix: 'src/app/api/few-shot/refresh/', reason: 'Scheduled few-shot refresh' },
   { prefix: 'src/app/api/trends/ingest/', reason: 'Scheduled trend ingest' },
   { prefix: 'src/app/api/relay/reconcile/', reason: 'Scheduled reconciliation' },
+  { prefix: 'src/app/api/jobs/sources/', reason: 'Job source health/admin configuration; service-role write' },
+  { prefix: 'src/app/api/jobs/import/', reason: 'Manual job import; service-role write to the public jobs table' },
 
   // Signed provider callbacks — secret or single-use signed state.
   { prefix: 'src/app/api/email/webhook/', reason: 'Provider webhook; EMAIL_WEBHOOK_SECRET' },
