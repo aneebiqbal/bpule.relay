@@ -8,6 +8,8 @@
 import { headers } from 'next/headers'
 import type { AuthFailure, AuthProvider, AuthSession, AuthUser } from './contract'
 import { getBetterAuthInstance } from './better-auth'
+import { requestMemo } from '@/lib/request-scope'
+import '@/lib/request-scope.node'
 
 function failure(message: string | undefined): AuthFailure {
   return { message: message ?? 'Authentication failed.' }
@@ -24,11 +26,15 @@ export function betterAuthServerAuth(): Pick<
 > {
   return {
     async getSession(): Promise<AuthSession> {
-      const auth = getBetterAuthInstance()
-      const requestHeaders = await headers()
-      const session = await auth.api.getSession({ headers: requestHeaders })
-      if (!session?.user) return { user: null }
-      return { user: toUser(session.user) }
+      // One session read per request. This is the single most repeated call in
+      // the app (14x on one request before); Better Auth reads its own tables.
+      return requestMemo('auth.session', async () => {
+        const auth = getBetterAuthInstance()
+        const requestHeaders = await headers()
+        const session = await auth.api.getSession({ headers: requestHeaders })
+        if (!session?.user) return { user: null }
+        return { user: toUser(session.user) }
+      })
     },
 
     async createUser({ email, password, name }) {

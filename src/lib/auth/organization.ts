@@ -4,6 +4,7 @@ import { isMissingRelation } from '@/lib/operations/db-errors'
 import { isDemoMode } from '@/lib/ai/config'
 import { getDbClient } from '@/lib/db/provider'
 import { perfTrace } from '@/lib/perf-trace'
+import { requestMemo } from '@/lib/request-scope'
 
 export type OrganizationRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER'
 export type TeamRole = 'MANAGER' | 'MEMBER'
@@ -165,7 +166,7 @@ async function resolveAuthContext(): Promise<AuthContext | null> {
   }
 }
 
-export const getAuthContext = cache(resolveAuthContext)
+export const getAuthContext = cache(() => requestMemo('auth.context', () => resolveAuthContext()))
 
 export async function requireAuthContext(): Promise<AuthContext> {
   const ctx = await getAuthContext()
