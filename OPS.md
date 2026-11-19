@@ -214,10 +214,10 @@ always-on service and never marks jobs closed because a source failed.
 
 Install: `bash deploy/install-job-discovery.sh`
 Units: `deploy/job-discovery.timer`, `deploy/job-discovery.service`
-Migrations: `20261119120000_job_intelligence_v2.sql`, `20261119130000_job_intelligence_v3_sources.sql`, `20261119140000_job_intelligence_v3_filters.sql`, `20261119150000_fix_reps_auth_fk.sql`
-Enabled sources: RemoteOK, Remotive, Greenhouse · Airbnb, Greenhouse · Stripe, Ashby · Ramp, Ashby · Linear
+Migrations: `20261119120000_job_intelligence_v2.sql`, `20261119130000_job_intelligence_v3_sources.sql`, `20261119140000_job_intelligence_v3_filters.sql`, `20261119150000_fix_reps_auth_fk.sql`, `20261120120000_job_inventory_index.sql`, `20261120130000_more_sources.sql`, `20261120140000_job_freshness_columns.sql`
+Enabled sources: RemoteOK, Remotive, Greenhouse · Airbnb, Greenhouse · Stripe, Ashby · Ramp, Ashby · Linear, Himalayas, Jobicy (Arbeitnow evaluated and left disabled — Germany-centric, low Pakistan eligibility)
 Admin health: `/jobs?view=sources`
-Full record: `docs/RELAY_JOB_INTELLIGENCE_V3.md` (activation) and `docs/RELAY_JOB_INTELLIGENCE_V2.md` (design)
+Full record: `docs/RELAY_JOB_INTELLIGENCE_V4.md` (activation), `docs/RELAY_JOB_INTELLIGENCE_V3.md`, `docs/RELAY_JOB_INTELLIGENCE_V2.md` (design)
 
 **Staging:** `relay_staging` on the same Aiven project is an isolated schema-clone database used for browser acceptance. Never point the production app at it.
 
@@ -231,6 +231,38 @@ Removal:
 ```bash
 sudo systemctl disable --now job-discovery.timer
 sudo rm /etc/systemd/system/job-discovery.{service,timer}
+sudo systemctl daemon-reload
+```
+
+---
+
+## 9c. Job inventory reindex
+
+A second systemd timer calls `GET /api/cron/job-inventory` with `CRON_SECRET`.
+It recomputes `job_inventory_index` from the `jobs` table: feed bucket
+(`recommended`, `eligible_low`, `eligibility_unknown`, `location_restricted`,
+`stale_unverified`, `duplicate`, `not_remote`, `closed`), Pakistan eligibility,
+freshness and apply-URL quality. It is **non-destructive** — no job row is ever
+deleted, and saved jobs / applications / documents are untouched.
+
+The Jobs "Ready Today" shortlist and the feed views read this index, so the timer
+must be running. The index lags ingestion by at most one timer interval.
+
+Units: `deploy/job-inventory.timer`, `deploy/job-inventory.service` (installed by
+`deploy/install-job-discovery.sh`).
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+  "http://127.0.0.1:3000/api/cron/job-inventory?dryRun=1"   # counts only
+sudo systemctl start job-inventory.service
+journalctl -u job-inventory.service -e
+```
+
+Removal:
+
+```bash
+sudo systemctl disable --now job-inventory.timer
+sudo rm /etc/systemd/system/job-inventory.{service,timer}
 sudo systemctl daemon-reload
 ```
 

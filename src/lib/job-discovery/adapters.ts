@@ -136,7 +136,7 @@ function parseMoney(value: unknown): {
         ? 'week'
         : /\b(month|monthly)\b/i.test(raw)
           ? 'month'
-          : /\b(year|annually|annual|yr)\b/i.test(raw)
+          : /\b(year(?:ly)?|annual(?:ly)?|yr)\b/i.test(raw)
             ? 'year'
             : undefined
   return {
@@ -542,6 +542,106 @@ const smartrecruiters: SourceAdapter = async (ctx) => {
   return output(jobs, snapshot, url, contentHash, cursor)
 }
 
+// ── Himalayas ───────────────────────────────────────────────────────────────
+const himalayas: SourceAdapter = async (ctx) => {
+  const limit = Number(configString(ctx.config, 'limit') || 100)
+  const cursor = ctx.cursor ?? ''
+  const url = `https://himalayas.app/jobs/api?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+  const { json, snapshot, contentHash } = await fetchJson(url, ctx)
+  const body = asRecord(json)
+  const rows = asArray(body.jobs)
+  const jobs: DiscoveryJob[] = []
+  for (const row of rows) {
+    const item = asRecord(row)
+    const id = str(item.guid) ?? str(item.id)
+    const title = str(item.title)
+    if (!id || !title) continue
+    const description = text(item.description ?? item.excerpt)
+    const restrictions = asArray(item.locationRestrictions).map((value) => String(value))
+    // Himalayas is a remote-only board: a location/timezone restriction bounds
+    // where a remote hire may live, it does not make the role onsite.
+    const timezoneOffsets = asArray(item.timezoneRestrictions).map((value) => String(value))
+    const locationRaw = [
+      restrictions.join(', '),
+      ...timezoneOffsets.map((offset) => `UTC${Number(offset) >= 0 ? '+' : ''}${offset}`),
+    ].filter(Boolean).join(', ') || 'Remote'
+    const seniority = asArray(item.seniority).map((value) => String(value))[0]
+    const salary = salaryFields(`${str(item.minSalary) ?? ''} ${str(item.maxSalary) ?? ''} ${str(item.currency) ?? ''}`.trim())
+    jobs.push({
+      sourceId: 'himalayas',
+      sourceJobId: id,
+      title,
+      company: str(item.companyName) ?? 'Unknown company',
+      companyLogo: str(item.companyLogo),
+      locationRaw,
+      remote: true,
+      employmentType: (str(item.employmentType) ?? '').toLowerCase().replace(' ', '-'),
+      seniority: (seniority ?? '').toLowerCase(),
+      ...salary,
+      description,
+      excerpt: excerpt(description),
+      skills: skills(item.skills ?? item.tags).length > 0 ? skills(item.skills ?? item.tags) : extractSkills(description),
+      categories: asArray(item.categories).map((value) => String(value)),
+      postedAt: parseDate(item.pubDate),
+      expiresAt: parseDate(item.expiryDate),
+      applyUrl: str(item.applicationLink) ?? str(item.url),
+      sourceUrl: str(item.applicationLink) ?? str(item.url),
+      attribution: { required: false, label: 'Himalayas', url: 'https://himalayas.app' },
+      raw: item,
+    })
+  }
+  const nextCursor = str(body.nextCursor) ?? null
+  return { jobs, cursor: nextCursor, snapshot: { ...snapshot, url, contentHash } }
+}
+
+// ── Jobicy ──────────────────────────────────────────────────────────────────
+const jobicy: SourceAdapter = async (ctx) => {
+  const count = Number(configString(ctx.config, 'count') || 100)
+  const industry = configString(ctx.config, 'industry') ?? 'engineering'
+  const cursor = ctx.cursor ?? ''
+  const url = `https://jobicy.com/api/v2/remote-jobs?count=${count}&industry=${encodeURIComponent(industry)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+  const { json, snapshot, contentHash } = await fetchJson(url, ctx)
+  const body = asRecord(json)
+  const rows = asArray(body.jobs)
+  const jobs: DiscoveryJob[] = []
+  for (const row of rows) {
+    const item = asRecord(row)
+    const id = str(item.id)
+    const title = str(item.jobTitle)
+    if (!id || !title) continue
+    const description = text(item.jobDescription ?? item.jobExcerpt)
+    const geo = str(item.jobGeo) ?? ''
+    const jobType = asArray(item.jobType).map((value) => String(value)).join(', ')
+    const level = str(item.jobLevel) ?? ''
+    const salary = salaryFields(`${str(item.salaryMin) ?? ''} ${str(item.salaryMax) ?? ''} ${str(item.salaryCurrency) ?? ''} ${str(item.salaryPeriod) ?? ''}`.trim())
+    jobs.push({
+      sourceId: 'jobicy',
+      sourceJobId: id,
+      title,
+      company: str(item.companyName) ?? 'Unknown company',
+      companyLogo: str(item.companyLogo),
+      locationRaw: geo || 'Remote',
+      // Jobicy is a remote-only board; jobGeo is the permitted work region.
+      remote: true,
+      employmentType: jobType.toLowerCase().replace(' ', '-'),
+      seniority: level.toLowerCase(),
+      ...salary,
+      description,
+      excerpt: excerpt(description),
+      skills: extractSkills(description),
+      categories: asArray(item.jobIndustry).map((value) => String(value)),
+      postedAt: parseDate(item.pubDate),
+      applyUrl: str(item.url),
+      sourceUrl: str(item.url),
+      attribution: { required: false, label: 'Jobicy', url: 'https://jobicy.com' },
+      raw: item,
+    })
+  }
+  const hasMore = Boolean(body.hasMore)
+  const nextCursor = hasMore ? str(body.nextCursor) ?? 'next' : null
+  return { jobs, cursor: nextCursor, snapshot: { ...snapshot, url, contentHash } }
+}
+
 export const ADAPTERS: Record<string, SourceAdapter> = {
   remoteok,
   remotive,
@@ -549,6 +649,8 @@ export const ADAPTERS: Record<string, SourceAdapter> = {
   lever,
   ashby,
   smartrecruiters,
+  himalayas,
+  jobicy,
 }
 
 export function adapterFor(sourceId: string): SourceAdapter | null {

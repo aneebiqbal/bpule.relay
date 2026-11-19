@@ -14,7 +14,7 @@ import type { ProfileEvidence } from '@/lib/generation/sales-context'
 import { countryFromLocation, evaluateEligibility, type JobEligibility, type SeekerPreferences } from './eligibility'
 import type { DiscoveryJob } from './types'
 
-export const MATCH_SCORE_VERSION = 1
+export const MATCH_SCORE_VERSION = 2
 
 export interface MatchProfile {
   profileId: string

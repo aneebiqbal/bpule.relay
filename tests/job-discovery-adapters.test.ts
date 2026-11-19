@@ -142,6 +142,50 @@ describe('job discovery adapters', () => {
     expect(result.cursor).toBe('1')
   })
 
+  it('normalizes Himalayas and keeps a location-bounded role remote', async () => {
+    const result = await ADAPTERS.himalayas(ctx(mockFetch({
+      jobs: [{
+        guid: 'https://himalayas.app/jobs/1',
+        title: 'Backend Engineer',
+        companyName: 'Acme',
+        description: '<p>Build.</p>',
+        locationRestrictions: ['United Kingdom'],
+        timezoneRestrictions: [0],
+        employmentType: 'Full Time',
+        pubDate: 1_700_000_000,
+        applicationLink: 'https://himalayas.app/jobs/1',
+      }],
+      nextCursor: 'next',
+    }), { limit: 100 }))
+    expect(result.jobs[0].sourceId).toBe('himalayas')
+    expect(result.jobs[0].remote).toBe(true)
+    expect(result.jobs[0].locationRaw).toContain('United Kingdom')
+    expect(result.jobs[0].locationRaw).toContain('UTC+0')
+    expect(result.jobs[0].postedAt).toBe(new Date(1_700_000_000_000).toISOString())
+    expect(result.cursor).toBe('next')
+  })
+
+  it('normalizes Jobicy and keeps a geo-bounded role remote', async () => {
+    const result = await ADAPTERS.jobicy(ctx(mockFetch({
+      jobs: [{
+        id: 163229,
+        jobTitle: 'Software Engineer',
+        companyName: 'Automox',
+        jobDescription: '<p>Build.</p>',
+        jobGeo: 'USA',
+        jobLevel: 'Senior',
+        jobType: ['Full-Time'],
+        pubDate: '2026-11-19T09:05:10+00:00',
+        url: 'https://jobicy.com/jobs/163229',
+      }],
+    }), { count: 100, industry: 'engineering' }))
+    expect(result.jobs[0].sourceId).toBe('jobicy')
+    expect(result.jobs[0].remote).toBe(true)
+    expect(result.jobs[0].locationRaw).toBe('USA')
+    expect(result.jobs[0].seniority).toBe('senior')
+    expect(result.jobs[0].employmentType).toBe('full-time')
+  })
+
   it('throws a typed error when an ATS source is not configured', async () => {
     await expect(ADAPTERS.greenhouse(ctx(mockFetch({}), {}))).rejects.toThrow(/config\.slug/)
   })

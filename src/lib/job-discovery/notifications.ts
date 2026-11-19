@@ -34,6 +34,7 @@ export async function notifyNewStrongMatches(db: DbClient, orgId: string, since:
      from job_matches m
      join profiles p on p.id = m.profile_id
      join jobs j on j.id = m.job_id
+     join job_inventory_index ii on ii.job_id = m.job_id and ii.include_in_feed
      where m.organization_id = ? and m.category in ('excellent','strong') and m.created_at > ?
      order by m.created_at desc limit 200`,
     [orgId, since],

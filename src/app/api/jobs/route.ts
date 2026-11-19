@@ -5,7 +5,7 @@ import { listJobs, type JobsView, type JobFilters } from '@/lib/job-discovery/se
 
 export const dynamic = 'force-dynamic'
 
-const VIEWS: JobsView[] = ['for-you', 'latest', 'verified-remote', 'saved', 'applications', 'documents']
+const VIEWS: JobsView[] = ['for-you', 'shortlist', 'latest', 'verified-remote', 'saved', 'applications', 'documents']
 
 export async function GET(request: Request) {
   const store = await createScoutStore().catch(() => null)

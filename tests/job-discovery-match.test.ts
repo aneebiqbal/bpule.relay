@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeJobMatch, MATCH_SCORE_VERSION, type MatchProfile } from '@/lib/job-discovery/match'
+import { tokenizeSkill } from '@/lib/jobs/rank-jobs'
 import type { ProfileEvidence } from '@/lib/generation/sales-context'
 import type { DiscoveryJob } from '@/lib/job-discovery/types'
 
@@ -102,9 +103,20 @@ describe('computeJobMatch', () => {
     expect(match.score).toBeLessThanOrEqual(45)
   })
 
+  it('normalizes Rails/React punctuation and aliases', () => {
+    expect(tokenizeSkill('Rails/React')).toEqual(expect.arrayContaining(['ruby on rails', 'react']))
+    expect(tokenizeSkill('Node.js')).toEqual(expect.arrayContaining(['node.js', 'node']))
+  })
+
+  it('matches a job requiring Node.js/PostgreSQL to a profile with those skills', () => {
+    const match = computeJobMatch(job({ skills: ['Node.js/PostgreSQL'] }), profile)
+    expect(match.evidence.matchedSkills).toContain('Node.js/PostgreSQL')
+    expect(match.evidence.missingSkills).toEqual([])
+  })
+
   it('exposes a versioned, explainable breakdown', () => {
     const match = computeJobMatch(job({}), profile)
-    expect(MATCH_SCORE_VERSION).toBe(1)
+    expect(MATCH_SCORE_VERSION).toBe(2)
     expect(Object.keys(match.breakdown)).toContain('freshness')
     expect(match.explanation.length).toBeGreaterThan(20)
   })

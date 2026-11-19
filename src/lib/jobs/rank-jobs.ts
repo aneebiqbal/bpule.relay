@@ -47,6 +47,32 @@ const nouns = (value: string): string[] =>
 
 const slugify = (value: string): string => value.toLowerCase().replace(/[^a-z0-9+#]/g, '')
 
+const SKILL_ALIASES: Record<string, string> = {
+  rails: 'ruby on rails', rail: 'ruby on rails', ruby: 'ruby',
+  react: 'react', reactjs: 'react', 'react.js': 'react', reactnative: 'react native',
+  node: 'node.js', nodejs: 'node.js', 'node.js': 'node.js',
+  js: 'javascript', javascript: 'javascript', ts: 'typescript', typescript: 'typescript',
+  py: 'python', python: 'python', k8s: 'kubernetes', kubernetes: 'kubernetes',
+  gcp: 'google cloud', 'google cloud': 'google cloud', postgres: 'postgresql',
+  postgresql: 'postgresql', mongo: 'mongodb', mongodb: 'mongodb', vue: 'vue.js',
+  'vue.js': 'vue.js', angular: 'angular', 'c#': 'c#', 'c++': 'c++',
+}
+
+/** Split a skill phrase into normalized tokens and aliases. */
+export function tokenizeSkill(skill: string): string[] {
+  const normalized = skill.toLowerCase().trim().replace(/[\/\|&,;+.]+/g, ' ').replace(/\s+/g, ' ')
+  if (!normalized) return []
+  const parts = normalized.split(' ')
+  const tokens = new Set<string>([normalized, ...parts])
+  for (const part of parts) {
+    const alias = SKILL_ALIASES[part]
+    if (alias) tokens.add(alias)
+  }
+  const fullAlias = SKILL_ALIASES[normalized]
+  if (fullAlias) tokens.add(fullAlias)
+  return [...tokens]
+}
+
 export function scoreJob(job: Job, cv: CvProfile, params: JobSearchParams): JobMatch {
   const breakdown = {
     role: roleScore(job, cv),
@@ -111,17 +137,18 @@ function roleScore(job: Job, cv: CvProfile): number {
 }
 
 function skillsScore(job: Job, cv: CvProfile): number {
-  const cvSkills = cv.skills.map(slugify).filter(Boolean)
-  const jobSkills = (job.skills ?? []).map(slugify).filter(Boolean)
-  if (cvSkills.length === 0) return 0.5
-  if (jobSkills.length === 0) {
+  const cvTokens = new Set(cv.skills.flatMap(tokenizeSkill))
+  const jobSkillTokens = (job.skills ?? []).map(tokenizeSkill)
+  if (cvTokens.size === 0) return 0.5
+  if (jobSkillTokens.length === 0) {
     // No explicit skills — check the description for CV skill mentions.
     const text = slugify(job.description ?? '')
+    const cvSkills = cv.skills.map(slugify).filter(Boolean)
     const mentioned = cvSkills.filter((s) => text.includes(s)).length
     return clamp01(mentioned / cvSkills.length > 0.2 ? 0.75 : 0.5)
   }
-  const matched = jobSkills.filter((s) => cvSkills.includes(s)).length
-  return clamp01(matched / jobSkills.length)
+  const matched = jobSkillTokens.filter((tokens) => tokens.some((token) => cvTokens.has(token))).length
+  return clamp01(matched / jobSkillTokens.length)
 }
 
 function seniorityScore(job: Job, cv: CvProfile): number {
@@ -207,10 +234,10 @@ function freshnessScore(job: Job): number {
 }
 
 function skillGaps(job: Job, cv: CvProfile): { matched: string[]; missing: string[] } {
-  const cvSet = new Set(cv.skills.map(slugify))
+  const cvTokens = new Set(cv.skills.flatMap(tokenizeSkill))
   const listed = job.skills ?? []
-  const matched = listed.filter((s) => cvSet.has(slugify(s)))
-  const missing = listed.filter((s) => !cvSet.has(slugify(s))).slice(0, 4)
+  const matched = listed.filter((skill) => tokenizeSkill(skill).some((token) => cvTokens.has(token)))
+  const missing = listed.filter((skill) => !tokenizeSkill(skill).some((token) => cvTokens.has(token))).slice(0, 4)
   if (matched.length === 0 && cv.skills.length > 0) {
     const text = slugify(job.description ?? '')
     const implied = cv.skills.filter((s) => text.includes(slugify(s))).slice(0, 4)

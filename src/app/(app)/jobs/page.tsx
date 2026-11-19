@@ -6,7 +6,7 @@ import { JobsWorkspace } from '@/components/jobs/jobs-workspace'
 
 export const dynamic = 'force-dynamic'
 
-const VIEWS: JobsView[] = ['for-you', 'latest', 'verified-remote', 'saved', 'applications', 'documents', 'sources']
+const VIEWS: JobsView[] = ['for-you', 'shortlist', 'latest', 'verified-remote', 'saved', 'applications', 'documents', 'sources']
 
 export default async function JobsPage({
   searchParams,
@@ -18,7 +18,7 @@ export default async function JobsPage({
   if (!auth) redirect('/login')
 
   const params = await searchParams
-  const rawView = typeof params.view === 'string' ? params.view : 'for-you'
+  const rawView = typeof params.view === 'string' ? params.view : 'shortlist'
   const view: JobsView = (VIEWS.includes(rawView as JobsView) ? rawView : 'for-you') as JobsView
   const search = typeof params.search === 'string' ? params.search : undefined
   const num = (key: string): number | undefined => {
@@ -48,10 +48,10 @@ export default async function JobsPage({
 
   const limit = 24
   const offset = typeof params.offset === 'string' ? Number(params.offset) || 0 : 0
-  // For You is the one view that needs a stored match. Compute it for the
-  // selected profile before reading the list; bounded to the 200 most recent
-  // live jobs by ensureJobMatches.
-  if (view === 'for-you' && profileId) {
+  // For You and Ready Today are the views that need a stored match. Compute it
+  // for the selected profile before reading the list; bounded to the 200 most
+  // recent live jobs by ensureJobMatches.
+  if ((view === 'for-you' || view === 'shortlist') && profileId) {
     await ensureJobMatches(store.getSupabaseClient(), auth.orgId, profileId)
   }
   const { jobs, hasMore } = await listJobs(store.getSupabaseClient(), auth.orgId, {

@@ -18,6 +18,7 @@ import { cn } from 'cn'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { JobCard, JobFilters, JobsView } from '@/lib/job-discovery/service'
+import { isSafeApplicationUrl } from '@/lib/job-discovery/url'
 
 interface ProfileOption {
   id: string
@@ -44,6 +45,7 @@ interface JobsWorkspaceProps {
 
 const VIEW_LABELS: Record<JobsView, string> = {
   'for-you': 'For You',
+  shortlist: 'Ready Today',
   latest: 'Latest',
   'verified-remote': 'Verified Remote',
   saved: 'Saved',
@@ -68,9 +70,9 @@ function formatDate(value: string | null): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function relative(value: string | null): string {
+function relative(value: string | null, now: number = Date.now()): string {
   if (!value) return '—'
-  const ms = Date.now() - new Date(value).getTime()
+  const ms = now - new Date(value).getTime()
   if (!Number.isFinite(ms) || ms < 0) return 'just now'
   const hours = Math.floor(ms / 3_600_000)
   if (hours < 1) return 'just now'
@@ -476,6 +478,15 @@ export function JobsWorkspace(props: JobsWorkspaceProps) {
   )
 }
 
+function RelativeTime({ value }: { value: string | null }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  return <>{relative(value, now)}</>
+}
+
 function JobCardView({ job, profileId, busy, onSave }: { job: JobCard; profileId: string; busy: boolean; onSave: () => void }) {
   const eligibility = eligibilityLabel(job)
   const verification = verificationLabel(job.verificationStatus)
@@ -546,14 +557,14 @@ function JobCardView({ job, profileId, busy, onSave }: { job: JobCard; profileId
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-2 text-[11px] text-stone">
-        <span className="flex items-center gap-1"><Clock className="size-3" aria-hidden /> Posted {relative(job.postedAt)}</span>
-        <span className="flex items-center gap-1"><ShieldCheck className="size-3" aria-hidden /> Checked {relative(job.lastVerifiedAt ?? job.lastSeenAt)}</span>
-        <span className="col-span-2">First seen {formatDate(job.firstSeenAt)} · last seen {relative(job.lastSeenAt)}</span>
+        <span className="flex items-center gap-1"><Clock className="size-3" aria-hidden /> Posted <RelativeTime value={job.postedAt} /></span>
+        <span className="flex items-center gap-1"><ShieldCheck className="size-3" aria-hidden /> Checked <RelativeTime value={job.lastVerifiedAt ?? job.lastSeenAt} /></span>
+        <span className="col-span-2">First seen {formatDate(job.firstSeenAt)} · last seen <RelativeTime value={job.lastSeenAt} /></span>
         {salary && <span className="col-span-2 text-graphite">{salary}</span>}
       </div>
 
       <div className="mt-auto flex items-center gap-2">
-        <Button size="sm" variant="orange" className="flex-1" disabled={!job.applyUrl && !job.sourceUrl} onClick={() => window.open(job.applyUrl ?? job.sourceUrl ?? '#', '_blank', 'noopener,noreferrer')}>
+        <Button size="sm" variant="orange" className="flex-1" disabled={!isSafeApplicationUrl(job.applyUrl ?? job.sourceUrl)} onClick={() => window.open(job.applyUrl ?? job.sourceUrl ?? '#', '_blank', 'noopener,noreferrer')}>
           <ExternalLink className="size-3.5" aria-hidden /> Apply
         </Button>
         <Button size="sm" variant="outline" onClick={onSave} disabled={busy} aria-pressed={job.saved}>
@@ -729,7 +740,7 @@ function SourcesView({ sources }: { sources: Array<Record<string, unknown>> }) {
                     </label>
                   </td>
                   <td className="px-4 py-3 tabular-nums text-graphite">{Number(row.jobCount ?? 0)}</td>
-                  <td className="px-4 py-3 text-graphite">{relative(String(row.last_run_at ?? ''))}</td>
+                  <td className="px-4 py-3 text-graphite"><RelativeTime value={String(row.last_run_at ?? '')} /></td>
                   <td className="px-4 py-3 text-graphite">{Number(row.consecutive_failures ?? 0)}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1.5">

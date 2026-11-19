@@ -18,6 +18,11 @@ function sanitize(text: string): string {
   // PDF's base encoding becomes a visible placeholder rather than a broken
   // glyph. Non-ASCII names are the only realistic case.
   return text
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u2192/g, '->')
+    .replace(/\u2022/g, '-')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
     .replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '?')
     .replace(/[\u0080-\u009F]/g, '?')
 }
@@ -36,21 +41,41 @@ function wrapLine(line: string, width: number): string[] {
   return out
 }
 
-const LAYOUTS: Record<ResumeLayout, { font: string; size: number; leading: number; margin: number; width: number }> = {
-  modern: { font: 'Helvetica', size: 10.5, leading: 15, margin: 54, width: 92 },
-  technical: { font: 'Courier', size: 9.5, leading: 13, margin: 48, width: 92 },
-  minimal: { font: 'Helvetica', size: 9.5, leading: 12, margin: 60, width: 88 },
+const LAYOUTS: Record<ResumeLayout, { font: string; bold: string; size: number; leading: number; margin: number; width: number }> = {
+  modern: { font: 'Helvetica', bold: 'Helvetica-Bold', size: 10.5, leading: 15, margin: 54, width: 92 },
+  technical: { font: 'Courier', bold: 'Courier-Bold', size: 9.5, leading: 13, margin: 48, width: 92 },
+  minimal: { font: 'Helvetica', bold: 'Helvetica-Bold', size: 9.5, leading: 12, margin: 60, width: 88 },
+}
+
+type LineKind = 'heading' | 'bullet' | 'normal'
+
+function kindFor(line: string): LineKind {
+  const trimmed = line.trim()
+  if (/^(experience|projects|skills|certifications|education|summary)$/i.test(trimmed)) return 'heading'
+  if (trimmed.length > 1 && trimmed === trimmed.toUpperCase() && trimmed.length < 42 && /[A-Z]/.test(trimmed)) return 'heading'
+  if (/^[-•]\s+/.test(trimmed)) return 'bullet'
+  return 'normal'
 }
 
 export function renderResumePdf(sourceText: string, layout: ResumeLayout = 'modern'): Buffer {
   const style = LAYOUTS[layout] ?? LAYOUTS.modern
-  const wrapped = sourceText
+  const items = sourceText
     .split(/\r?\n/)
     .flatMap((line) => wrapLine(line.replace(/\t/g, '    '), style.width))
-  const perPage = Math.floor((792 - style.margin * 2) / style.leading)
-  const pages: string[][] = []
-  for (let i = 0; i < wrapped.length; i += perPage) pages.push(wrapped.slice(i, i + perPage))
-  if (pages.length === 0) pages.push([''])
+    .map((line) => ({ line, kind: kindFor(line) }))
+
+  const pages: Array<Array<{ line: string; kind: LineKind }>> = [[]]
+  let y = 792 - style.margin
+  for (const item of items) {
+    const leading = item.kind === 'heading' ? style.leading + 3 : style.leading
+    if (y - leading < style.margin) {
+      pages.push([])
+      y = 792 - style.margin
+    }
+    pages[pages.length - 1].push(item)
+    y -= leading
+  }
+  if (pages.length === 0) pages.push([{ line: '', kind: 'normal' }])
 
   const objects: string[] = []
   const pageIds: number[] = []
@@ -62,19 +87,23 @@ export function renderResumePdf(sourceText: string, layout: ResumeLayout = 'mode
   objects[1] = '<< /Type /Catalog /Pages 2 0 R >>'
   objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`
   objects[3] = `<< /Type /Font /Subtype /Type1 /BaseFont /${style.font} >>`
+  objects[4] = `<< /Type /Font /Subtype /Type1 /BaseFont /${style.bold} >>`
 
   pages.forEach((lines, index) => {
     const pageId = pageIds[index]
     const contentId = pageId + 1
-    const content = [
-      'BT',
-      `/F1 ${style.size} Tf`,
-      `${style.margin} ${792 - style.margin} Td`,
-      `${style.leading} TL`,
-      ...lines.map((line) => `(${escapePdf(sanitize(line))}) Tj T*`),
-      'ET',
-    ].join('\n')
-    objects[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`
+    const commands: string[] = []
+    let currentY = 792 - style.margin
+    for (const item of lines) {
+      const font = item.kind === 'heading' ? 'F2' : 'F1'
+      const size = item.kind === 'heading' ? style.size + 1.5 : style.size
+      const x = item.kind === 'bullet' ? style.margin + 12 : style.margin
+      const text = item.kind === 'heading' ? item.line.trim() : item.line
+      commands.push(`BT /${font} ${size} Tf ${x} ${currentY} Td (${escapePdf(sanitize(text))}) Tj ET`)
+      currentY -= item.kind === 'heading' ? style.leading + 3 : style.leading
+    }
+    const content = commands.join('\n')
+    objects[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`
     objects[contentId] = `<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`
   })
 

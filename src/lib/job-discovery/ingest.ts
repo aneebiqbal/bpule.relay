@@ -12,6 +12,7 @@ import { createServiceSupabase } from '@/lib/supabase/service'
 import type { DbClient } from '@/lib/db/types'
 import { adapterFor } from './adapters'
 import { classifyRemoteEligibility } from './eligibility'
+import { isSafeApplicationUrl } from './url'
 import type { DiscoveryJob, IngestionSummary } from './types'
 
 const LOCK_KEY = 'job-discovery-v2'
@@ -48,6 +49,7 @@ interface ExistingJob {
   content_hash: string | null
   verification_evidence: unknown
   duplicate_group_id: string | null
+  content_changed_at: string | null
 }
 
 function hash(value: unknown): string {
@@ -194,7 +196,7 @@ async function upsertJobs(
   now: Date,
 ): Promise<{ inserted: number; updated: number; expired: number }> {
   const existingResult = await db.raw!<ExistingJob[]>(
-    `select id, source_job_id, content_hash, verification_evidence, duplicate_group_id
+    `select id, source_job_id, content_hash, verification_evidence, duplicate_group_id, content_changed_at
      from jobs where source_id = ?`,
     [source.id],
   )
@@ -262,8 +264,8 @@ async function upsertJobs(
       categories: job.categories ?? [],
       posted_at: job.postedAt ?? null,
       expires_at: job.expiresAt ?? null,
-      apply_url: job.applyUrl ?? null,
-      source_url: job.sourceUrl ?? null,
+      apply_url: isSafeApplicationUrl(job.applyUrl) ? job.applyUrl : null,
+      source_url: isSafeApplicationUrl(job.sourceUrl) ? job.sourceUrl : null,
       // pg serializes JS arrays as Postgres array literals, which are not valid
       // JSON. jsonb columns must be handed a string explicitly.
       attribution: job.attribution ? JSON.stringify(job.attribution) : null,
@@ -276,6 +278,8 @@ async function upsertJobs(
       last_checked_at: now,
       last_verified_at: source.kind === 'ats' ? now : null,
       content_hash: contentHash,
+      content_changed_at: previous && previous.content_hash !== contentHash ? now : (previous?.content_changed_at ?? null),
+      source_updated_at: now,
       dedupe_key: key,
       updated_at: now,
     })
@@ -288,7 +292,8 @@ async function upsertJobs(
     'description', 'excerpt', 'skills', 'categories', 'posted_at', 'expires_at',
     'apply_url', 'source_url', 'attribution', 'raw', 'eligibility',
     'verification_status', 'verification_evidence', 'first_seen_at', 'last_seen_at',
-    'last_checked_at', 'last_verified_at', 'content_hash', 'dedupe_key', 'updated_at',
+    'last_checked_at', 'last_verified_at', 'content_hash', 'content_changed_at', 'source_updated_at',
+    'dedupe_key', 'updated_at',
   ]
   const updateSet = [
     'title=excluded.title', 'company=excluded.company', 'company_logo=excluded.company_logo',
@@ -303,7 +308,10 @@ async function upsertJobs(
     'verification_status=excluded.verification_status', 'verification_evidence=excluded.verification_evidence',
     'last_seen_at=excluded.last_seen_at', 'last_checked_at=excluded.last_checked_at',
     'last_verified_at=coalesce(excluded.last_verified_at, jobs.last_verified_at)',
-    'content_hash=excluded.content_hash', 'dedupe_key=excluded.dedupe_key', 'updated_at=excluded.updated_at',
+    'content_hash=excluded.content_hash',
+    'content_changed_at=case when jobs.content_hash is distinct from excluded.content_hash then excluded.updated_at else jobs.content_changed_at end',
+    'source_updated_at=excluded.source_updated_at',
+    'dedupe_key=excluded.dedupe_key', 'updated_at=excluded.updated_at',
   ].join(', ')
 
   const chunkSize = 200

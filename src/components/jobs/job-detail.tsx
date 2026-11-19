@@ -18,6 +18,7 @@ import { cn } from 'cn'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { JobCard } from '@/lib/job-discovery/service'
+import { isSafeApplicationUrl } from '@/lib/job-discovery/url'
 
 interface ProfileOption {
   id: string
@@ -67,6 +68,15 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
   const [editText, setEditText] = useState('')
   const [compare, setCompare] = useState<{ a: DocumentRow; b: DocumentRow } | null>(null)
   const [layout, setLayout] = useState<'modern' | 'technical' | 'minimal'>('modern')
+  const [checklist, setChecklist] = useState<Record<string, boolean>>({})
+  const CHECKLIST = [
+    'Verified open at the original source',
+    'Pakistan eligibility confirmed',
+    'CV reviewed for truthful claims',
+    'Application package downloaded',
+    'Official application opened',
+    'Submission confirmed and recorded',
+  ]
   const [recommendations, setRecommendations] = useState<Array<{ profileId: string; name: string; score: number; category: string; reason: string }>>([])
   const [saved, setSaved] = useState(job.saved)
   const [applicationId, setApplicationId] = useState<string | null>(null)
@@ -266,7 +276,7 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
             <Button
               variant="orange"
               size="sm"
-              disabled={!destinationUrl && !job.applyUrl}
+              disabled={!isSafeApplicationUrl(destinationUrl || job.applyUrl)}
               onClick={() => window.open(destinationUrl || job.applyUrl || '#', '_blank', 'noopener,noreferrer')}
             >
               <ExternalLink className="size-3.5" aria-hidden /> Open official application
@@ -291,6 +301,13 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
           <div className="rounded-xl bg-bone p-3 ring-1 ring-line">
             <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-stone">Eligibility reasoning</p>
             <p className="text-sm text-ink">{eligibility.explanation}</p>
+            <p className="mt-2 text-xs font-medium text-graphite">
+              {eligibility.pakistan?.eligible === true
+                ? `Pakistan: eligible (${eligibility.pakistan.classification.replace(/_/g, ' ')}${eligibility.pakistan.confidence === 'likely' ? ', likely' : ''})`
+                : eligibility.pakistan?.eligible === false
+                  ? 'Pakistan: not eligible from this posting'
+                  : 'Pakistan: eligibility not established — review before applying'}
+            </p>
             {eligibility.evidence.length > 0 && (
               <ul className="mt-2 space-y-1 text-xs text-graphite">
                 {eligibility.evidence.slice(0, 4).map((item, index) => (
@@ -491,6 +508,18 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
               <CheckCircle2 className="size-3.5" aria-hidden /> Confirm actually submitted
             </Button>
             <p className="mt-2 text-[11px] text-stone">Relay never auto-applies. “Applied” is recorded only after your confirmation.</p>
+            <div className="mt-3 space-y-1 border-t border-line pt-3">
+              {CHECKLIST.map((item) => (
+                <label key={item} className="flex items-center gap-2 text-[11px] text-graphite">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(checklist[item])}
+                    onChange={() => setChecklist((previous) => ({ ...previous, [item]: !previous[item] }))}
+                  />
+                  {item}
+                </label>
+              ))}
+            </div>
           </section>
 
           <section className="rounded-2xl border border-line bg-bone-raised p-5">

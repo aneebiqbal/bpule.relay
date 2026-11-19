@@ -12,7 +12,7 @@ import type { JobEligibility } from './eligibility'
 import { computeJobMatch, MATCH_SCORE_VERSION, type MatchProfile } from './match'
 import type { DiscoveryJob } from './types'
 
-export type JobsView = 'for-you' | 'latest' | 'verified-remote' | 'saved' | 'applications' | 'documents' | 'sources'
+export type JobsView = 'for-you' | 'shortlist' | 'latest' | 'verified-remote' | 'saved' | 'applications' | 'documents' | 'sources'
 
 export interface JobCard {
   id: string
@@ -189,6 +189,17 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
   const joinParams: unknown[] = []
   const whereParams: unknown[] = []
 
+  const feedView = options.view === 'latest' || options.view === 'verified-remote' || options.view === 'for-you' || options.view === 'shortlist'
+  if (options.view === 'shortlist') {
+    // The daily shortlist is the strict recommended set plus the next-best
+    // eligible roles, so a thin verified pipeline still shows a usable list.
+    join = `join job_inventory_index ii on ii.job_id = j.id and ii.feed_bucket in ('recommended','eligible_low')`
+    where += ` and ii.feed_bucket in ('recommended','eligible_low')`
+  } else if (feedView) {
+    join = `join job_inventory_index ii on ii.job_id = j.id and ii.include_in_feed`
+    where += ` and ii.include_in_feed`
+  }
+
   if (options.view === 'saved') {
     if (!profileId) return { jobs: [], hasMore: false }
     join = `join saved_jobs s on s.job_id = j.id and s.organization_id = ? and s.profile_id = ?`
@@ -262,7 +273,7 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
     whereParams.push(filters.matchCategory)
   }
 
-  const sort = filters.sort ?? (options.view === 'for-you' ? 'match_desc' : 'posted_desc')
+  const sort = filters.sort ?? (options.view === 'for-you' || options.view === 'shortlist' ? 'match_desc' : 'posted_desc')
   const sortOrder: Record<NonNullable<JobFilters['sort']>, string> = {
     posted_desc: `coalesce(j.posted_at, j.first_seen_at) desc`,
     posted_asc: `coalesce(j.posted_at, j.first_seen_at) asc nulls last`,

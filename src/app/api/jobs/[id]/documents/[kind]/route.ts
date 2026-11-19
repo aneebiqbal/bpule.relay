@@ -26,8 +26,8 @@ export async function GET(
   const format = (url.searchParams.get('format') ?? 'pdf').toLowerCase()
   const layoutParam = url.searchParams.get('layout')
   if (!profileId) return NextResponse.json({ error: 'profileId is required.' }, { status: 400 })
-  if (!['pdf', 'docx', 'txt'].includes(format)) {
-    return NextResponse.json({ error: 'Format must be pdf, docx or txt.' }, { status: 400 })
+  if (!['pdf', 'docx', 'txt', 'zip'].includes(format)) {
+    return NextResponse.json({ error: 'Format must be pdf, docx, txt or zip.' }, { status: 400 })
   }
 
   const db = store.getSupabaseClient()
@@ -48,6 +48,42 @@ export async function GET(
       ? storedLayout
       : 'modern'
 
+  if (format === 'zip') {
+    const all = await db.from('application_documents').select('*')
+      .eq('organization_id', auth.orgId).eq('job_id', id).eq('profile_id', profileId)
+      .order('version', { ascending: false }).limit(100)
+    const docs = (all.data as Array<Record<string, unknown>> | null) ?? []
+    const cvDoc = docs.find((doc) => doc.kind === 'cv')
+    const coverDoc = docs.find((doc) => doc.kind === 'cover_letter')
+    const [{ renderResumePdf }, { renderResumeDocx, zipFiles }] = await Promise.all([
+      import('@/lib/job-discovery/pdf'),
+      import('@/lib/job-discovery/docx'),
+    ])
+    const cvText = String(cvDoc?.text ?? '')
+    const checklist = (cvDoc?.content as Record<string, unknown> | null)?.checklist as string[] | undefined ?? [
+      'Verify the job is still open',
+      'Confirm Pakistan eligibility',
+      'Review the CV for truthful claims',
+      'Download the application package',
+      'Open the official application',
+      'Confirm submission and record the outcome',
+    ]
+    const files = [
+      { name: 'cv.pdf', data: renderResumePdf(cvText, layout) },
+      { name: 'cv.docx', data: renderResumeDocx(cvText, layout) },
+      { name: 'cover-letter.txt', data: Buffer.from(String(coverDoc?.text ?? ''), 'utf8') },
+      { name: 'checklist.txt', data: Buffer.from(checklist.map((item, index) => `${index + 1}. ${item}`).join('\n'), 'utf8') },
+      { name: 'linkedin-note.txt', data: Buffer.from(String(docs.find((doc) => doc.kind === 'linkedin_note')?.text ?? ''), 'utf8') },
+    ]
+    const buffer = zipFiles(files)
+    return new NextResponse(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${fileName('application-package', 'zip', title)}"`,
+      },
+    })
+  }
   if (format === 'txt') {
     return new NextResponse(text, {
       status: 200,

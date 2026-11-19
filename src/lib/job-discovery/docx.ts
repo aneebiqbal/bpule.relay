@@ -32,7 +32,7 @@ function xmlEscape(text: string): string {
     .replace(/'/g, '&apos;')
 }
 
-function zipStore(files: Array<{ name: string; data: Buffer }>): Buffer {
+export function zipFiles(files: Array<{ name: string; data: Buffer }>): Buffer {
   const chunks: Buffer[] = []
   const central: Buffer[] = []
   let offset = 0
@@ -98,10 +98,23 @@ function documentXml(text: string, layout: ResumeLayout): string {
     technical: { font: 'Consolas', size: 20, margin: 1080 },
     minimal: { font: 'Arial', size: 20, margin: 1800 },
   }[layout] ?? { font: 'Calibri', size: 22, margin: 1440 }
+  const kindFor = (line: string): 'heading' | 'bullet' | 'normal' => {
+    const trimmed = line.trim()
+    if (/^(experience|projects|skills|certifications|education|summary)$/i.test(trimmed)) return 'heading'
+    if (trimmed.length > 1 && trimmed === trimmed.toUpperCase() && trimmed.length < 42 && /[A-Z]/.test(trimmed)) return 'heading'
+    if (/^[-•]\s+/.test(trimmed)) return 'bullet'
+    return 'normal'
+  }
   const paragraphs = text
     .split(/\r?\n/)
     .map((line) => line.replace(/\t/g, '    '))
-    .map((line) => `    <w:p><w:r><w:rPr><w:rFonts w:ascii="${style.font}" w:hAnsi="${style.font}"/><w:sz w:val="${style.size}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(line)}</w:t></w:r></w:p>`)
+    .map((line) => {
+      const kind = kindFor(line)
+      const size = kind === 'heading' ? style.size + 4 : style.size
+      const bold = kind === 'heading' ? '<w:b/>' : ''
+      const indent = kind === 'bullet' ? '<w:ind w:left="360"/>' : ''
+      return `    <w:p><w:pPr>${indent}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="${style.font}" w:hAnsi="${style.font}"/>${bold}<w:sz w:val="${size}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(line)}</w:t></w:r></w:p>`
+    })
     .join('\n')
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -123,7 +136,7 @@ export function renderResumeDocx(sourceText: string, layout: ResumeLayout = 'mod
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`
-  return zipStore([
+  return zipFiles([
     { name: '[Content_Types].xml', data: Buffer.from(contentTypes, 'utf8') },
     { name: '_rels/.rels', data: Buffer.from(rels, 'utf8') },
     { name: 'word/document.xml', data: Buffer.from(documentXml(sourceText, layout), 'utf8') },
