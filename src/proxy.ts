@@ -26,6 +26,7 @@ const PROTECTED_PREFIXES = [
   "/admin",
   "/reports",
   "/tasks",
+  "/jobs",
   "/chats",
   "/relay",
   "/notifications",

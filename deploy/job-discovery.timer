@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Relay job discovery every 15 minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=15min
+RandomizedDelaySec=2min
+AccuracySec=1min
+Persistent=true
+Unit=job-discovery.service
+
+[Install]
+WantedBy=timers.target

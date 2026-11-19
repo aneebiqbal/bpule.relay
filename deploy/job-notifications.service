@@ -1,0 +1,17 @@
+[Unit]
+Description=Relay job notification sweep (strong matches, reminders, follow-ups)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+WorkingDirectory=/home/deploy/apps/relay-current
+EnvironmentFile=/home/deploy/apps/relay/.env.production
+ExecStart=/bin/sh -c 'exec /usr/bin/curl -fsS --max-time 120 -H "Authorization: Bearer $CRON_SECRET" "http://127.0.0.1:3000/api/cron/job-notifications"'
+TimeoutStartSec=130
+MemoryMax=120M
+CPUQuota=20%
+Nice=10
+IOSchedulingClass=idle
+Restart=no

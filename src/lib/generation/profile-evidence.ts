@@ -31,8 +31,37 @@ export async function loadProfileEvidence(
   ])
 
   return {
-    proofCards: (proofCards.data ?? []) as ProfileEvidence['proofCards'],
-    proofItems: (proofItems.data ?? []) as ProfileEvidence['proofItems'],
+    proofCards: (proofCards.data ?? []).map(
+      (row): ProfileEvidence['proofCards'][number] => ({
+        id: String(row.id),
+        organizationId: String(row.organization_id),
+        profileId: String(row.profile_id),
+        capability: String(row.capability),
+        strength: (row.strength as 'strong' | 'moderate' | 'weak') ?? 'moderate',
+        safeClaim: String(row.safe_claim ?? ''),
+        sourceType: (row.source_type as ProfileEvidence['proofCards'][number]['sourceType']) ?? 'approved_fact',
+        sourceReference: (row.source_reference as string | null) ?? null,
+        tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        verified: Boolean(row.verified),
+        forbiddenClaims: Array.isArray(row.forbidden_claims) ? (row.forbidden_claims as string[]) : [],
+        createdAt: String(row.created_at),
+        updatedAt: String(row.updated_at),
+      }),
+    ),
+    proofItems: (proofItems.data ?? []).map(
+      (row): ProfileEvidence['proofItems'][number] => ({
+        id: String(row.id),
+        organizationId: String(row.organization_id),
+        profileId: String(row.profile_id),
+        clientNamed: Boolean(row.client_named),
+        clientName: (row.client_name as string | null) ?? null,
+        permissionOnFile: Boolean(row.permission_on_file),
+        projectSummary: String(row.project_summary ?? ''),
+        reviewQuote: (row.review_quote as string | null) ?? null,
+        tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        createdAt: String(row.created_at),
+      }),
+    ),
     portfolioProjects: (portfolioProjects.data ?? []).map(
       (row): GenerationPortfolioProject => ({
         id: String(row.id),

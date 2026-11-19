@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Relay job notifications daily
+
+[Timer]
+OnCalendar=*-*-* 09:00:00
+RandomizedDelaySec=10min
+Persistent=true
+Unit=job-notifications.service
+
+[Install]
+WantedBy=timers.target

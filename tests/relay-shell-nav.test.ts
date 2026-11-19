@@ -188,6 +188,7 @@ describe('V3_NAV_ROLE_VISIBILITY', () => {
     expect(visibleDomains(rep).map((d) => d.id)).toEqual([
       'home',
       'sales',
+      'jobs',
       'inbox',
       'work',
       'content',
@@ -297,25 +298,25 @@ describe('V3_NAV_BREADCRUMB', () => {
 })
 
 describe('V3_NAV_MOBILE', () => {
-  it('rep gets Home, Sales, Inbox, Work, More', () => {
-    expect(mobileNavItems(rep).map((i) => i.id)).toEqual(['home', 'sales', 'inbox', 'work', 'more'])
+  it('rep gets Home, Sales, Jobs, Inbox, More', () => {
+    expect(mobileNavItems(rep).map((i) => i.id)).toEqual(['home', 'sales', 'jobs', 'inbox', 'more'])
   })
 
-  it('manager gets Home, Sales, Inbox, Team, More', () => {
-    expect(mobileNavItems(manager).map((i) => i.id)).toEqual(['home', 'sales', 'inbox', 'team', 'more'])
+  it('manager gets the same bottom bar; Team lives in More', () => {
+    expect(mobileNavItems(manager).map((i) => i.id)).toEqual(['home', 'sales', 'jobs', 'inbox', 'more'])
+    expect(moreSheetSections(manager).map((s) => s.id)).toContain('team')
   })
 
   it('More sheet contains every domain the bottom bar omits, and nothing it already shows', () => {
     const repSheet = moreSheetSections(rep)
     const repBottomBar = mobileNavItems(rep).map((i) => i.id)
-    expect(repSheet.map((s) => s.id)).toEqual(['content', 'insights', 'settings'])
+    expect(repSheet.map((s) => s.id)).toEqual(['work', 'content', 'insights', 'settings'])
     for (const id of repSheet.map((s) => s.id)) {
       expect(repBottomBar).not.toContain(id)
     }
 
     const managerSheet = moreSheetSections(manager)
-    expect(managerSheet.map((s) => s.id)).toEqual(['work', 'content', 'insights', 'settings'])
-    expect(managerSheet.map((s) => s.id)).not.toContain('team')
+    expect(managerSheet.map((s) => s.id)).toEqual(['work', 'team', 'content', 'insights', 'settings'])
   })
 
   it('More sheet never lists a domain the role cannot open', () => {

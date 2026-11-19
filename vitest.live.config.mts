@@ -33,6 +33,7 @@ export const LIVE_TEST_FILES = [
   'tests/v631-stale-job-reaper.test.ts',
   'tests/v632-health-parity.test.ts',
   'tests/v632-live-discovery.test.ts',
+  'tests/job-discovery-ingest.live.test.ts',
 ] as const
 
 export default defineConfig({
