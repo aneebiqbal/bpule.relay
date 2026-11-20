@@ -1,6 +1,7 @@
 /** Job Intelligence v2 — discovery source contracts. */
 
-export type ResumeLayout = 'modern' | 'technical' | 'minimal'
+export type ResumeLayout = 'modern' | 'technical' | 'minimal' | 'ultra'
+export type ResumePaper = 'a4' | 'letter'
 
 export interface DiscoveryJob {
   /** Canonical job id once persisted; absent on a freshly parsed row. */

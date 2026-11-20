@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext } from '@/lib/auth/organization'
 import { listDocuments } from '@/lib/job-discovery/service'
+import type { ResumePaper } from '@/lib/job-discovery/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +30,7 @@ export async function GET(
   if (!['pdf', 'docx', 'txt', 'zip'].includes(format)) {
     return NextResponse.json({ error: 'Format must be pdf, docx, txt or zip.' }, { status: 400 })
   }
+  const paper: ResumePaper = url.searchParams.get('paper') === 'a4' ? 'a4' : 'letter'
 
   const db = store.getSupabaseClient()
   const doc = await db.from('application_documents').select('*')
@@ -69,8 +71,8 @@ export async function GET(
       'Confirm submission and record the outcome',
     ]
     const files = [
-      { name: 'cv.pdf', data: renderResumePdf(cvText, layout) },
-      { name: 'cv.docx', data: renderResumeDocx(cvText, layout) },
+      { name: 'cv.pdf', data: renderResumePdf(cvText, layout, paper) },
+      { name: 'cv.docx', data: renderResumeDocx(cvText, layout, paper) },
       { name: 'cover-letter.txt', data: Buffer.from(String(coverDoc?.text ?? ''), 'utf8') },
       { name: 'checklist.txt', data: Buffer.from(checklist.map((item, index) => `${index + 1}. ${item}`).join('\n'), 'utf8') },
       { name: 'linkedin-note.txt', data: Buffer.from(String(docs.find((doc) => doc.kind === 'linkedin_note')?.text ?? ''), 'utf8') },
@@ -95,7 +97,7 @@ export async function GET(
   }
   if (format === 'docx') {
     const { renderResumeDocx } = await import('@/lib/job-discovery/docx')
-    const buffer = renderResumeDocx(text, layout)
+    const buffer = renderResumeDocx(text, layout, paper)
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
@@ -105,7 +107,7 @@ export async function GET(
     })
   }
   const { renderResumePdf } = await import('@/lib/job-discovery/pdf')
-  const buffer = renderResumePdf(text, layout)
+  const buffer = renderResumePdf(text, layout, paper)
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {

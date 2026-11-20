@@ -250,7 +250,7 @@ export function classifyRemoteEligibility(input: JobEligibilityInput): JobEligib
   const description = input.description ?? ''
   const title = input.title ?? ''
   const locationRaw = (input.locationRaw ?? '').trim()
-  const text = `${title}\n${locationRaw}\n${description}`.replace(/\r/g, '')
+  const text = `${title}\n${locationRaw}\n${description}`.replace(/\r/g, '').replace(/\u0000/g, '').replace(/[\uD800-\uDFFF]/g, '')
   const lower = text.toLowerCase()
 
   const evidence: EligibilityEvidence[] = []

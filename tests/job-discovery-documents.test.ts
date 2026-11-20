@@ -97,6 +97,22 @@ describe('ATS Resume Studio documents', () => {
     expect(resume.certifications).toEqual([])
   })
 
+  it('populates experience bullets from approved proof claims only', () => {
+    const resume = buildResumeData(profile, evidence)
+    expect(resume.experience[0].bullets).toContain('Integrated a payment provider and reduced failed payments.')
+    expect(resumeToText(resume)).not.toMatch(/\d+\+?\s*years/)
+  })
+
+  it('never leaks another profile evidence into the resume', () => {
+    const other: ProfileEvidence = {
+      ...evidence,
+      proofCards: [{ ...evidence.proofCards[0], id: 'c2', safeClaim: 'Secret other claim.' }],
+    }
+    const resume = buildResumeData(profile, evidence)
+    expect(resumeToText(resume)).not.toContain('Secret other claim.')
+    expect(resumeToText(buildResumeData(profile, other))).toContain('Secret other claim.')
+  })
+
   it('tailors by reordering existing evidence, not by inventing skills', () => {
     const base = buildResumeData(profile, evidence)
     const tailored = tailorResumeForJob(base, job)
@@ -116,6 +132,16 @@ describe('ATS Resume Studio documents', () => {
     expect(extracted).toContain('Ada Lovelace')
     expect(extracted).toContain('Senior Backend Engineer')
     expect(extracted).toContain('Realtime dashboard')
+  })
+
+  it('renders A4 with the correct media box and clickable links', () => {
+    const resume = tailorResumeForJob(buildResumeData(profile, evidence), job)
+    const withLinks = { ...resume, links: ['https://github.com/ada'] }
+    const pdf = renderResumePdf(resumeToText(withLinks), 'ultra', 'a4')
+    const raw = pdf.toString('latin1')
+    expect(raw).toContain('/MediaBox [0 0 595 842]')
+    expect(raw).toContain('/Subtype /Link')
+    expect(raw).toContain('https://github.com/ada')
   })
 
   it('renders a DOCX zip that contains the OOXML parts', () => {

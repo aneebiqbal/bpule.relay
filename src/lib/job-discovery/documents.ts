@@ -21,6 +21,7 @@ import {
   type GenerationChannel,
 } from '@/lib/generation/sales-context'
 import { evaluateCoverLetter } from '@/lib/upwork/application-gate'
+import { extractJobRequirements } from './requirements'
 import type { DiscoveryJob } from './types'
 
 export interface GeneratedDocument {
@@ -51,12 +52,33 @@ export function buildResumeData(profile: Profile, evidence: ProfileEvidence): Re
     ...evidence.proofCards.flatMap((card) => card.tags),
     ...evidence.portfolioProjects.flatMap((project) => project.technologies),
   ]
-  const experience = evidence.experience.map((item) => ({
-    company: item.company ?? 'Independent',
-    role: item.role ?? title,
-    period: formatPeriod(item.startDate, item.endDate),
-    bullets: [],
-  }))
+  const proofClaims = evidence.proofCards
+    .filter((card) => Boolean(card.safeClaim && card.safeClaim.trim()) && (card.verified || card.strength === 'strong'))
+    .map((card) => ({ id: card.id, capability: card.capability, tags: card.tags, claim: card.safeClaim }))
+
+  const assigned = new Set<string>()
+  const experience = evidence.experience.map((item) => {
+    const roleWords = `${item.role ?? ''} ${item.company ?? ''}`.toLowerCase().split(/\s+/).filter((word) => word.length > 3)
+    const matched = proofClaims.filter((card) => {
+      if (assigned.has(card.id)) return false
+      const cardText = `${card.capability} ${card.tags.join(' ')}`.toLowerCase()
+      return roleWords.some((word) => cardText.includes(word))
+    })
+    matched.forEach((card) => assigned.add(card.id))
+    return {
+      company: item.company ?? 'Independent',
+      role: item.role ?? title,
+      period: formatPeriod(item.startDate, item.endDate),
+      // Every bullet is a verbatim approved proof claim, never invented.
+      bullets: matched.map((card) => card.claim),
+    }
+  })
+  // Approved proof that does not name a role still belongs on the CV, attached
+  // to the most recent role so it stays traceable.
+  const remaining = proofClaims.filter((card) => !assigned.has(card.id))
+  if (remaining.length > 0 && experience.length > 0) {
+    experience[experience.length - 1].bullets.push(...remaining.slice(0, 3).map((card) => card.claim))
+  }
   const projects: ResumeProject[] = evidence.portfolioProjects.map((project) => ({
     name: project.title,
     description: project.description ?? '',
@@ -79,6 +101,7 @@ export function buildResumeData(profile: Profile, evidence: ProfileEvidence): Re
     projects,
     education: [],
     certifications,
+    links: extractPortfolioLinks(profile, evidence).map((link) => link.url),
   }
 }
 
@@ -102,12 +125,14 @@ export function extractResponsibilities(description: string, limit = 8): string[
 }
 
 export function tailorResumeForJob(base: ResumeData, job: DiscoveryJob): ResumeData {
+  const requirements = extractJobRequirements(job)
+  const requiredSkills = requirements.requiredSkills.length > 0 ? requirements.requiredSkills : (job.skills ?? [])
   const target: ResumeTarget = {
     title: job.title,
     company: job.company ?? null,
-    requiredSkills: job.skills ?? [],
-    responsibilities: extractResponsibilities(job.description ?? ''),
-    technologies: job.skills ?? [],
+    requiredSkills,
+    responsibilities: requirements.responsibilities,
+    technologies: requiredSkills,
   }
   return generateResume(base, target)
 }
@@ -285,6 +310,11 @@ export function resumeToText(resume: ResumeData): string {
     lines.push('')
   }
   if (resume.certifications.length > 0) lines.push(`Certifications: ${resume.certifications.join(', ')}`, '')
+  if (resume.links && resume.links.length > 0) {
+    lines.push('Links')
+    for (const link of resume.links) lines.push(`- ${link}`)
+    lines.push('')
+  }
   return lines.join('\n').trim()
 }
 

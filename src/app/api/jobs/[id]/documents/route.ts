@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext } from '@/lib/auth/organization'
 import { getJobDetail, listDocuments, saveDocuments } from '@/lib/job-discovery/service'
-import { generateJobDocuments, buildResumeData, tailorResumeForJob, resumeToText } from '@/lib/job-discovery/documents'
+import { generateJobDocuments, buildResumeData, tailorResumeForJob, resumeToText, extractPortfolioLinks } from '@/lib/job-discovery/documents'
 import { evaluateResumeAgainstJob } from '@/lib/job-discovery/ats'
-import { renderResumePdf } from '@/lib/job-discovery/pdf'
-import type { DiscoveryJob } from '@/lib/job-discovery/types'
+import { extractJobRequirements } from '@/lib/job-discovery/requirements'
+import { assessResume } from '@/lib/job-discovery/ats-score'
+import { renderResumePdf, countPdfPages } from '@/lib/job-discovery/pdf'
+import type { DiscoveryJob, ResumeLayout, ResumePaper } from '@/lib/job-discovery/types'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -61,9 +63,10 @@ export async function POST(
   const auth = await getAuthContext().catch(() => null)
   if (!auth) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   const { id } = await params
-  const body = (await request.json().catch(() => ({}))) as { profileId?: string; layout?: string }
+  const body = (await request.json().catch(() => ({}))) as { profileId?: string; layout?: string; paper?: string }
   if (!body.profileId) return NextResponse.json({ error: 'profileId is required.' }, { status: 400 })
-  const layout = body.layout === 'technical' || body.layout === 'minimal' ? body.layout : 'modern'
+  const layout: ResumeLayout = body.layout === 'technical' || body.layout === 'minimal' || body.layout === 'ultra' ? body.layout : 'modern'
+  const paper: ResumePaper = body.paper === 'a4' ? 'a4' : 'letter'
 
   const profile = await store.getProfile(body.profileId)
   if (!profile) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 })
@@ -76,10 +79,29 @@ export async function POST(
   const cv = documents.find((doc) => doc.kind === 'cv')
   if (cv) {
     const resume = tailorResumeForJob(buildResumeData(profile, evidence), job)
-    const pdf = renderResumePdf(resumeToText(resume), layout)
+    const pdf = renderResumePdf(resumeToText(resume), layout, paper)
     const ats = await evaluateResumeAgainstJob(resume, job, pdf)
-    cv.ats = ats
-    cv.content = { ...(cv.content as Record<string, unknown>), ats, layout }
+    const links = extractPortfolioLinks(profile, evidence)
+    const assessment = assessResume({
+      resume,
+      requirements: extractJobRequirements(job),
+      contact: {
+        name: resume.name,
+        title: resume.title,
+        location: profile.location ?? null,
+        links: links.map((link) => link.url),
+        email: null,
+        phone: null,
+      },
+      extraction: {
+        coverage: ats.extraction.coverage,
+        pages: countPdfPages(pdf),
+        overflow: ats.formatIssues.some((issue) => /overflow/i.test(issue)),
+        missingSections: ats.extraction.missingLines,
+      },
+    })
+    cv.ats = { ...ats, readiness: assessment.readiness, documentQuality: assessment.documentQuality, jobMatch: assessment.jobMatch }
+    cv.content = { ...(cv.content as Record<string, unknown>), ats, atsAssessment: assessment, layout }
   }
 
   await saveDocuments(

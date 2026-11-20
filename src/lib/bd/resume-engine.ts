@@ -12,6 +12,8 @@ export interface ResumeData {
   projects: ResumeProject[]
   education: string[]
   certifications: string[]
+  /** Verified portfolio / profile URLs rendered as clickable links. */
+  links?: string[]
 }
 
 export interface ResumeExperience {

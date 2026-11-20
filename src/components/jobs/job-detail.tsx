@@ -67,7 +67,8 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [compare, setCompare] = useState<{ a: DocumentRow; b: DocumentRow } | null>(null)
-  const [layout, setLayout] = useState<'modern' | 'technical' | 'minimal'>('modern')
+  const [layout, setLayout] = useState<'modern' | 'technical' | 'minimal' | 'ultra'>('modern')
+  const [paper, setPaper] = useState<'a4' | 'letter'>('letter')
   const [checklist, setChecklist] = useState<Record<string, boolean>>({})
   const CHECKLIST = [
     'Verified open at the original source',
@@ -157,7 +158,7 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
       const response = await fetch(`/api/jobs/${job.id}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId, layout }),
+        body: JSON.stringify({ profileId, layout, paper }),
       })
       if (!response.ok) throw new Error('Generation failed')
       const data = (await response.json()) as { documents: DocumentRow[] }
@@ -389,13 +390,23 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
               <div className="flex items-center gap-2">
                 <select
                   value={layout}
-                  onChange={(event) => setLayout(event.target.value as 'modern' | 'technical' | 'minimal')}
+                  onChange={(event) => setLayout(event.target.value as 'modern' | 'technical' | 'minimal' | 'ultra')}
                   className="h-8 rounded-md border border-line bg-bone px-2 text-xs text-ink outline-none"
                   aria-label="CV layout"
                 >
                   <option value="modern">Modern professional</option>
                   <option value="technical">Technical engineering</option>
                   <option value="minimal">Minimal corporate</option>
+                  <option value="ultra">Ultra ATS</option>
+                </select>
+                <select
+                  value={paper}
+                  onChange={(event) => setPaper(event.target.value as 'a4' | 'letter')}
+                  className="h-8 rounded-md border border-line bg-bone px-2 text-xs text-ink outline-none"
+                  aria-label="Paper size"
+                >
+                  <option value="letter">US Letter</option>
+                  <option value="a4">A4</option>
                 </select>
                 <Button size="sm" variant="ghost" onClick={openCompare} disabled={documents.filter((doc) => doc.kind === 'cv').length < 2}>
                   Compare versions
@@ -416,6 +427,22 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                       <p className="text-[11px] font-medium uppercase tracking-wide text-stone">ATS readiness (internal heuristic)</p>
                       <span className="text-sm font-semibold text-ink">{String(ats.score)}/100</span>
                     </div>
+                    {(ats as Record<string, unknown>).readiness !== undefined && (
+                      <div className="mb-2 grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-lg bg-bone p-2 ring-1 ring-line">
+                          <p className="text-[10px] uppercase tracking-wide text-stone">Document quality</p>
+                          <p className="text-sm font-semibold text-ink">{Number((ats.documentQuality as Record<string, unknown>)?.score ?? 0)}/100</p>
+                        </div>
+                        <div className="rounded-lg bg-bone p-2 ring-1 ring-line">
+                          <p className="text-[10px] uppercase tracking-wide text-stone">Job match</p>
+                          <p className="text-sm font-semibold text-ink">{Number((ats.jobMatch as Record<string, unknown>)?.score ?? 0)}/100</p>
+                        </div>
+                        <div className="rounded-lg bg-bone p-2 ring-1 ring-line">
+                          <p className="text-[10px] uppercase tracking-wide text-stone">ATS readiness</p>
+                          <p className="text-sm font-semibold text-ink">{Number((ats as Record<string, unknown>).readiness ?? 0)}/100</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <AtsGroup title="Matched" items={ats.matchedRequirements as Array<Record<string, unknown>>} tone="success" />
                       <AtsGroup title="Missing" items={ats.missingRequirements as Array<Record<string, unknown>>} tone="destructive" />
@@ -457,8 +484,8 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                           <p className="mb-2 line-clamp-2 text-[11px] text-graphite">{doc.text?.slice(0, 140)}</p>
                           <div className="flex items-center gap-3 text-[11px] font-medium text-orange-ink">
                             <button type="button" onClick={() => startEdit(doc)} className="hover:underline">Edit</button>
-                            <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=pdf&layout=${layout}`}>PDF</a>
-                            <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=docx&layout=${layout}`}>DOCX</a>
+                            <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=pdf&layout=${layout}&paper=${paper}`}>PDF</a>
+                            <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=docx&layout=${layout}&paper=${paper}`}>DOCX</a>
                             <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=txt`}>TXT</a>
                           </div>
                         </>

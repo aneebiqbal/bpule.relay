@@ -1,6 +1,7 @@
 import type { DbClient } from '@/lib/db/types'
 import type { JobEligibility } from './eligibility'
 import { classifyRemoteEligibility } from './eligibility'
+import { extractJobRequirements } from './requirements'
 
 export interface InventoryJob {
   id: string
@@ -21,6 +22,7 @@ export interface InventoryJob {
   apply_url: string | null
   source_url: string | null
   eligibility: JobEligibility | null
+  requirements?: unknown
 }
 
 const ENGINEERING = /engineer|software|developer|devops|sre|site reliability|data|machine learning|security|backend|frontend|full.?stack|mobile|qa|test automation|architect/i
@@ -107,7 +109,7 @@ export async function reindexJobInventory(db: DbClient, options: ReindexOptions 
   const jobs = await db.raw!<InventoryJob[]>(
     `select id, source_id, company, title, description, location_raw, remote, skills, employment_type,
             posted_at, last_seen_at, last_verified_at, verification_status, closed_at,
-            duplicate_group_id, apply_url, source_url, eligibility
+            duplicate_group_id, apply_url, source_url, eligibility, requirements
      from jobs
      where (?::text[] is null or source_id = any(?::text[]))`,
     [options.sourceIds ?? null, options.sourceIds ?? null],
@@ -126,21 +128,37 @@ export async function reindexJobInventory(db: DbClient, options: ReindexOptions 
   const buckets: Record<string, number> = {}
   let included = 0
   const rows: Array<Record<string, unknown>> = []
-  const jobUpdates: Array<{ id: string; eligibility: string }> = []
+  const jobUpdates: Array<{ id: string; eligibility: string; requirements: string }> = []
 
   for (const job of jobs.data ?? []) {
     const isCanonical = job.duplicate_group_id == null || canonical.has(job.id)
-    // Recompute so newly added eligibility dimensions (e.g. Pakistan) reach
-    // existing inventory without a full re-ingest.
+    // Recompute so newly added eligibility dimensions (e.g. Pakistan) and
+    // requirements reach existing inventory without a full re-ingest.
     const eligibility = classifyRemoteEligibility({
       title: job.title,
       description: job.description ?? '',
       locationRaw: job.location_raw,
       remote: Boolean(job.remote),
     })
+    const requirements = extractJobRequirements({
+      id: job.id,
+      sourceId: job.source_id,
+      sourceJobId: job.id,
+      title: job.title,
+      company: job.company ?? undefined,
+      locationRaw: job.location_raw ?? undefined,
+      remote: Boolean(job.remote),
+      description: job.description ?? '',
+      skills: Array.isArray(job.skills) ? job.skills : [],
+      employmentType: job.employment_type ?? undefined,
+    })
     const eligibilityJson = JSON.stringify(eligibility)
-    const previous = job.eligibility ? JSON.stringify(job.eligibility) : null
-    if (previous !== eligibilityJson) jobUpdates.push({ id: job.id, eligibility: eligibilityJson })
+    const requirementsJson = JSON.stringify(requirements)
+    const previousEligibility = job.eligibility ? JSON.stringify(job.eligibility) : null
+    const previousRequirements = job.requirements ? JSON.stringify(job.requirements) : null
+    if (previousEligibility !== eligibilityJson || previousRequirements !== requirementsJson) {
+      jobUpdates.push({ id: job.id, eligibility: eligibilityJson, requirements: requirementsJson })
+    }
     const result = bucketFor({ ...job, eligibility }, isCanonical, now)
     buckets[result.bucket] = (buckets[result.bucket] ?? 0) + 1
     if (result.include) included++
@@ -188,11 +206,11 @@ export async function reindexJobInventory(db: DbClient, options: ReindexOptions 
   if (!options.dryRun && jobUpdates.length > 0) {
     for (let index = 0; index < jobUpdates.length; index += 100) {
       const chunk = jobUpdates.slice(index, index + 100)
-      const placeholders = chunk.map(() => '(?, ?)').join(', ')
-      const params = chunk.flatMap((update) => [update.id, update.eligibility])
+      const placeholders = chunk.map(() => '(?, ?, ?)').join(', ')
+      const params = chunk.flatMap((update) => [update.id, update.eligibility, update.requirements])
       const result = await db.raw!(
-        `update jobs set eligibility = data.eligibility::jsonb, updated_at = now()
-         from (values ${placeholders}) as data(id, eligibility)
+        `update jobs set eligibility = data.eligibility::jsonb, requirements = data.requirements::jsonb, updated_at = now()
+         from (values ${placeholders}) as data(id, eligibility, requirements)
          where jobs.id = data.id::uuid`,
         params,
       )

@@ -63,9 +63,22 @@ async function fetchJson(
   }
 }
 
+// Some feeds serve UTF-8 bytes that were decoded as Latin-1 (double-encoded).
+// Repair the classic signature (C1 continuation bytes) without touching
+// already-correct text or ASCII identifiers.
+export function repairEncoding(value: string): string {
+  if (!value || !/[\u0080-\u009F]/.test(value)) return value
+  try {
+    const repaired = Buffer.from(value, 'latin1').toString('utf8')
+    return repaired.includes('\uFFFD') ? value : repaired
+  } catch {
+    return value
+  }
+}
+
 function str(value: unknown): string | undefined {
   if (typeof value === 'string') {
-    const trimmed = value.trim()
+    const trimmed = repairEncoding(value.trim())
     return trimmed ? trimmed : undefined
   }
   if (typeof value === 'number' && Number.isFinite(value)) return String(value)
@@ -97,7 +110,7 @@ function stripHtml(value: string): string {
 
 function text(value: unknown): string {
   if (typeof value !== 'string') return ''
-  return stripHtml(value)
+  return repairEncoding(stripHtml(value))
 }
 
 function parseDate(value: unknown): string | undefined {
