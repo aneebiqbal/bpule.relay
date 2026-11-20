@@ -14,9 +14,9 @@ function escapePdf(text: string): string {
 }
 
 function sanitize(text: string): string {
-  // WinAnsi is close enough to Latin-1 for a resume; anything outside the
-  // PDF's base encoding becomes a visible placeholder rather than a broken
-  // glyph. Non-ASCII names are the only realistic case.
+  // shortcut: the base-14 PDF font is Latin-1 only, so non-Latin-1 scripts
+  // (Urdu / Arabic / Devanagari) degrade to "?" in the PDF. DOCX preserves full
+  // Unicode. Upgrade by embedding a Unicode TTF if a non-Latin name matters.
   return text
     .replace(/[\u2013\u2014]/g, '-')
     .replace(/\u2192/g, '->')

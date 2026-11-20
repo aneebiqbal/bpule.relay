@@ -268,6 +268,46 @@ sudo systemctl daemon-reload
 
 ---
 
+## 9d. Job verification sweep
+
+A third systemd timer calls `GET /api/cron/job-verification` with
+`CRON_SECRET`. It checks a bounded slice of fresh, remote `recently_seen` jobs
+at their application destination:
+
+- `2xx/3xx` → `verified_open`
+- `404/410` → `closed`
+- `403 / 429 / 5xx / timeout` → left `recently_seen` (recorded as
+  `check_failed`; a failed check never closes a job)
+
+Units: `deploy/job-verification.timer`, `deploy/job-verification.service`
+(installed by `deploy/install-job-discovery.sh`).
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+  "http://127.0.0.1:3000/api/cron/job-verification?dryRun=1"   # counts only
+sudo systemctl start job-verification.service
+journalctl -u job-verification.service -e
+```
+
+This is what unlocks feed jobs for the **verified recommended** bucket (5 roles
+on production as of 2026-11-20). See `docs/RELAY_V5_JOB_QUALITY_REPORT.md`.
+
+---
+
+## 9e. Job requirements intelligence
+
+`jobs.requirements` jsonb is populated by the inventory reindex
+(`src/lib/job-discovery/requirements.ts`). It stores hard vs preferred
+requirements, years, seniority, filtered technical stack, responsibilities,
+domains, languages, certifications, portfolio expectations, source evidence and
+confidence. It is derived data — safe to recompute.
+
+Full V5 record: `docs/RELAY_V5_CV_ARCHITECTURE.md`,
+`docs/RELAY_V5_ATS_SCORE_SPEC.md`, `docs/RELAY_V5_PDF_VISUAL_QA.md`,
+`docs/RELAY_V5_DEPLOYMENT.md`.
+
+---
+
 ## 10. Verification
 
 After every deploy:
