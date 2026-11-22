@@ -1,12 +1,15 @@
 import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext } from '@/lib/auth/organization'
-import { listJobs, listApplications, listDocuments, listSources, ensureJobMatches, type JobsView, type JobFilters } from '@/lib/job-discovery/service'
+import { listJobs, listApplications, listDocuments, listSources, listPreparedJobs, ensureJobMatches, type JobsView, type JobFilters, type PreparedCard } from '@/lib/job-discovery/service'
 import { JobsWorkspace } from '@/components/jobs/jobs-workspace'
 
 export const dynamic = 'force-dynamic'
 
-const VIEWS: JobsView[] = ['for-you', 'latest', 'verified-remote', 'saved', 'applications', 'documents', 'sources']
+// The primary workspace: five action-oriented views plus a broader discovery
+// feed. The legacy views (`for-you`, `verified-remote`, `saved`, `applications`,
+// `documents`) remain valid deep links but are no longer competing tabs.
+const VIEWS: JobsView[] = ['shortlist', 'prepared', 'in-progress', 'history', 'latest', 'sources']
 
 export default async function JobsPage({
   searchParams,
@@ -18,8 +21,8 @@ export default async function JobsPage({
   if (!auth) redirect('/login')
 
   const params = await searchParams
-  const rawView = typeof params.view === 'string' ? params.view : 'for-you'
-  const view: JobsView = (VIEWS.includes(rawView as JobsView) ? rawView : 'for-you') as JobsView
+  const rawView = typeof params.view === 'string' ? params.view : 'shortlist'
+  const view: JobsView = (VIEWS.includes(rawView as JobsView) ? rawView : 'shortlist') as JobsView
   const search = typeof params.search === 'string' ? params.search : undefined
   const num = (key: string): number | undefined => {
     const value = Number(params[key])
@@ -48,20 +51,25 @@ export default async function JobsPage({
 
   const limit = 24
   const offset = typeof params.offset === 'string' ? Number(params.offset) || 0 : 0
-  // For You is the one view that needs a stored match. Compute it for the
-  // selected profile before reading the list; bounded to the 200 most recent
-  // live jobs by ensureJobMatches.
-  if (view === 'for-you' && profileId) {
+  // For You and Ready Today are the views that need a stored match. Compute it
+  // for the selected profile before reading the list; bounded to the 200 most
+  // recent live jobs by ensureJobMatches.
+  if ((view === 'for-you' || view === 'shortlist') && profileId) {
     await ensureJobMatches(store.getSupabaseClient(), auth.orgId, profileId)
   }
-  const { jobs, hasMore } = await listJobs(store.getSupabaseClient(), auth.orgId, {
-    view,
-    profileId,
-    search,
-    filters,
-    limit,
-    offset,
-  })
+  const prepared = view === 'prepared'
+    ? await listPreparedJobs(store.getSupabaseClient(), auth.orgId)
+    : []
+  const { jobs, hasMore } = view === 'prepared'
+    ? { jobs: [], hasMore: false }
+    : await listJobs(store.getSupabaseClient(), auth.orgId, {
+        view,
+        profileId,
+        search,
+        filters,
+        limit,
+        offset,
+      })
 
   const [applications, documents, sources] = await Promise.all([
     view === 'applications' ? listApplications(store.getSupabaseClient(), auth.orgId, profileId) : Promise.resolve([]),
@@ -83,6 +91,7 @@ export default async function JobsPage({
       activeProfileId={profileId ?? null}
       applications={applications}
       documents={documents}
+      prepared={prepared}
       sources={sources as unknown as Array<Record<string, unknown>>}
       isAdmin={Boolean(auth.isAdmin || auth.isOwner)}
     />

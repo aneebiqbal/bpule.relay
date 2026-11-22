@@ -68,7 +68,10 @@ export async function loadTeamLive(orgId: string, now = currentInstant()): Promi
       revenue_identity_id: row.revenue_identity_id,
       activity_type: row.activity_type,
       target_count: row.target_count,
-      shared: repsForLane.length > 1 && !allocations,
+      // A lane with more than one seat is SHARED regardless of whether an
+      // allocation exists. An unallocated seat contributes 0 to its rep's
+      // personal expectation; an allocation is that rep's explicit share.
+      shared: repsForLane.length > 1,
       allocation: allocations?.get(repId) ?? null,
     }))
   })

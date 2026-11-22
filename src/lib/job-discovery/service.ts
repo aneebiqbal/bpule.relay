@@ -12,7 +12,7 @@ import type { JobEligibility } from './eligibility'
 import { computeJobMatch, MATCH_SCORE_VERSION, type MatchProfile } from './match'
 import type { DiscoveryJob } from './types'
 
-export type JobsView = 'for-you' | 'latest' | 'verified-remote' | 'saved' | 'applications' | 'documents' | 'sources'
+export type JobsView = 'for-you' | 'shortlist' | 'prepared' | 'latest' | 'verified-remote' | 'saved' | 'applications' | 'documents' | 'sources' | 'in-progress' | 'history'
 
 export interface JobCard {
   id: string
@@ -185,9 +185,40 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
   const profileId = options.profileId ?? null
   const search = options.search?.trim()
   let join = ''
-  let where = `j.verification_status not in ('closed','expired','source_unavailable')`
+  const isHistory = options.view === 'history'
+  let where = isHistory
+    ? `(
+        j.verification_status in ('closed','expired')
+        or exists(
+          select 1 from applications ah
+          where ah.job_id = j.id and ah.organization_id = ? and ah.profile_id = ?
+            and ah.status in ('applied','replied','interview','offer','hired','rejected','withdrawn')
+        )
+        or exists(
+          select 1 from saved_jobs sh
+          where sh.job_id = j.id and sh.organization_id = ? and sh.profile_id = ?
+        )
+      )`
+    : `j.verification_status not in ('closed','expired','source_unavailable')`
   const joinParams: unknown[] = []
-  const whereParams: unknown[] = []
+  const whereParams: unknown[] = isHistory
+    ? [orgId, profileId, orgId, profileId]
+    : []
+  if (isHistory && !profileId) {
+    // History is profile-scoped (a person's applications and saved jobs).
+    return { jobs: [], hasMore: false }
+  }
+
+  const feedView = options.view === 'latest' || options.view === 'verified-remote' || options.view === 'for-you' || options.view === 'shortlist'
+  if (options.view === 'shortlist') {
+    // The daily shortlist is the strict recommended set plus the next-best
+    // eligible roles, so a thin verified pipeline still shows a usable list.
+    join = `join job_inventory_index ii on ii.job_id = j.id and ii.feed_bucket in ('recommended','eligible_low')`
+    where += ` and ii.feed_bucket in ('recommended','eligible_low')`
+  } else if (feedView) {
+    join = `join job_inventory_index ii on ii.job_id = j.id and ii.include_in_feed`
+    where += ` and ii.include_in_feed`
+  }
 
   if (options.view === 'saved') {
     if (!profileId) return { jobs: [], hasMore: false }
@@ -204,6 +235,17 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
     join = `join lateral (select max(d.updated_at) as updated_at from application_documents d where d.job_id = j.id and d.organization_id = ? and d.profile_id = ?) d on true`
     joinParams.push(orgId, profileId)
     where += ` and d.updated_at is not null`
+  }
+
+  if (options.view === 'in-progress') {
+    if (!profileId) return { jobs: [], hasMore: false }
+    where += ` and (
+      exists(select 1 from saved_jobs s where s.job_id = j.id and s.organization_id = ? and s.profile_id = ?)
+      or exists(select 1 from applications a where a.job_id = j.id and a.organization_id = ? and a.profile_id = ?
+        and a.status in ('draft','saved','reviewed','prepared','applied','replied','interview','offer'))
+      or exists(select 1 from application_documents d where d.job_id = j.id and d.organization_id = ? and d.profile_id = ?)
+    )`
+    whereParams.push(orgId, profileId, orgId, profileId, orgId, profileId)
   }
 
   if (options.view === 'verified-remote') {
@@ -262,7 +304,7 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
     whereParams.push(filters.matchCategory)
   }
 
-  const sort = filters.sort ?? (options.view === 'for-you' ? 'match_desc' : 'posted_desc')
+  const sort = filters.sort ?? (options.view === 'for-you' || options.view === 'shortlist' ? 'match_desc' : 'posted_desc')
   const sortOrder: Record<NonNullable<JobFilters['sort']>, string> = {
     posted_desc: `coalesce(j.posted_at, j.first_seen_at) desc`,
     posted_asc: `coalesce(j.posted_at, j.first_seen_at) asc nulls last`,
@@ -522,6 +564,53 @@ export async function saveDocuments(
       ats: doc.ats ?? null,
     })
   }
+}
+
+export interface PreparedCard {
+  id: string
+  jobId: string
+  profileId: string
+  title: string
+  company: string | null
+  matchScore: number | null
+  matchCategory: string | null
+  documentQuality: number | null
+  jobMatch: number | null
+  readiness: number | null
+  status: string
+  createdAt: string
+  documents: Array<Record<string, unknown>>
+}
+
+export async function listPreparedJobs(db: DbClient, orgId: string, profileId?: string): Promise<PreparedCard[]> {
+  const result = await db.raw!<Array<Record<string, unknown>>>(
+    `select p.id, p.job_id, p.profile_id, p.match_score, p.match_category, p.status, p.created_at,
+            p.documents, p.assessment, j.title, j.company
+     from prepared_jobs p
+     join jobs j on j.id = p.job_id
+     where p.organization_id = ? ${profileId ? 'and p.profile_id = ?' : ''}
+     order by p.created_at desc limit 100`,
+    profileId ? [orgId, profileId] : [orgId],
+  )
+  if (result.error) throw new Error(result.error.message)
+  return (result.data ?? []).map((row) => {
+    const assessment = row.assessment as { documentQuality?: { score?: number }; jobMatch?: { score?: number }; readiness?: number } | null
+    return {
+      id: String(row.id),
+      jobId: String(row.job_id),
+      profileId: String(row.profile_id),
+      title: String(row.title ?? ''),
+      company: (row.company as string | null) ?? null,
+      matchScore: (row.match_score as number | null) ?? null,
+      matchCategory: (row.match_category as string | null) ?? null,
+      documentQuality: assessment?.documentQuality?.score ?? null,
+      jobMatch: assessment?.jobMatch?.score ?? null,
+      readiness: assessment?.readiness ?? null,
+      status: String(row.status ?? 'ready'),
+      createdAt: String(row.created_at ?? ''),
+      documents: Array.isArray(row.documents) ? row.documents as Array<Record<string, unknown>> : [],
+    }
+  })
 }
 
 export interface SourceHealthRow {

@@ -246,7 +246,7 @@ export function V4AdminHome({
                   {data.teamTarget > 0 ? data.teamCompleted : '—'}
                 </span>
                 {data.teamTarget > 0 && (
-                  <span className="text-[15px] text-stone tabular-nums">/ {data.teamTarget} expected</span>
+                  <span className="text-[15px] text-stone tabular-nums">/ {data.teamTarget} required</span>
                 )}
                 <span className="ml-auto text-[15px] font-medium tabular-nums text-ink">
                   {data.teamTarget > 0 ? `${teamPct}%` : 'No target set'}
@@ -270,9 +270,14 @@ export function V4AdminHome({
               </div>
               <p className="mt-2 text-[12px] text-graphite">
                 {data.teamTarget > 0
-                  ? `${data.teamCompleted} of ${data.teamTarget} expected actions completed · ${Math.max(0, data.teamTarget - data.teamCompleted)} remaining`
+                  ? `${data.teamCompleted} of ${data.teamTarget} required actions completed · ${Math.max(0, data.teamTarget - data.teamCompleted)} remaining`
                   : 'Assign daily targets to track today’s progress.'}
               </p>
+              {data.orgAssigned > 0 && (
+                <p className="mt-1 text-[12px] text-stone tabular-nums">
+                  {data.orgAssigned} allocated · {data.orgUnallocated} shared unallocated · {data.orgTracked} tracked
+                </p>
+              )}
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-graphite">
                 <span className="text-stone">New today:</span>
                 <Link href="/leads?filter=new" className="font-medium text-ink hover:underline">

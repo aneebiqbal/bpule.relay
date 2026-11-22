@@ -19,6 +19,7 @@ import type { DbClient } from '@/lib/db/types'
 export type ReconcileKind =
   | 'eligibility_without_seat'
   | 'seat_without_eligibility'
+  | 'allocation_without_seat'
   | 'multiple_active_primaries'
   | 'active_plan_without_primary'
   | 'seat_on_archived_identity'
@@ -51,6 +52,7 @@ export interface ReconcileReport {
 export const RECONCILE_KINDS: ReconcileKind[] = [
   'eligibility_without_seat',
   'seat_without_eligibility',
+  'allocation_without_seat',
   'multiple_active_primaries',
   'active_plan_without_primary',
   'seat_on_archived_identity',
@@ -59,14 +61,15 @@ export const RECONCILE_KINDS: ReconcileKind[] = [
   'orphaned_seat',
 ]
 
-export async function scanAssignmentDrift(client: DbClient, orgId: string): Promise<ReconcileReport> {  const [seatsRes, eligibilityRes, identityRes, profileRes, planRes, primaryHistoryRes] = await Promise.all([
+export async function scanAssignmentDrift(client: DbClient, orgId: string): Promise<ReconcileReport> {  const [seatsRes, eligibilityRes, identityRes, profileRes, planRes, primaryHistoryRes, allocationsRes] = await Promise.all([
     client.from('profile_coverage').select('profile_id, rep_id, role, active').eq('organization_id', orgId).limit(5000),
     client.from('identity_assignments').select('revenue_identity_id, rep_id').eq('organization_id', orgId).limit(5000),
     client.from('revenue_identities').select('id, profile_id, status').eq('organization_id', orgId).limit(5000),
     client.from('profiles').select('id, archived_at').eq('organization_id', orgId).limit(5000),
-    client.from('daily_target_plans').select('revenue_identity_id').eq('organization_id', orgId).eq('active', true).limit(5000),
+    client.from('daily_target_plans').select('id, revenue_identity_id').eq('organization_id', orgId).eq('active', true).limit(5000),
     // Every PRIMARY seat ever recorded, so a repair can name the last known owner.
     client.from('profile_coverage').select('profile_id, rep_id').eq('organization_id', orgId).eq('role', 'PRIMARY').limit(5000),
+    client.from('daily_plan_allocations').select('plan_id, rep_id, target_count').eq('organization_id', orgId).eq('active', true).limit(5000),
   ])
 
   const seats = (seatsRes.data ?? []) as Array<{ profile_id: string; rep_id: string; role: string; active: boolean }>
@@ -179,6 +182,25 @@ export async function scanAssignmentDrift(client: DbClient, orgId: string): Prom
     if (!seatKeys.has(`${identity.profile_id}:${row.rep_id}`)) {
       push({ kind: 'eligibility_without_seat', profileId: identity.profile_id, identityId: row.revenue_identity_id, repId: row.rep_id, detail: 'eligibility with no active seat' })
     }
+  }
+
+  // An allocation names a rep's share of a lane. When that rep holds no active
+  // seat on the lane's profile, the share is unseated: it inflates the
+  // organization's assigned total while the rep cannot execute the channel.
+  const planById = new Map((planRes.data ?? []).map((row) => [row.id as string, row]))
+  for (const row of (allocationsRes.data ?? []) as Array<{ plan_id: string; rep_id: string; target_count: number }>) {
+    const plan = planById.get(row.plan_id)
+    if (!plan) continue
+    const identity = identityById.get(plan.revenue_identity_id as string)
+    if (!identity?.profile_id) continue
+    if (seatKeys.has(`${identity.profile_id}:${row.rep_id}`)) continue
+    push({
+      kind: 'allocation_without_seat',
+      profileId: identity.profile_id,
+      identityId: identity.id,
+      repId: row.rep_id,
+      detail: `${row.target_count} allocated units with no active seat`,
+    })
   }
 
   return {

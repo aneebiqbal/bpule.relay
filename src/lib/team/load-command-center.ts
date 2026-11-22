@@ -2,6 +2,7 @@ import { getPeopleDirectory, type OpsPageContext } from '@/lib/operations/page-c
 import { loadTeamDay } from '@/lib/rep-day/team'
 import { loadCoverageFacts, loadCoveragePlan } from '@/lib/coverage/load'
 import { loadDailyPlanProgress } from '@/lib/targets/load-plan-progress'
+import { getOrganizationDailySummary } from '@/lib/execution/accountability'
 import { loadCanonicalProfileAssignments } from '@/lib/profiles/canonical'
 import { loadTimeline } from '@/lib/operations/activity'
 import { effectiveRepIds } from '@/lib/operations/scope'
@@ -47,7 +48,7 @@ export async function loadTeamCommandCenter(ctx: OpsPageContext): Promise<Comman
     pendingAcknowledgementRepIds: repIds,
   }))
 
-  const [plan, progress, timeline] = await Promise.all([
+  const [plan, progress, timeline, accountability] = await Promise.all([
     loadCoveragePlan(ctx.auth.orgId, { client: ctx.client }, facts),
     loadDailyPlanProgress(ctx.client, {
       orgId: ctx.auth.orgId,
@@ -59,6 +60,10 @@ export async function loadTeamCommandCenter(ctx: OpsPageContext): Promise<Comman
       start: rangeWindow('today').start,
       end: rangeWindow('today').end,
       limit: 20,
+    }).catch(() => null),
+    getOrganizationDailySummary(ctx.client, {
+      orgId: ctx.auth.orgId,
+      businessDate: team.businessDate,
     }).catch(() => null),
   ])
 
@@ -74,5 +79,6 @@ export async function loadTeamCommandCenter(ctx: OpsPageContext): Promise<Comman
     profiles,
     timeline,
     repNameById: new Map(directory.rows.map((row) => [row.repId, row.repName])),
+    accountability: accountability ?? undefined,
   })
 }

@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Relay application preparation every 20 minutes
+
+[Timer]
+OnBootSec=12min
+OnUnitActiveSec=20min
+RandomizedDelaySec=3min
+AccuracySec=1min
+Persistent=true
+Unit=job-preparation.service
+
+[Install]
+WantedBy=timers.target

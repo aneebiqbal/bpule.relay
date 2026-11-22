@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Relay job verification every 10 minutes
+
+[Timer]
+OnBootSec=9min
+OnUnitActiveSec=10min
+RandomizedDelaySec=2min
+AccuracySec=1min
+Persistent=true
+Unit=job-verification.service
+
+[Install]
+WantedBy=timers.target

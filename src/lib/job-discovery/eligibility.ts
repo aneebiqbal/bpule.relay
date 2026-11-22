@@ -40,6 +40,12 @@ export interface JobEligibility {
   confidence: EligibilityConfidence
   evidence: EligibilityEvidence[]
   explanation: string
+  pakistan: {
+    eligible: boolean | null
+    classification: 'explicit_pakistan' | 'worldwide' | 'apac' | 'country_restricted' | 'region_restricted' | 'timezone_restricted' | 'residency_required' | 'unknown'
+    confidence: EligibilityConfidence
+    evidence: EligibilityEvidence[]
+  }
 }
 
 export interface JobEligibilityInput {
@@ -85,7 +91,7 @@ const COUNTRIES: Record<string, string> = {
   'nepal': 'NP', 'indonesia': 'ID', 'malaysia': 'MY', 'philippines': 'PH',
   'singapore': 'SG', 'vietnam': 'VN', 'thailand': 'TH', 'taiwan': 'TW',
   'hong kong': 'HK', 'china': 'CN', 'japan': 'JP', 'south korea': 'KR',
-  'australia': 'AU', 'new zealand': 'NZ',
+  'australia': 'AU', 'new zealand': 'NZ', 'pakistani': 'PK',
 }
 
 const REGIONS: Record<string, string> = {
@@ -93,6 +99,7 @@ const REGIONS: Record<string, string> = {
   'eea': 'EEA', 'emea': 'EMEA', 'apac': 'APAC', 'asia-pacific': 'APAC',
   'latin america': 'LATAM', 'latam': 'LATAM', 'south america': 'LATAM',
   'north america': 'NA', 'middle east': 'MEA', 'africa': 'AFR',
+  'south asia': 'APAC', 'asia pacific': 'APAC',
 }
 
 const TIMEZONES: Record<string, string> = {
@@ -243,7 +250,7 @@ export function classifyRemoteEligibility(input: JobEligibilityInput): JobEligib
   const description = input.description ?? ''
   const title = input.title ?? ''
   const locationRaw = (input.locationRaw ?? '').trim()
-  const text = `${title}\n${locationRaw}\n${description}`.replace(/\r/g, '')
+  const text = `${title}\n${locationRaw}\n${description}`.replace(/\r/g, '').replace(/\u0000/g, '').replace(/[\uD800-\uDFFF]/g, '')
   const lower = text.toLowerCase()
 
   const evidence: EligibilityEvidence[] = []
@@ -255,6 +262,7 @@ export function classifyRemoteEligibility(input: JobEligibilityInput): JobEligib
   const regions = findRegions(lower)
   const timezones = findTimezones(lower)
   const workAuth = findFirst(lower, WORK_AUTH)
+  const explicitPakistan = findFirst(lower, ['pakistan', 'pakistani'])
   const employeeOnly = findFirst(lower, EMPLOYEE_ONLY)
   const contractor = findFirst(lower, CONTRACTOR)
   const worldwide = findFirst(lower, WORLDWIDE)
@@ -269,6 +277,7 @@ export function classifyRemoteEligibility(input: JobEligibilityInput): JobEligib
   if (employeeOnly) evidence.push({ text: snippet(lower, employeeOnly.index), decision: 'Employee-only engagement' })
   if (contractor) evidence.push({ text: snippet(lower, contractor.index), decision: 'Contractor engagement permitted' })
   if (worldwide) evidence.push({ text: snippet(lower, worldwide.index), decision: 'Explicit worldwide language' })
+  if (explicitPakistan) evidence.push({ text: snippet(lower, explicitPakistan.index), decision: 'Explicit Pakistan eligibility' })
 
   // A single-country location on a non-worldwide posting is a likely boundary.
   const locationCountry = locationCountries.length === 1 ? locationCountries[0].code : null
@@ -311,6 +320,56 @@ export function classifyRemoteEligibility(input: JobEligibilityInput): JobEligib
     remote,
   })
 
+  const pakistanEvidence: EligibilityEvidence[] = []
+  if (explicitPakistan) pakistanEvidence.push({ text: snippet(lower, explicitPakistan.index), decision: 'Explicitly names Pakistan' })
+  if (worldwide) pakistanEvidence.push({ text: snippet(lower, worldwide.index), decision: 'Worldwide remote' })
+  if (countryCodes.length > 0) pakistanEvidence.push({ text: `Countries: ${countryCodes.join(', ')}`, decision: 'Country restriction' })
+  if (regionCodes.length > 0) pakistanEvidence.push({ text: `Regions: ${regionCodes.join(', ')}`, decision: 'Region restriction' })
+
+  let pakistanEligible: boolean | null = null
+  let pakistanClassification: JobEligibility['pakistan']['classification'] = 'unknown'
+  let pakistanConfidence: EligibilityConfidence = 'unknown'
+  if (explicitPakistan) {
+    pakistanEligible = true
+    pakistanClassification = 'explicit_pakistan'
+    pakistanConfidence = 'confirmed'
+  } else if (countryCodes.length > 0) {
+    // Mirror the main classification: a named country boundary outranks a
+    // "worldwide" phrase, which is often corporate boilerplate.
+    pakistanEligible = countryCodes.includes('PK')
+    pakistanClassification = 'country_restricted'
+    pakistanConfidence = 'confirmed'
+  } else if (regionCodes.length > 0) {
+    if (regionCodes.every((region) => region === 'APAC')) {
+      pakistanEligible = true
+      pakistanClassification = 'apac'
+      pakistanConfidence = 'likely'
+    } else if (regionCodes.includes('APAC')) {
+      // Mixed regions: Pakistan is in APAC, but the employer may not treat it
+      // as such. Send it to review rather than recommending or excluding.
+      pakistanEligible = null
+      pakistanClassification = 'region_restricted'
+      pakistanConfidence = 'unknown'
+    } else {
+      pakistanEligible = false
+      pakistanClassification = 'region_restricted'
+      pakistanConfidence = 'confirmed'
+    }
+  } else if (tzCodes.length > 0) {
+    // A timezone boundary cannot be mapped to Pakistan without guessing.
+    pakistanEligible = null
+    pakistanClassification = 'timezone_restricted'
+    pakistanConfidence = 'unknown'
+  } else if (worldwide) {
+    pakistanEligible = true
+    pakistanClassification = 'worldwide'
+    pakistanConfidence = 'likely'
+  } else if (workAuth) {
+    pakistanEligible = null
+    pakistanClassification = 'residency_required'
+    pakistanConfidence = 'unknown'
+  }
+
   return {
     classification,
     remote,
@@ -324,6 +383,12 @@ export function classifyRemoteEligibility(input: JobEligibilityInput): JobEligib
     confidence,
     evidence: evidence.slice(0, 12),
     explanation,
+    pakistan: {
+      eligible: pakistanEligible,
+      classification: pakistanClassification,
+      confidence: pakistanConfidence,
+      evidence: pakistanEvidence.slice(0, 6),
+    },
   }
 }
 
@@ -408,6 +473,11 @@ export function evaluateEligibility(
 
   if (!eligibility.remote) {
     return { eligible: false, confidence: 'confirmed', reasons: ['This is not a remote role.'] }
+  }
+
+  if (prefs.country === 'PK' && eligibility.pakistan?.eligible === false && eligibility.pakistan.confidence === 'confirmed') {
+    const detail = eligibility.countries.length > 0 ? ` to ${eligibility.countries.join(', ')}` : ''
+    return { eligible: false, confidence: 'confirmed', reasons: [`The posting restricts work${detail}; Pakistan is excluded.`] }
   }
 
   if (eligibility.residencyRequired) {

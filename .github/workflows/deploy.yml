@@ -68,6 +68,14 @@ jobs:
 
           rm -f .env.production
 
+      - name: Package operations assets
+        run: |
+          # Migrations, the migration runner and the systemd units must ship
+          # with the release: a standalone build alone cannot apply schema or
+          # start the scheduled workers.
+          tar -czf /tmp/relay-ops.tar.gz \
+            supabase/migrations scripts/apply-migrations.mjs deploy
+
       - name: Upload release
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -77,6 +85,9 @@ jobs:
 
           scp /tmp/relay-release.tar.gz \
             deploy@"$VPS_HOST":/home/deploy/apps/relay-releases/"$GITHUB_SHA"/release.tar.gz
+
+          scp /tmp/relay-ops.tar.gz \
+            deploy@"$VPS_HOST":/home/deploy/apps/relay-releases/"$GITHUB_SHA"/ops.tar.gz
 
       - name: Activate release
         env:
@@ -93,9 +104,26 @@ jobs:
           cd "$RELEASE"
           tar -xzf release.tar.gz
           rm release.tar.gz
+          tar -xzf ops.tar.gz
+          rm ops.tar.gz
 
           ln -s "$BASE/relay/.env.production" \
             "$RELEASE/.env.production"
+
+          # Schema first: the new build must never serve against an old schema.
+          set -a
+          . .env.production
+          set +a
+          node scripts/apply-migrations.mjs
+
+          # Scheduled workers (discovery / verification / inventory /
+          # preparation / notifications). Guarded: a missing passwordless sudo
+          # must not fail the deployment.
+          if sudo -n true 2>/dev/null; then
+            sudo bash deploy/install-job-discovery.sh || echo "job timer install failed"
+          else
+            echo "passwordless sudo unavailable; install deploy/install-job-discovery.sh manually"
+          fi
 
           ln -sfn "$RELEASE" "$BASE/relay-next"
           mv -Tf "$BASE/relay-next" "$CURRENT"

@@ -214,10 +214,10 @@ always-on service and never marks jobs closed because a source failed.
 
 Install: `bash deploy/install-job-discovery.sh`
 Units: `deploy/job-discovery.timer`, `deploy/job-discovery.service`
-Migrations: `20261119120000_job_intelligence_v2.sql`, `20261119130000_job_intelligence_v3_sources.sql`, `20261119140000_job_intelligence_v3_filters.sql`, `20261119150000_fix_reps_auth_fk.sql`
-Enabled sources: RemoteOK, Remotive, Greenhouse · Airbnb, Greenhouse · Stripe, Ashby · Ramp, Ashby · Linear
+Migrations: `20261119120000_job_intelligence_v2.sql`, `20261119130000_job_intelligence_v3_sources.sql`, `20261119140000_job_intelligence_v3_filters.sql`, `20261119150000_fix_reps_auth_fk.sql`, `20261120120000_job_inventory_index.sql`, `20261120130000_more_sources.sql`, `20261120140000_job_freshness_columns.sql`
+Enabled sources: RemoteOK, Remotive, Greenhouse · Airbnb, Greenhouse · Stripe, Ashby · Ramp, Ashby · Linear, Himalayas, Jobicy (Arbeitnow evaluated and left disabled — Germany-centric, low Pakistan eligibility)
 Admin health: `/jobs?view=sources`
-Full record: `docs/RELAY_JOB_INTELLIGENCE_V3.md` (activation) and `docs/RELAY_JOB_INTELLIGENCE_V2.md` (design)
+Full record: `docs/RELAY_JOB_INTELLIGENCE_V4.md` (activation), `docs/RELAY_JOB_INTELLIGENCE_V3.md`, `docs/RELAY_JOB_INTELLIGENCE_V2.md` (design)
 
 **Staging:** `relay_staging` on the same Aiven project is an isolated schema-clone database used for browser acceptance. Never point the production app at it.
 
@@ -233,6 +233,112 @@ sudo systemctl disable --now job-discovery.timer
 sudo rm /etc/systemd/system/job-discovery.{service,timer}
 sudo systemctl daemon-reload
 ```
+
+---
+
+## 9c. Job inventory reindex
+
+A second systemd timer calls `GET /api/cron/job-inventory` with `CRON_SECRET`.
+It recomputes `job_inventory_index` from the `jobs` table: feed bucket
+(`recommended`, `eligible_low`, `eligibility_unknown`, `location_restricted`,
+`stale_unverified`, `duplicate`, `not_remote`, `closed`), Pakistan eligibility,
+freshness and apply-URL quality. It is **non-destructive** — no job row is ever
+deleted, and saved jobs / applications / documents are untouched.
+
+The Jobs "Ready Today" shortlist and the feed views read this index, so the timer
+must be running. The index lags ingestion by at most one timer interval.
+
+Units: `deploy/job-inventory.timer`, `deploy/job-inventory.service` (installed by
+`deploy/install-job-discovery.sh`).
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+  "http://127.0.0.1:3000/api/cron/job-inventory?dryRun=1"   # counts only
+sudo systemctl start job-inventory.service
+journalctl -u job-inventory.service -e
+```
+
+Removal:
+
+```bash
+sudo systemctl disable --now job-inventory.timer
+sudo rm /etc/systemd/system/job-inventory.{service,timer}
+sudo systemctl daemon-reload
+```
+
+---
+
+## 9d. Job verification sweep
+
+A third systemd timer calls `GET /api/cron/job-verification` with
+`CRON_SECRET`. It checks a bounded slice of fresh, remote `recently_seen` jobs
+at their application destination:
+
+- `2xx/3xx` → `verified_open`
+- `404/410` → `closed`
+- `403 / 429 / 5xx / timeout` → left `recently_seen` (recorded as
+  `check_failed`; a failed check never closes a job)
+
+Units: `deploy/job-verification.timer`, `deploy/job-verification.service`
+(installed by `deploy/install-job-discovery.sh`).
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+  "http://127.0.0.1:3000/api/cron/job-verification?dryRun=1"   # counts only
+sudo systemctl start job-verification.service
+journalctl -u job-verification.service -e
+```
+
+This is what unlocks feed jobs for the **verified recommended** bucket (5 roles
+on production as of 2026-11-20). See `docs/RELAY_V5_JOB_QUALITY_REPORT.md`.
+
+---
+
+## 9e. Job requirements intelligence
+
+`jobs.requirements` jsonb is populated by the inventory reindex
+(`src/lib/job-discovery/requirements.ts`). It stores hard vs preferred
+requirements, years, seniority, filtered technical stack, responsibilities,
+domains, languages, certifications, portfolio expectations, source evidence and
+confidence. It is derived data — safe to recompute.
+
+Full V5 record: `docs/RELAY_V5_CV_ARCHITECTURE.md`,
+`docs/RELAY_V5_ATS_SCORE_SPEC.md`, `docs/RELAY_V5_PDF_VISUAL_QA.md`,
+`docs/RELAY_V5_DEPLOYMENT.md`.
+
+---
+
+## 9f. Application preparation sweep
+
+A fourth systemd timer calls `GET /api/cron/job-preparation` with `CRON_SECRET`.
+For each authorized profile it selects the strongest verified, eligible,
+high-fit job, builds the versioned master resume, tailors it, renders and
+assesses it, stores the package in `prepared_jobs` and notifies the operator
+once. Idempotent by `job + profile + content_hash + template + paper`.
+
+Units: `deploy/job-preparation.{service,timer}` (installed by
+`deploy/install-job-discovery.sh`). Surface: `/jobs?view=prepared`.
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+  "http://127.0.0.1:3000/api/cron/job-preparation?dryRun=1"
+sudo systemctl start job-preparation.service
+journalctl -u job-preparation.service -e
+```
+
+`master_resumes` is a versioned, job-independent derived copy of the profile
+evidence; safe to rebuild.
+
+Preparation gates (default `RELAY_PREPARE_MIN_FIT=65`): confirmed open, remote,
+confirmed Pakistan eligibility, non-`requires_verification`, fit ≥ threshold,
+no hard-requirement gap, valid public destination. Every decision is logged to
+`preparation_logs` (`low_fit`, `hard_requirement_gap`, `pakistan_unconfirmed`,
+`unsafe_destination`, `eligibility_unconfirmed`). Packages pass
+`validatePackage` (`ready` / `needs_evidence` / `needs_review`); an empty cover
+letter is never `ready`.
+
+Full V6 record: `docs/RELAY_V6_RESUME_STUDIO_AND_AUTONOMOUS_PREPARATION.md`.
+Full V7 record: `docs/RELAY_V7_AUTONOMOUS_APPLICATION_STUDIO.md`.
 
 ---
 

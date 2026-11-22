@@ -18,6 +18,9 @@ import { cn } from 'cn'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { JobCard } from '@/lib/job-discovery/service'
+import { isSafeApplicationUrl } from '@/lib/job-discovery/url'
+import { SCORE_METRICS } from '@/lib/job-discovery/score-contract'
+import { ScreeningAnswers } from '@/components/jobs/screening-answers'
 
 interface ProfileOption {
   id: string
@@ -66,7 +69,18 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [compare, setCompare] = useState<{ a: DocumentRow; b: DocumentRow } | null>(null)
-  const [layout, setLayout] = useState<'modern' | 'technical' | 'minimal'>('modern')
+  const [layout, setLayout] = useState<'modern' | 'technical' | 'minimal' | 'ultra'>('modern')
+  const [paper, setPaper] = useState<'a4' | 'letter'>('letter')
+  const [preview, setPreview] = useState(false)
+  const [checklist, setChecklist] = useState<Record<string, boolean>>({})
+  const CHECKLIST = [
+    'Verified open at the original source',
+    'Pakistan eligibility confirmed',
+    'CV reviewed for truthful claims',
+    'Application package downloaded',
+    'Official application opened',
+    'Submission confirmed and recorded',
+  ]
   const [recommendations, setRecommendations] = useState<Array<{ profileId: string; name: string; score: number; category: string; reason: string }>>([])
   const [saved, setSaved] = useState(job.saved)
   const [applicationId, setApplicationId] = useState<string | null>(null)
@@ -147,7 +161,7 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
       const response = await fetch(`/api/jobs/${job.id}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId, layout }),
+        body: JSON.stringify({ profileId, layout, paper }),
       })
       if (!response.ok) throw new Error('Generation failed')
       const data = (await response.json()) as { documents: DocumentRow[] }
@@ -179,6 +193,36 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
       setNotice('Saved as a new version. The previous version is kept for comparison.')
     } else {
       setNotice('Could not save the edit.')
+    }
+  }
+
+  function applySuggestion(text: string, suggestion: { section: string; existing: string; suggested: string }): string {
+    if (suggestion.section === 'summary' || suggestion.section === 'skills') {
+      return text.includes(suggestion.existing) ? text.replace(suggestion.existing, suggestion.suggested) : `${text}\n${suggestion.suggested}`
+    }
+    return `${text}\n- ${suggestion.suggested}`
+  }
+
+  async function acceptSuggestion(suggestion: { section: string; existing: string; suggested: string }) {
+    if (!profileId) return
+    const cv = documents.find((doc) => doc.kind === 'cv')
+    if (!cv?.text) return
+    const updated = applySuggestion(cv.text, suggestion)
+    if (updated === cv.text) {
+      setNotice('That suggestion is already applied.')
+      return
+    }
+    const response = await fetch(`/api/jobs/${job.id}/documents/cv`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profileId, text: updated }),
+    })
+    if (response.ok) {
+      const data = (await response.json()) as { documents: DocumentRow[] }
+      setDocuments(data.documents)
+      setNotice('Suggestion accepted and saved as a new version.')
+    } else {
+      setNotice('Could not apply the suggestion.')
     }
   }
 
@@ -239,7 +283,7 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 lg:py-12">
-      <Link href="/jobs?view=for-you" className="mb-6 inline-flex items-center gap-1.5 text-sm text-graphite transition-colors hover:text-ink">
+      <Link href="/jobs?view=shortlist" className="mb-6 inline-flex items-center gap-1.5 text-sm text-graphite transition-colors hover:text-ink">
         <ArrowLeft className="size-4" aria-hidden /> Back to Jobs
       </Link>
 
@@ -266,7 +310,7 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
             <Button
               variant="orange"
               size="sm"
-              disabled={!destinationUrl && !job.applyUrl}
+              disabled={!isSafeApplicationUrl(destinationUrl || job.applyUrl)}
               onClick={() => window.open(destinationUrl || job.applyUrl || '#', '_blank', 'noopener,noreferrer')}
             >
               <ExternalLink className="size-3.5" aria-hidden /> Open official application
@@ -291,6 +335,13 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
           <div className="rounded-xl bg-bone p-3 ring-1 ring-line">
             <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-stone">Eligibility reasoning</p>
             <p className="text-sm text-ink">{eligibility.explanation}</p>
+            <p className="mt-2 text-xs font-medium text-graphite">
+              {eligibility.pakistan?.eligible === true
+                ? `Pakistan: eligible (${eligibility.pakistan.classification.replace(/_/g, ' ')}${eligibility.pakistan.confidence === 'likely' ? ', likely' : ''})`
+                : eligibility.pakistan?.eligible === false
+                  ? 'Pakistan: not eligible from this posting'
+                  : 'Pakistan: eligibility not established — review before applying'}
+            </p>
             {eligibility.evidence.length > 0 && (
               <ul className="mt-2 space-y-1 text-xs text-graphite">
                 {eligibility.evidence.slice(0, 4).map((item, index) => (
@@ -372,16 +423,29 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
               <div className="flex items-center gap-2">
                 <select
                   value={layout}
-                  onChange={(event) => setLayout(event.target.value as 'modern' | 'technical' | 'minimal')}
+                  onChange={(event) => setLayout(event.target.value as 'modern' | 'technical' | 'minimal' | 'ultra')}
                   className="h-8 rounded-md border border-line bg-bone px-2 text-xs text-ink outline-none"
                   aria-label="CV layout"
                 >
                   <option value="modern">Modern professional</option>
                   <option value="technical">Technical engineering</option>
                   <option value="minimal">Minimal corporate</option>
+                  <option value="ultra">Ultra ATS</option>
+                </select>
+                <select
+                  value={paper}
+                  onChange={(event) => setPaper(event.target.value as 'a4' | 'letter')}
+                  className="h-8 rounded-md border border-line bg-bone px-2 text-xs text-ink outline-none"
+                  aria-label="Paper size"
+                >
+                  <option value="letter">US Letter</option>
+                  <option value="a4">A4</option>
                 </select>
                 <Button size="sm" variant="ghost" onClick={openCompare} disabled={documents.filter((doc) => doc.kind === 'cv').length < 2}>
                   Compare versions
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setPreview((value) => !value)} disabled={!documents.some((doc) => doc.kind === 'cv')}>
+                  {preview ? 'Hide preview' : 'Preview'}
                 </Button>
                 <Button size="sm" variant="outline" onClick={generateDocuments} disabled={generating || !profileId}>
                   {generating ? 'Generating…' : 'Generate package'}
@@ -396,9 +460,25 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                 {ats && (
                   <div className="rounded-xl bg-bone p-3 ring-1 ring-line">
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-stone">ATS readiness (internal heuristic)</p>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-stone">{SCORE_METRICS.internal_readiness.label} (heuristic)</p>
                       <span className="text-sm font-semibold text-ink">{String(ats.score)}/100</span>
                     </div>
+                    {(ats as Record<string, unknown>).readiness !== undefined && (
+                      <div className="mb-2 grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-lg bg-bone p-2 ring-1 ring-line">
+                          <p className="text-[10px] uppercase tracking-wide text-stone">{SCORE_METRICS.resume_quality.shortLabel}</p>
+                          <p className="text-sm font-semibold text-ink">{Number((ats.documentQuality as Record<string, unknown>)?.score ?? 0)}/100</p>
+                        </div>
+                        <div className="rounded-lg bg-bone p-2 ring-1 ring-line">
+                          <p className="text-[10px] uppercase tracking-wide text-stone">{SCORE_METRICS.resume_to_job_coverage.shortLabel}</p>
+                          <p className="text-sm font-semibold text-ink">{Number((ats.jobMatch as Record<string, unknown>)?.score ?? 0)}/100</p>
+                        </div>
+                        <div className="rounded-lg bg-bone p-2 ring-1 ring-line">
+                          <p className="text-[10px] uppercase tracking-wide text-stone">{SCORE_METRICS.internal_readiness.shortLabel}</p>
+                          <p className="text-sm font-semibold text-ink">{Number((ats as Record<string, unknown>).readiness ?? 0)}/100</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <AtsGroup title="Matched" items={ats.matchedRequirements as Array<Record<string, unknown>>} tone="success" />
                       <AtsGroup title="Missing" items={ats.missingRequirements as Array<Record<string, unknown>>} tone="destructive" />
@@ -413,6 +493,39 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                       PDF text extraction coverage: {Math.round(Number((ats.extraction as Record<string, unknown>)?.coverage ?? 0) * 100)}%.
                       This is not an official employer ATS score.
                     </p>
+                  </div>
+                )}
+                {(() => {
+                  const cvDoc = documents.find((doc) => doc.kind === 'cv')
+                  const suggestions = (cvDoc?.content as Record<string, unknown> | null)?.suggestions as Array<Record<string, unknown>> | undefined
+                  if (!suggestions || suggestions.length === 0) return null
+                  return (
+                    <div className="rounded-xl bg-bone p-3 ring-1 ring-line">
+                      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-stone">Suggested improvements</p>
+                      <ul className="space-y-2">
+                        {suggestions.map((suggestion, index) => (
+                          <li key={String(suggestion.id ?? index)} className="text-xs text-graphite">
+                            <p className="font-medium text-ink">{String(suggestion.requirement)}</p>
+                            <p className="mt-0.5">“{String(suggestion.existing)}” → “{String(suggestion.suggested)}”</p>
+                            <p className="mt-0.5 text-[11px]">{String(suggestion.rationale)}</p>
+                            <div className="mt-1 flex gap-3">
+                              <button type="button" onClick={() => acceptSuggestion({ section: String(suggestion.section), existing: String(suggestion.existing), suggested: String(suggestion.suggested) })} className="font-medium text-orange-ink hover:underline">Accept</button>
+                              <button type="button" onClick={() => setNotice('Suggestion rejected.')} className="hover:underline">Reject</button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })()}
+                <ScreeningAnswers jobId={job.id} profileId={profileId} />
+                {preview && documents.some((doc) => doc.kind === 'cv') && profileId && (
+                  <div className="overflow-hidden rounded-xl bg-bone ring-1 ring-line">
+                    <iframe
+                      title="CV preview"
+                      src={`/api/jobs/${job.id}/documents/cv?profileId=${profileId}&format=pdf&layout=${layout}&paper=${paper}`}
+                      className="h-[72vh] w-full"
+                    />
                   </div>
                 )}
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -440,8 +553,8 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                           <p className="mb-2 line-clamp-2 text-[11px] text-graphite">{doc.text?.slice(0, 140)}</p>
                           <div className="flex items-center gap-3 text-[11px] font-medium text-orange-ink">
                             <button type="button" onClick={() => startEdit(doc)} className="hover:underline">Edit</button>
-                            <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=pdf&layout=${layout}`}>PDF</a>
-                            <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=docx&layout=${layout}`}>DOCX</a>
+                            <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=pdf&layout=${layout}&paper=${paper}`}>PDF</a>
+                            <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=docx&layout=${layout}&paper=${paper}`}>DOCX</a>
                             <a href={`/api/jobs/${job.id}/documents/${doc.kind}?profileId=${profileId}&format=txt`}>TXT</a>
                           </div>
                         </>
@@ -491,6 +604,18 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
               <CheckCircle2 className="size-3.5" aria-hidden /> Confirm actually submitted
             </Button>
             <p className="mt-2 text-[11px] text-stone">Relay never auto-applies. “Applied” is recorded only after your confirmation.</p>
+            <div className="mt-3 space-y-1 border-t border-line pt-3">
+              {CHECKLIST.map((item) => (
+                <label key={item} className="flex items-center gap-2 text-[11px] text-graphite">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(checklist[item])}
+                    onChange={() => setChecklist((previous) => ({ ...previous, [item]: !previous[item] }))}
+                  />
+                  {item}
+                </label>
+              ))}
+            </div>
           </section>
 
           <section className="rounded-2xl border border-line bg-bone-raised p-5">

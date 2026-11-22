@@ -17,7 +17,9 @@ import {
 import { cn } from 'cn'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import type { JobCard, JobFilters, JobsView } from '@/lib/job-discovery/service'
+import type { JobCard, JobFilters, JobsView, PreparedCard } from '@/lib/job-discovery/service'
+import { isSafeApplicationUrl } from '@/lib/job-discovery/url'
+import { SCORE_METRICS } from '@/lib/job-discovery/score-contract'
 
 interface ProfileOption {
   id: string
@@ -38,13 +40,18 @@ interface JobsWorkspaceProps {
   activeProfileId: string | null
   applications: Array<Record<string, unknown>>
   documents: Array<Record<string, unknown>>
+  prepared: PreparedCard[]
   sources: Array<Record<string, unknown>>
   isAdmin: boolean
 }
 
 const VIEW_LABELS: Record<JobsView, string> = {
   'for-you': 'For You',
-  latest: 'Latest',
+  shortlist: 'Ready Today',
+  prepared: 'Prepared',
+  'in-progress': 'In Progress',
+  history: 'History',
+  latest: 'Discover',
   'verified-remote': 'Verified Remote',
   saved: 'Saved',
   applications: 'Applications',
@@ -53,10 +60,10 @@ const VIEW_LABELS: Record<JobsView, string> = {
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
-  excellent: 'Excellent match',
-  strong: 'Strong match',
-  possible: 'Possible match',
-  stretch: 'Stretch opportunity',
+  excellent: 'Excellent fit',
+  strong: 'Strong fit',
+  possible: 'Possible fit',
+  stretch: 'Stretch fit',
   not_eligible: 'Not eligible',
   requires_verification: 'Requires verification',
 }
@@ -68,9 +75,9 @@ function formatDate(value: string | null): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function relative(value: string | null): string {
+function relative(value: string | null, now: number = Date.now()): string {
   if (!value) return '—'
-  const ms = Date.now() - new Date(value).getTime()
+  const ms = now - new Date(value).getTime()
   if (!Number.isFinite(ms) || ms < 0) return 'just now'
   const hours = Math.floor(ms / 3_600_000)
   if (hours < 1) return 'just now'
@@ -417,7 +424,9 @@ export function JobsWorkspace(props: JobsWorkspaceProps) {
         </nav>
       </div>
 
-      {activeView === 'applications' ? (
+      {activeView === 'prepared' ? (
+        <PreparedView prepared={props.prepared} />
+      ) : activeView === 'applications' ? (
         <ApplicationsView applications={props.applications} />
       ) : activeView === 'documents' ? (
         <DocumentsView documents={props.documents} profileId={profileId} />
@@ -476,6 +485,15 @@ export function JobsWorkspace(props: JobsWorkspaceProps) {
   )
 }
 
+function RelativeTime({ value }: { value: string | null }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  return <>{relative(value, now)}</>
+}
+
 function JobCardView({ job, profileId, busy, onSave }: { job: JobCard; profileId: string; busy: boolean; onSave: () => void }) {
   const eligibility = eligibilityLabel(job)
   const verification = verificationLabel(job.verificationStatus)
@@ -522,7 +540,7 @@ function JobCardView({ job, profileId, busy, onSave }: { job: JobCard; profileId
       {job.match && (
         <div className="mb-3">
           <div className="mb-1 flex items-center justify-between text-[11px] text-stone">
-            <span>Fit (heuristic)</span>
+            <span>{SCORE_METRICS.candidate_fit.shortLabel} (heuristic)</span>
             <span className="tabular-nums">{job.match.score}/100</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-line">
@@ -546,14 +564,14 @@ function JobCardView({ job, profileId, busy, onSave }: { job: JobCard; profileId
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-2 text-[11px] text-stone">
-        <span className="flex items-center gap-1"><Clock className="size-3" aria-hidden /> Posted {relative(job.postedAt)}</span>
-        <span className="flex items-center gap-1"><ShieldCheck className="size-3" aria-hidden /> Checked {relative(job.lastVerifiedAt ?? job.lastSeenAt)}</span>
-        <span className="col-span-2">First seen {formatDate(job.firstSeenAt)} · last seen {relative(job.lastSeenAt)}</span>
+        <span className="flex items-center gap-1"><Clock className="size-3" aria-hidden /> Posted <RelativeTime value={job.postedAt} /></span>
+        <span className="flex items-center gap-1"><ShieldCheck className="size-3" aria-hidden /> Checked <RelativeTime value={job.lastVerifiedAt ?? job.lastSeenAt} /></span>
+        <span className="col-span-2">First seen {formatDate(job.firstSeenAt)} · last seen <RelativeTime value={job.lastSeenAt} /></span>
         {salary && <span className="col-span-2 text-graphite">{salary}</span>}
       </div>
 
       <div className="mt-auto flex items-center gap-2">
-        <Button size="sm" variant="orange" className="flex-1" disabled={!job.applyUrl && !job.sourceUrl} onClick={() => window.open(job.applyUrl ?? job.sourceUrl ?? '#', '_blank', 'noopener,noreferrer')}>
+        <Button size="sm" variant="orange" className="flex-1" disabled={!isSafeApplicationUrl(job.applyUrl ?? job.sourceUrl)} onClick={() => window.open(job.applyUrl ?? job.sourceUrl ?? '#', '_blank', 'noopener,noreferrer')}>
           <ExternalLink className="size-3.5" aria-hidden /> Apply
         </Button>
         <Button size="sm" variant="outline" onClick={onSave} disabled={busy} aria-pressed={job.saved}>
@@ -611,6 +629,54 @@ function ApplicationsView({ applications }: { applications: Array<Record<string,
 function StatusBadge({ status }: { status: string }) {
   const tone = status === 'hired' || status === 'offer' ? 'success' : status === 'rejected' || status === 'withdrawn' ? 'destructive' : status === 'interview' ? 'cobalt' : 'secondary'
   return <Badge variant={tone}>{status.replace('_', ' ')}</Badge>
+}
+
+function PreparedView({ prepared }: { prepared: PreparedCard[] }) {
+  if (prepared.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-line bg-bone-raised/50 p-10 text-center">
+        <FileText className="mx-auto mb-3 size-5 text-stone" aria-hidden />
+        <p className="text-sm font-medium text-ink">No prepared applications yet.</p>
+        <p className="mt-1 text-xs text-graphite">
+          When a verified, Pakistan-eligible, high-fit job appears, Relay prepares a tailored CV and cover letter here.
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {prepared.map((item) => (
+        <Link
+          key={item.id}
+          href={`/jobs/${item.jobId}?profileId=${item.profileId}&view=prepared`}
+          className="rounded-2xl border border-line bg-bone-raised p-4 transition-colors hover:ring-1 hover:ring-line"
+        >
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-ink">{item.title}</p>
+              <p className="text-xs text-graphite">{item.company ?? 'Company'}</p>
+            </div>
+            <Badge variant={item.status === 'ready' ? 'success' : 'outline'}>{item.status}</Badge>
+          </div>
+          <div className="mb-2 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-bone p-1.5 ring-1 ring-line">
+              <p className="text-[9px] uppercase tracking-wide text-stone">{SCORE_METRICS.candidate_fit.shortLabel}</p>
+              <p className="text-xs font-semibold text-ink">{item.matchScore ?? '—'}</p>
+            </div>
+            <div className="rounded-lg bg-bone p-1.5 ring-1 ring-line">
+              <p className="text-[9px] uppercase tracking-wide text-stone">{SCORE_METRICS.resume_quality.shortLabel}</p>
+              <p className="text-xs font-semibold text-ink">{item.documentQuality ?? '—'}</p>
+            </div>
+            <div className="rounded-lg bg-bone p-1.5 ring-1 ring-line">
+              <p className="text-[9px] uppercase tracking-wide text-stone">{SCORE_METRICS.internal_readiness.shortLabel}</p>
+              <p className="text-xs font-semibold text-ink">{item.readiness ?? '—'}</p>
+            </div>
+          </div>
+          <p className="text-[10px] text-stone">Prepared <RelativeTime value={item.createdAt} /> · review the CV, then open the official application.</p>
+        </Link>
+      ))}
+    </div>
+  )
 }
 
 function DocumentsView({ documents, profileId }: { documents: Array<Record<string, unknown>>; profileId: string }) {
@@ -729,7 +795,7 @@ function SourcesView({ sources }: { sources: Array<Record<string, unknown>> }) {
                     </label>
                   </td>
                   <td className="px-4 py-3 tabular-nums text-graphite">{Number(row.jobCount ?? 0)}</td>
-                  <td className="px-4 py-3 text-graphite">{relative(String(row.last_run_at ?? ''))}</td>
+                  <td className="px-4 py-3 text-graphite"><RelativeTime value={String(row.last_run_at ?? '')} /></td>
                   <td className="px-4 py-3 text-graphite">{Number(row.consecutive_failures ?? 0)}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1.5">

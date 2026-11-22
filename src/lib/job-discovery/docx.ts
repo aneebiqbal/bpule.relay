@@ -5,7 +5,7 @@
  * tracked changes. Enough for an ATS to parse and for a human to edit.
  */
 
-import type { ResumeLayout } from './types'
+import type { ResumeLayout, ResumePaper } from './types'
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256)
@@ -32,7 +32,7 @@ function xmlEscape(text: string): string {
     .replace(/'/g, '&apos;')
 }
 
-function zipStore(files: Array<{ name: string; data: Buffer }>): Buffer {
+export function zipFiles(files: Array<{ name: string; data: Buffer }>): Buffer {
   const chunks: Buffer[] = []
   const central: Buffer[] = []
   let offset = 0
@@ -92,27 +92,46 @@ function zipStore(files: Array<{ name: string; data: Buffer }>): Buffer {
   return Buffer.concat([...chunks, centralBuffer, end])
 }
 
-function documentXml(text: string, layout: ResumeLayout): string {
+const DOCX_PAPERS: Record<ResumePaper, { width: number; height: number }> = {
+  letter: { width: 12240, height: 15840 },
+  a4: { width: 11906, height: 16838 },
+}
+
+function documentXml(text: string, layout: ResumeLayout, paper: ResumePaper): string {
   const style = {
     modern: { font: 'Calibri', size: 22, margin: 1440 },
     technical: { font: 'Consolas', size: 20, margin: 1080 },
     minimal: { font: 'Arial', size: 20, margin: 1800 },
+    ultra: { font: 'Calibri', size: 20, margin: 1134 },
   }[layout] ?? { font: 'Calibri', size: 22, margin: 1440 }
+  const kindFor = (line: string): 'heading' | 'bullet' | 'normal' => {
+    const trimmed = line.trim()
+    if (/^(experience|projects|skills|certifications|education|summary)$/i.test(trimmed)) return 'heading'
+    if (trimmed.length > 1 && trimmed === trimmed.toUpperCase() && trimmed.length < 42 && /[A-Z]/.test(trimmed)) return 'heading'
+    if (/^[-•]\s+/.test(trimmed)) return 'bullet'
+    return 'normal'
+  }
   const paragraphs = text
     .split(/\r?\n/)
     .map((line) => line.replace(/\t/g, '    '))
-    .map((line) => `    <w:p><w:r><w:rPr><w:rFonts w:ascii="${style.font}" w:hAnsi="${style.font}"/><w:sz w:val="${style.size}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(line)}</w:t></w:r></w:p>`)
+    .map((line) => {
+      const kind = kindFor(line)
+      const size = kind === 'heading' ? style.size + 4 : style.size
+      const bold = kind === 'heading' ? '<w:b/>' : ''
+      const indent = kind === 'bullet' ? '<w:ind w:left="360"/>' : ''
+      return `    <w:p><w:pPr>${indent}</w:pPr><w:r><w:rPr><w:rFonts w:ascii="${style.font}" w:hAnsi="${style.font}"/>${bold}<w:sz w:val="${size}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(line)}</w:t></w:r></w:p>`
+    })
     .join('\n')
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
 ${paragraphs}
-    <w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="${style.margin}" w:right="${style.margin}" w:bottom="${style.margin}" w:left="${style.margin}"/></w:sectPr>
+    <w:sectPr><w:pgSz w:w="${DOCX_PAPERS[paper].width}" w:h="${DOCX_PAPERS[paper].height}"/><w:pgMar w:top="${style.margin}" w:right="${style.margin}" w:bottom="${style.margin}" w:left="${style.margin}"/></w:sectPr>
   </w:body>
 </w:document>`
 }
 
-export function renderResumeDocx(sourceText: string, layout: ResumeLayout = 'modern'): Buffer {
+export function renderResumeDocx(sourceText: string, layout: ResumeLayout = 'modern', paper: ResumePaper = 'letter'): Buffer {
   const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -123,9 +142,9 @@ export function renderResumeDocx(sourceText: string, layout: ResumeLayout = 'mod
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`
-  return zipStore([
+  return zipFiles([
     { name: '[Content_Types].xml', data: Buffer.from(contentTypes, 'utf8') },
     { name: '_rels/.rels', data: Buffer.from(rels, 'utf8') },
-    { name: 'word/document.xml', data: Buffer.from(documentXml(sourceText, layout), 'utf8') },
+    { name: 'word/document.xml', data: Buffer.from(documentXml(sourceText, layout, paper), 'utf8') },
   ])
 }

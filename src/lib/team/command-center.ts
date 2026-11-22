@@ -3,6 +3,7 @@ import type { PeopleDirectory } from '@/lib/operations/people'
 import type { TimelineRow } from '@/lib/operations/activity'
 import type { CoveragePlan, CoverageProfileResult, CoverageStatus } from '@/lib/coverage/engine'
 import type { IdentityPlanProgress } from '@/lib/targets/load-plan-progress'
+import type { OrganizationDailySummary } from '@/lib/execution/accountability'
 import type { CanonicalAssignmentSet } from '@/lib/profiles/canonical'
 
 /**
@@ -113,6 +114,8 @@ export interface CommandCenterInput {
   profiles: CommandProfileFact[]
   timeline: TimelineRow[] | null
   repNameById: Map<string, string>
+  /** Canonical daily accountability — the authority for the summary totals. */
+  accountability?: OrganizationDailySummary
 }
 
 const SEVERITY_RANK: Record<CommandSeverity, number> = { critical: 0, attention: 1 }
@@ -366,9 +369,12 @@ export function deriveCommandSummary(input: {
   canonical: CanonicalAssignmentSet
   targets: CommandTargetRow[]
   profiles: CommandProfileFact[]
+  accountability?: OrganizationDailySummary
 }): CommandSummary {
   const coverage: Record<CoverageStatus, number> = { COVERED: 0, BACKUP_ACTIVE: 0, AT_RISK: 0, UNCOVERED: 0 }
   for (const profile of input.plan.profiles) coverage[profile.status] += 1
+  const requirement = input.accountability?.requirement
+  const completed = input.accountability?.completed
   return {
     people: input.team.counts.ACTIVE + input.team.counts.READY_TO_CLOSE + input.team.counts.NOT_STARTED,
     working: input.team.counts.ACTIVE + input.team.counts.READY_TO_CLOSE,
@@ -378,9 +384,15 @@ export function deriveCommandSummary(input: {
     overdueTasks: 0,
     unassignedProfiles: input.canonical.unassigned.length,
     unacknowledged: input.profiles.filter((profile) => profile.pendingAcknowledgementRepIds.length > 0).length,
-    target: input.targets.reduce((sum, row) => sum + row.target, 0),
-    completed: input.targets.reduce((sum, row) => sum + row.completed, 0),
-    remaining: input.targets.reduce((sum, row) => sum + row.remaining, 0),
+    // Canonical accountability when available; otherwise the same unique-lane
+    // sum the target rows already carry.
+    target: requirement ?? input.targets.reduce((sum, row) => sum + row.target, 0),
+    completed: completed ?? input.targets.reduce((sum, row) => sum + row.completed, 0),
+    remaining: Math.max(
+      0,
+      (requirement ?? input.targets.reduce((sum, row) => sum + row.target, 0)) -
+        (completed ?? input.targets.reduce((sum, row) => sum + row.completed, 0)),
+    ),
     coverage,
   }
 }
@@ -393,6 +405,7 @@ export function deriveCommandCenter(input: CommandCenterInput): CommandCenterDat
     canonical: input.canonical,
     targets,
     profiles: input.profiles,
+    accountability: input.accountability,
   })
   // Overdue tasks come from the People directory, not Team Day (which has no
   // per-rep overdue counter), so the summary reflects the same source as the

@@ -315,6 +315,26 @@ export function orgTodayRange(policy: OperatingPolicy, now: Date = orgNow()): { 
   return businessDateRange(orgDate(now, policy.timezone), policy.timezone)
 }
 
+/**
+ * The next calendar date in the organization's zone and the UTC instant it
+ * starts. This is the rollover boundary: the moment "today" becomes tomorrow.
+ */
+export function nextDateBoundary(
+  timeZone: string,
+  now: Date = orgNow(),
+): { date: string; start: Date; startIso: string; milliseconds: number } {
+  const next = addDays(orgDate(now, timeZone), 1)
+  const start = zonedWallClockToUtc(
+    Number(next.slice(0, 4)),
+    Number(next.slice(5, 7)),
+    Number(next.slice(8, 10)),
+    0,
+    0,
+    timeZone,
+  )
+  return { date: next, start, startIso: start.toISOString(), milliseconds: Math.max(0, start.getTime() - now.getTime()) }
+}
+
 /** The rolling 7-day window ending today, in the organization's timezone. */
 export function orgWeekRange(policy: OperatingPolicy, now: Date = orgNow()): { start: string; end: string } {
   const today = orgDate(now, policy.timezone)

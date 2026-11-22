@@ -156,6 +156,14 @@ export interface AdminCommandCenterData {
   /** Org-wide daily target and completion sums — the truthful denominator. */
   teamTarget: number
   teamCompleted: number
+  /** Unique targetable lanes — the organization's real requirement. */
+  orgRequirement: number
+  /** Every unique lane, including tracked-only (non-targetable) lanes. */
+  orgTracked: number
+  /** Sum of personal expectations (solo lanes + allocations). */
+  orgAssigned: number
+  /** Shared work with no explicit allocation. */
+  orgUnallocated: number
   /** Canonical rep-day contract for today — the authority for state and remaining work. */
   teamDay: TeamDaySummary
   /** Per-profile today completion, the profile-first view of execution. */
@@ -372,6 +380,10 @@ export function assembleAdminCommandCenter(input: {
   yesterday?: AdminYesterday
   teamTarget?: number
   teamCompleted?: number
+  orgRequirement?: number
+  orgTracked?: number
+  orgAssigned?: number
+  orgUnallocated?: number
   /** Canonical org-wide Inbox counts — the one truth for reply/follow-up metrics. */
   inboxCounts?: { needsReply: number; followups: number }
   /** Canonical per-rep Inbox counts over each rep's executable profiles. */
@@ -437,6 +449,10 @@ export function assembleAdminCommandCenter(input: {
     teamDay: input.teamDay,
     teamTarget: input.teamTarget ?? 0,
     teamCompleted: input.teamCompleted ?? 0,
+    orgRequirement: input.orgRequirement ?? input.teamTarget ?? 0,
+    orgTracked: input.orgTracked ?? input.orgRequirement ?? input.teamTarget ?? 0,
+    orgAssigned: input.orgAssigned ?? 0,
+    orgUnallocated: input.orgUnallocated ?? 0,
     profileExecution: input.profileExecution ?? [],
     movement: input.movement ?? emptyMovement(),
     yesterday: input.yesterday ?? emptyYesterday(),

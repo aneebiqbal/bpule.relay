@@ -109,6 +109,66 @@ describe('classifyRemoteEligibility', () => {
     expect(result.countries).toContain('US')
   })
 
+  it('classifies Pakistan eligibility from explicit and regional evidence', () => {
+    const explicit = classify('Remote role open to Pakistan-based engineers.')
+    expect(explicit.pakistan.eligible).toBe(true)
+    expect(explicit.pakistan.classification).toBe('explicit_pakistan')
+    expect(explicit.pakistan.confidence).toBe('confirmed')
+
+    const worldwide = classify('Work from anywhere in the world.')
+    expect(worldwide.pakistan.eligible).toBe(true)
+    expect(worldwide.pakistan.classification).toBe('worldwide')
+
+    const usOnly = classify('US only; must be authorized to work in the United States.')
+    expect(usOnly.pakistan.eligible).toBe(false)
+    expect(usOnly.pakistan.classification).toBe('country_restricted')
+    expect(usOnly.pakistan.confidence).toBe('confirmed')
+
+    const europe = classify('Remote within Europe only.')
+    expect(europe.pakistan.eligible).toBe(false)
+    expect(europe.pakistan.classification).toBe('region_restricted')
+
+    const apac = classify('Remote across APAC.')
+    expect(apac.pakistan.eligible).toBe(true)
+    expect(apac.pakistan.classification).toBe('apac')
+    expect(apac.pakistan.confidence).toBe('likely')
+
+    const latam = classify('Remote within Latin America only.')
+    expect(latam.pakistan.eligible).toBe(false)
+    expect(latam.pakistan.classification).toBe('region_restricted')
+
+    const mixed = classify('Remote across APAC and North America.')
+    expect(mixed.pakistan.eligible).toBeNull()
+    expect(mixed.pakistan.classification).toBe('region_restricted')
+    expect(mixed.pakistan.confidence).toBe('unknown')
+
+    // "Worldwide" marketing boilerplate must not override a named boundary.
+    const boilerplate = classify('We are a worldwide company. This role is based in Singapore.', {
+      locationRaw: 'Singapore',
+    })
+    expect(boilerplate.pakistan.eligible).toBe(false)
+    expect(boilerplate.pakistan.classification).toBe('country_restricted')
+
+    // A timezone boundary cannot be mapped to Pakistan without guessing.
+    const timezone = classify('Remote, but you must work US Eastern time hours.')
+    expect(timezone.pakistan.eligible).toBeNull()
+    expect(timezone.pakistan.classification).toBe('timezone_restricted')
+
+    const unknown = classify('Remote backend role.')
+    expect(unknown.pakistan.eligible).toBeNull()
+    expect(unknown.pakistan.classification).toBe('unknown')
+  })
+
+  it('uses Pakistan eligibility in the seeker verdict', () => {
+    const usOnly = classify('US only; must be located in the United States.')
+    const verdict = evaluateEligibility(usOnly, { country: 'PK' })
+    expect(verdict.eligible).toBe(false)
+    expect(verdict.confidence).toBe('confirmed')
+
+    const worldwide = classify('Work from anywhere in the world.')
+    expect(evaluateEligibility(worldwide, { country: 'PK' }).eligible).toBe(true)
+  })
+
   it('extracts a country from a location string', () => {
     expect(countryFromLocation('Berlin, Germany')).toBe('DE')
     expect(countryFromLocation('Remote')).toBeNull()
@@ -129,7 +189,7 @@ describe('evaluateEligibility', () => {
     const verdict = evaluateEligibility(eligibility, { country: 'PK', timezone: 'UTC+5' })
     expect(verdict.eligible).toBe(false)
     expect(verdict.confidence).toBe('confirmed')
-    expect(verdict.reasons.join(' ')).toMatch(/restricted to US/)
+    expect(verdict.reasons.join(' ')).toMatch(/restricts work to US/)
   })
 
   it('never treats unknown work authorization as authorized', () => {
