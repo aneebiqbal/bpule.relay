@@ -51,6 +51,22 @@ export async function loadTeamLive(orgId: string, now = currentInstant()): Promi
     list.push(row.rep_id)
     seatsByProfile.set(row.profile_id, list)
   }
+  // A seated lane is executable even when its legacy eligibility row is missing.
+  // The seat is the authority, so it is unioned into the assignment set the
+  // summary filters on — otherwise a seated operator's lane would be dropped.
+  const identitiesByProfile = new Map<string, string[]>()
+  for (const row of (identities.data ?? []) as Array<{ id: string; profile_id: string | null }>) {
+    if (!row.profile_id) continue
+    const list = identitiesByProfile.get(row.profile_id) ?? []
+    list.push(row.id)
+    identitiesByProfile.set(row.profile_id, list)
+  }
+  const seatAssignments: Array<{ revenue_identity_id: string; rep_id: string }> = []
+  for (const row of (coverageRows.data ?? []) as Array<{ profile_id: string; rep_id: string }>) {
+    for (const identityId of identitiesByProfile.get(row.profile_id) ?? []) {
+      seatAssignments.push({ revenue_identity_id: identityId, rep_id: row.rep_id })
+    }
+  }
   const allocationByPlan = new Map<string, Map<string, number>>()
   for (const row of (allocationRows.data ?? []) as Array<{ plan_id: string; rep_id: string; target_count: number }>) {
     const byRep = allocationByPlan.get(row.plan_id) ?? new Map<string, number>()
@@ -82,7 +98,7 @@ export async function loadTeamLive(orgId: string, now = currentInstant()): Promi
     timezone: policy.timezone,
     reps: reps.data ?? [],
     identities: identities.data ?? [],
-    assignments: assignments.data ?? [],
+    assignments: [...((assignments.data ?? []) as Array<{ revenue_identity_id?: string | null; rep_id: string }>), ...seatAssignments],
     targets,
     accountability: accountability.data ?? [],
     messages: messages.data ?? [],

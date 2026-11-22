@@ -4,13 +4,24 @@
  * The canonical RPC keys exactly-once on `source_event_id`: a retry, a double
  * click or a duplicate callback must never increment the same real action twice.
  */
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDbPool, serviceDbClient } from '@/lib/db/client'
+import { currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const REP = 'aaaaaaaa-0000-0000-0000-000000000004' // Ahmad
 const IDENTITY = 'ab50b6a7-0b85-44c2-b8c9-52816f8adf93' // Zaira · Upwork
-const TODAY = new Date().toISOString().slice(0, 10)
+// The business date is the organization's, not the UTC server date: a UTC
+// Sunday can be a Monday in Asia/Karachi, and the RPC correctly refuses a
+// non-working day.
+let TODAY = new Date().toISOString().slice(0, 10)
+
+beforeAll(async () => {
+  const client = serviceDbClient()
+  const policy = await loadOperatingPolicy(ORG, client)
+  TODAY = orgDate(currentInstant(), policy.timezone)
+})
 
 afterAll(async () => { await closeDbPool() })
 
