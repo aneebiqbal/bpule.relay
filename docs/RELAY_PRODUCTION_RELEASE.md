@@ -1,7 +1,7 @@
 # Relay — Production Release Certification
 
 **Branch:** `feat/relay-job-intelligence-v2`
-**Release candidate:** see §8
+**Release candidate:** `1c73aba3` (tip; see §8)
 **Authorization:** not deployed. No merge, no production worker activation.
 
 ---
