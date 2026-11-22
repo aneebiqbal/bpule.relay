@@ -329,7 +329,16 @@ journalctl -u job-preparation.service -e
 `master_resumes` is a versioned, job-independent derived copy of the profile
 evidence; safe to rebuild.
 
+Preparation gates (default `RELAY_PREPARE_MIN_FIT=65`): confirmed open, remote,
+confirmed Pakistan eligibility, non-`requires_verification`, fit ≥ threshold,
+no hard-requirement gap, valid public destination. Every decision is logged to
+`preparation_logs` (`low_fit`, `hard_requirement_gap`, `pakistan_unconfirmed`,
+`unsafe_destination`, `eligibility_unconfirmed`). Packages pass
+`validatePackage` (`ready` / `needs_evidence` / `needs_review`); an empty cover
+letter is never `ready`.
+
 Full V6 record: `docs/RELAY_V6_RESUME_STUDIO_AND_AUTONOMOUS_PREPARATION.md`.
+Full V7 record: `docs/RELAY_V7_AUTONOMOUS_APPLICATION_STUDIO.md`.
 
 ---
 
