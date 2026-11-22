@@ -55,7 +55,7 @@ export default async function JobsPage({
     await ensureJobMatches(store.getSupabaseClient(), auth.orgId, profileId)
   }
   const prepared = view === 'prepared'
-    ? await listPreparedJobs(store.getSupabaseClient(), auth.orgId, profileId)
+    ? await listPreparedJobs(store.getSupabaseClient(), auth.orgId)
     : []
   const { jobs, hasMore } = view === 'prepared'
     ? { jobs: [], hasMore: false }

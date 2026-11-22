@@ -194,6 +194,36 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
     }
   }
 
+  function applySuggestion(text: string, suggestion: { section: string; existing: string; suggested: string }): string {
+    if (suggestion.section === 'summary' || suggestion.section === 'skills') {
+      return text.includes(suggestion.existing) ? text.replace(suggestion.existing, suggestion.suggested) : `${text}\n${suggestion.suggested}`
+    }
+    return `${text}\n- ${suggestion.suggested}`
+  }
+
+  async function acceptSuggestion(suggestion: { section: string; existing: string; suggested: string }) {
+    if (!profileId) return
+    const cv = documents.find((doc) => doc.kind === 'cv')
+    if (!cv?.text) return
+    const updated = applySuggestion(cv.text, suggestion)
+    if (updated === cv.text) {
+      setNotice('That suggestion is already applied.')
+      return
+    }
+    const response = await fetch(`/api/jobs/${job.id}/documents/cv`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profileId, text: updated }),
+    })
+    if (response.ok) {
+      const data = (await response.json()) as { documents: DocumentRow[] }
+      setDocuments(data.documents)
+      setNotice('Suggestion accepted and saved as a new version.')
+    } else {
+      setNotice('Could not apply the suggestion.')
+    }
+  }
+
   function openCompare() {
     const cvs = documents.filter((doc) => doc.kind === 'cv')
     if (cvs.length >= 2) setCompare({ a: cvs[0], b: cvs[1] })
@@ -463,6 +493,29 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                     </p>
                   </div>
                 )}
+                {(() => {
+                  const cvDoc = documents.find((doc) => doc.kind === 'cv')
+                  const suggestions = (cvDoc?.content as Record<string, unknown> | null)?.suggestions as Array<Record<string, unknown>> | undefined
+                  if (!suggestions || suggestions.length === 0) return null
+                  return (
+                    <div className="rounded-xl bg-bone p-3 ring-1 ring-line">
+                      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-stone">Suggested improvements</p>
+                      <ul className="space-y-2">
+                        {suggestions.map((suggestion, index) => (
+                          <li key={String(suggestion.id ?? index)} className="text-xs text-graphite">
+                            <p className="font-medium text-ink">{String(suggestion.requirement)}</p>
+                            <p className="mt-0.5">“{String(suggestion.existing)}” → “{String(suggestion.suggested)}”</p>
+                            <p className="mt-0.5 text-[11px]">{String(suggestion.rationale)}</p>
+                            <div className="mt-1 flex gap-3">
+                              <button type="button" onClick={() => acceptSuggestion({ section: String(suggestion.section), existing: String(suggestion.existing), suggested: String(suggestion.suggested) })} className="font-medium text-orange-ink hover:underline">Accept</button>
+                              <button type="button" onClick={() => setNotice('Suggestion rejected.')} className="hover:underline">Reject</button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })()}
                 {preview && documents.some((doc) => doc.kind === 'cv') && profileId && (
                   <div className="overflow-hidden rounded-xl bg-bone ring-1 ring-line">
                     <iframe

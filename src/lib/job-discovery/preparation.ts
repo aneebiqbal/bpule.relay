@@ -19,6 +19,8 @@ import { computeJobMatch } from './match'
 import type { JobEligibility } from './eligibility'
 import type { DiscoveryJob } from './types'
 import { getOrCreateMasterResume, masterResumeHash } from './master-resume'
+import { buildJobSuggestions } from './suggestions'
+import { saveDocuments } from './service'
 
 /** Minimum genuine job-fit score for automatic preparation. */
 export const MIN_JOB_FIT = Number(process.env.RELAY_PREPARE_MIN_FIT ?? 65)
@@ -272,6 +274,19 @@ export async function prepareHighFitJobs(db: DbClient, options: PrepareOptions =
           },
         })
         const documents = await generateJobDocuments(profile, evidence, best.job)
+        const cvDoc = documents.find((doc) => doc.kind === 'cv')
+        if (cvDoc) {
+          cvDoc.content = { ...cvDoc.content, suggestions: buildJobSuggestions(resume, extractJobRequirements(best.job), evidence), ats }
+          cvDoc.ats = { ...ats, readiness: assessment.readiness, documentQuality: assessment.documentQuality, jobMatch: assessment.jobMatch }
+        }
+        // Persist the package into the document-version store so the Resume
+        // Studio can review, edit and compare it.
+        await saveDocuments(db, profile.organizationId, bestJobId, profile.id, documents.map((doc) => ({
+          kind: doc.kind,
+          text: doc.text,
+          content: doc.content,
+          ats: doc.ats,
+        })))
         const validation = validatePackage({ documents, assessment, pdf, docx, links })
         const inserted = await db.raw!(
           `insert into prepared_jobs

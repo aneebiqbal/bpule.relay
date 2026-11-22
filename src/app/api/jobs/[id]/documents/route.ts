@@ -6,6 +6,7 @@ import { generateJobDocuments, buildResumeData, tailorResumeForJob, resumeToText
 import { evaluateResumeAgainstJob } from '@/lib/job-discovery/ats'
 import { extractJobRequirements } from '@/lib/job-discovery/requirements'
 import { assessResume } from '@/lib/job-discovery/ats-score'
+import { buildJobSuggestions } from '@/lib/job-discovery/suggestions'
 import { renderResumePdf, countPdfPages } from '@/lib/job-discovery/pdf'
 import type { DiscoveryJob, ResumeLayout, ResumePaper } from '@/lib/job-discovery/types'
 
@@ -100,8 +101,9 @@ export async function POST(
         missingSections: ats.extraction.missingLines,
       },
     })
+    const suggestions = buildJobSuggestions(resume, extractJobRequirements(job), evidence)
     cv.ats = { ...ats, readiness: assessment.readiness, documentQuality: assessment.documentQuality, jobMatch: assessment.jobMatch }
-    cv.content = { ...(cv.content as Record<string, unknown>), ats, atsAssessment: assessment, layout }
+    cv.content = { ...(cv.content as Record<string, unknown>), ats, atsAssessment: assessment, suggestions, layout }
   }
 
   await saveDocuments(

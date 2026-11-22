@@ -12,9 +12,11 @@ import { scoreJob } from '@/lib/jobs/rank-jobs'
 import { estimateSeniority } from '@/lib/jobs/search-query'
 import type { ProfileEvidence } from '@/lib/generation/sales-context'
 import { countryFromLocation, evaluateEligibility, type JobEligibility, type SeekerPreferences } from './eligibility'
+import { extractJobRequirements } from './requirements'
+import { tokenizeSkill } from '@/lib/jobs/rank-jobs'
 import type { DiscoveryJob } from './types'
 
-export const MATCH_SCORE_VERSION = 2
+export const MATCH_SCORE_VERSION = 3
 
 export interface MatchProfile {
   profileId: string
@@ -39,7 +41,7 @@ export interface ComputedMatch {
   explanation: string
 }
 
-function toJob(job: DiscoveryJob): Job {
+function toJob(job: DiscoveryJob, skillsOverride?: string[]): Job {
   return {
     id: job.sourceJobId,
     source: job.sourceId as JobSource,
@@ -55,6 +57,7 @@ function toJob(job: DiscoveryJob): Job {
     onsite: job.onsite ?? false,
     employmentType: job.employmentType,
     seniority: job.seniority,
+    skills: skillsOverride ?? job.skills ?? [],
     salary: job.salaryMin || job.salaryMax
       ? {
           min: job.salaryMin,
@@ -67,7 +70,6 @@ function toJob(job: DiscoveryJob): Job {
       : null,
     description: job.description,
     excerpt: job.excerpt,
-    skills: job.skills,
     categories: job.categories,
     postedAt: job.postedAt,
     expiresAt: job.expiresAt,
@@ -104,7 +106,9 @@ function parseEligibility(value: unknown): JobEligibility | null {
 export function computeJobMatch(job: DiscoveryJob, profile: MatchProfile, verificationStatus?: string): ComputedMatch {
   const cv = buildCv(profile)
   const params: JobSearchParams = { query: '', remote: true }
-  const base = scoreJob(toJob(job), cv, params)
+  const requirements = extractJobRequirements(job)
+  const targetSkills = requirements.requiredSkills.length > 0 ? requirements.requiredSkills : (job.skills ?? [])
+  const base = scoreJob(toJob(job, targetSkills), cv, params)
   const eligibility = parseEligibility((job as DiscoveryJob & { eligibility?: unknown }).eligibility)
   const prefs: SeekerPreferences = {
     country: cv.country,
@@ -155,13 +159,21 @@ export function computeJobMatch(job: DiscoveryJob, profile: MatchProfile, verifi
     ...reasons,
   ].filter(Boolean).join(' ')
 
+  // Skill gaps use the filtered technical requirements, not the raw feed tags
+  // (which contain noise like "admin", "api", "backend").
+  const requiredSkills = requirements.requiredSkills.length > 0 ? requirements.requiredSkills : (job.skills ?? [])
+  const gapSource = requiredSkills
+  const cvTokens = new Set(cv.skills.flatMap(tokenizeSkill))
+  const matchedSkills = gapSource.filter((skill) => tokenizeSkill(skill).some((token) => cvTokens.has(token)))
+  const missingSkills = gapSource.filter((skill) => !tokenizeSkill(skill).some((token) => cvTokens.has(token)))
+
   return {
     score: Math.round(score),
     category,
     breakdown: base.breakdown,
     evidence: {
-      matchedSkills: base.matchedSkills,
-      missingSkills: base.missingSkills,
+      matchedSkills,
+      missingSkills,
       eligibility,
       eligibilityReasons: verdict.reasons,
       proofUsed,

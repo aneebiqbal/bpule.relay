@@ -116,7 +116,7 @@ describe('computeJobMatch', () => {
 
   it('exposes a versioned, explainable breakdown', () => {
     const match = computeJobMatch(job({}), profile)
-    expect(MATCH_SCORE_VERSION).toBe(2)
+    expect(MATCH_SCORE_VERSION).toBe(3)
     expect(Object.keys(match.breakdown)).toContain('freshness')
     expect(match.explanation.length).toBeGreaterThan(20)
   })
