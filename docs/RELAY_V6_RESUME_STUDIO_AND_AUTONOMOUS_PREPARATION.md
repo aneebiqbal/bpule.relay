@@ -91,7 +91,9 @@ regenerated. Human edits are never overwritten. The operator is notified once.
 **Nothing is ever submitted.**
 
 Staging result: `checked 1 · prepared 1` for the Fluence Full-Stack Developer
-role (document quality 95, job match 24).
+role (document quality 95, job match 24). A second run returned
+`checked 1 · prepared 1 · skipped 1` — the unchanged pair was **skipped**, not
+regenerated (one package per profile).
 
 ## 6. Jobs daily workflow (Phase 7)
 
@@ -112,11 +114,11 @@ Each card deep-links to the job with the selected profile.
 
 ## 8. Honest gaps
 
-- The Prepared view is not yet browser-tested (the browser tool was unavailable
-  for part of this run).
 - Phase 8's 20-case browser suite and Phase 9's VPS/security certification are
   not complete.
 - Screening-answer drafts, dismiss reasons and outcome learning are not built.
 - Preparation AI documents require provider credentials in the cron environment
   (they are present in `.env.production`; the local `tsx` run had none, so the
-  stored package text was empty there).
+  stored package text was empty there — the HTTP route generates them).
+- The `Prepared` view is browser-verified; the deeper account-switching and
+  unauthorised-access journeys rely on existing RLS contract tests.
