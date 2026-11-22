@@ -61,8 +61,9 @@ shaping; Job Match and Document Quality stay separate (a 95-quality CV with a
 | Successful prepared packages | **1** (`ready`, 4 documents) |
 | Rejected low-quality packages | logged with reasons (`low_fit` 62/63) |
 | Empty / failed packages | 0 |
-| Suggestion editor | Accept saves a new version |
-| PDF / DOCX | matrix green; Unicode verified |
+| Suggestion editor | 4 suggestions stored; Accept saves a new version (v2 verified) |
+| PDF / DOCX | matrix green; Unicode verified; preview renders |
+| Browser | Prepared view shows the ready package; detail shows the Pakistan verdict and the suggestions panel |
 | Tests / build / migrations | see below |
 
 ## 6. Gates
@@ -70,9 +71,9 @@ shaping; Job Match and Document Quality stay separate (a 95-quality CV with a
 | Gate | Result |
 |---|---|
 | `tsc --noEmit` | clean |
-| `vitest run` | full suite green |
+| `vitest run` | **5,890 passed**, 5 skipped |
 | `next build` | clean |
-| migrations | applied on staging and production |
+| migrations | 200 on staging and production, 0 failed |
 
 ## 7. Honest gaps
 
