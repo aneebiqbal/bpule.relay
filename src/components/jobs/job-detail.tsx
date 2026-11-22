@@ -69,6 +69,7 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
   const [compare, setCompare] = useState<{ a: DocumentRow; b: DocumentRow } | null>(null)
   const [layout, setLayout] = useState<'modern' | 'technical' | 'minimal' | 'ultra'>('modern')
   const [paper, setPaper] = useState<'a4' | 'letter'>('letter')
+  const [preview, setPreview] = useState(false)
   const [checklist, setChecklist] = useState<Record<string, boolean>>({})
   const CHECKLIST = [
     'Verified open at the original source',
@@ -411,6 +412,9 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                 <Button size="sm" variant="ghost" onClick={openCompare} disabled={documents.filter((doc) => doc.kind === 'cv').length < 2}>
                   Compare versions
                 </Button>
+                <Button size="sm" variant="outline" onClick={() => setPreview((value) => !value)} disabled={!documents.some((doc) => doc.kind === 'cv')}>
+                  {preview ? 'Hide preview' : 'Preview'}
+                </Button>
                 <Button size="sm" variant="outline" onClick={generateDocuments} disabled={generating || !profileId}>
                   {generating ? 'Generating…' : 'Generate package'}
                 </Button>
@@ -457,6 +461,15 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                       PDF text extraction coverage: {Math.round(Number((ats.extraction as Record<string, unknown>)?.coverage ?? 0) * 100)}%.
                       This is not an official employer ATS score.
                     </p>
+                  </div>
+                )}
+                {preview && documents.some((doc) => doc.kind === 'cv') && profileId && (
+                  <div className="overflow-hidden rounded-xl bg-bone ring-1 ring-line">
+                    <iframe
+                      title="CV preview"
+                      src={`/api/jobs/${job.id}/documents/cv?profileId=${profileId}&format=pdf&layout=${layout}&paper=${paper}`}
+                      className="h-[72vh] w-full"
+                    />
                   </div>
                 )}
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
