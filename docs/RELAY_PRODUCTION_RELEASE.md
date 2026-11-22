@@ -102,6 +102,8 @@ time.
 - `CRON_SECRET`
 - `DATABASE_SSL_CA` (recommended) or `DATABASE_SSL_VERIFY=false`
 - AI provider keys (optional; provider routing degrades gracefully)
+- Do **not** set `RELAY_TEST_CLOCK` / `RELAY_TEST_CLOCK_IN_PRODUCTION`; they are
+  test-only clock overrides and inert unless explicitly enabled.
 
 The application is usable immediately after deployment: migrations apply, the
 shell rolls over at local midnight, and the Jobs workspace defaults to
