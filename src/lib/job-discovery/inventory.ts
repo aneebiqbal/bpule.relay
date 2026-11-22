@@ -260,47 +260,49 @@ export interface JobRetentionReport {
  */
 export async function buildRetentionReport(db: DbClient, sampleLimit = 20): Promise<JobRetentionReport> {
   const generatedAt = new Date().toISOString()
+  // One round trip for every count: the Aiven pool is the bottleneck, and nine
+  // parallel COUNTs per report needlessly contend for it.
+  const countsResult = await db.raw!<Array<{
+    total: number
+    active: number
+    prepared: number
+    applied: number
+    closed: number
+    duplicated: number
+    archived: number
+    referenced: number
+    eligible: number
+  }>>(
+    `select
+       (select count(*) from jobs) as total,
+       (select count(*) from jobs where verification_status not in ('closed','expired','source_unavailable')) as active,
+       (select count(*) from prepared_jobs where status in ('ready','needs_review')) as prepared,
+       (select count(*) from jobs j where exists (select 1 from applications a where a.job_id = j.id)) as applied,
+       (select count(*) from jobs where verification_status in ('closed','expired')) as closed,
+       (select count(*) from job_inventory_index where feed_bucket = 'duplicate') as duplicated,
+       (select count(*) from jobs where verification_status = 'archived') as archived,
+       (select count(*) from jobs j where exists (select 1 from applications a where a.job_id = j.id)) as referenced,
+       (select count(*) from jobs j
+         where j.verification_status not in ('closed','expired')
+           and not exists (select 1 from applications a where a.job_id = j.id)
+           and not exists (select 1 from saved_jobs s where s.job_id = j.id)
+           and exists (select 1 from job_inventory_index ii where ii.job_id = j.id and ii.feed_bucket in ('stale_unverified','duplicate'))
+       ) as eligible`,
+    [],
+  )
+  if (countsResult.error) throw new Error(countsResult.error.message)
+  const row = (countsResult.data ?? [])[0] ?? {
+    total: 0, active: 0, prepared: 0, applied: 0, closed: 0,
+    duplicated: 0, archived: 0, referenced: 0, eligible: 0,
+  }
+
   const bucketRows = await db.raw!<Array<{ feed_bucket: string; n: number }>>(
     `select feed_bucket, count(*)::int as n from job_inventory_index group by feed_bucket`,
     [],
   )
   if (bucketRows.error) throw new Error(bucketRows.error.message)
   const buckets: Record<string, number> = {}
-  for (const row of bucketRows.data ?? []) buckets[row.feed_bucket] = Number(row.n)
-
-  const count = async (sql: string, params: unknown[] = []): Promise<number> => {
-    const result = await db.raw!<Array<{ n: number }>>(sql, params)
-    if (result.error) throw new Error(result.error.message)
-    return Number(result.data?.[0]?.n ?? 0)
-  }
-
-  const [
-    total,
-    active,
-    prepared,
-    applied,
-    closed,
-    duplicated,
-    archived,
-    referencedByApplications,
-    eligibleForCleanup,
-  ] = await Promise.all([
-    count(`select count(*)::int as n from jobs`),
-    count(`select count(*)::int as n from jobs where verification_status not in ('closed','expired','source_unavailable')`),
-    count(`select count(*)::int as n from prepared_jobs where status in ('ready','needs_review')`),
-    count(`select count(*)::int as n from jobs j where exists (select 1 from applications a where a.job_id = j.id)`),
-    count(`select count(*)::int as n from jobs where verification_status in ('closed','expired')`),
-    count(`select count(*)::int as n from job_inventory_index where feed_bucket = 'duplicate'`),
-    count(`select count(*)::int as n from jobs where verification_status = 'archived'`),
-    count(`select count(*)::int as n from jobs j where exists (select 1 from applications a where a.job_id = j.id)`),
-    count(
-      `select count(*)::int as n from jobs j
-       where j.verification_status not in ('closed','expired')
-         and not exists (select 1 from applications a where a.job_id = j.id)
-         and not exists (select 1 from saved_jobs s where s.job_id = j.id)
-         and exists (select 1 from job_inventory_index ii where ii.job_id = j.id and ii.feed_bucket in ('stale_unverified','duplicate'))`,
-    ),
-  ])
+  for (const bucket of bucketRows.data ?? []) buckets[bucket.feed_bucket] = Number(bucket.n)
 
   const sample = await db.raw!<Array<{ id: string; title: string; company: string | null; reason: string }>>(
     `select j.id, j.title, j.company, ii.reason
@@ -317,17 +319,17 @@ export async function buildRetentionReport(db: DbClient, sampleLimit = 20): Prom
   return {
     generatedAt,
     counts: {
-      total,
-      active,
+      total: Number(row.total),
+      active: Number(row.active),
       recommended: buckets['recommended'] ?? 0,
-      prepared,
-      applied,
+      prepared: Number(row.prepared),
+      applied: Number(row.applied),
       stale: buckets['stale_unverified'] ?? 0,
-      closed,
-      duplicated,
-      archived,
-      referencedByApplications,
-      eligibleForCleanup,
+      closed: Number(row.closed),
+      duplicated: Number(row.duplicated),
+      archived: Number(row.archived),
+      referencedByApplications: Number(row.referenced),
+      eligibleForCleanup: Number(row.eligible),
     },
     buckets,
     cleanupSample: sample.data ?? [],

@@ -39,12 +39,13 @@ log(`history rendered: ${!/Job views/.test(historyText) ? 'yes' : 'no'} · empty
 await page.screenshot({ path: `${outDir}/03-jobs-history.png`, fullPage: true })
 
 // 4. Screening answers on a prepared job detail.
-await page.goto(`${base}/jobs?view=prepared`, { waitUntil: 'networkidle' })
-await page.waitForTimeout(2000)
+await page.goto(`${base}/jobs?view=prepared`, { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(4000)
 const href = await page.locator('a[href*="/jobs/"]').first().getAttribute('href').catch(() => null)
 if (href) {
-  await page.goto(`${base}${href}`, { waitUntil: 'networkidle' })
-  await page.waitForTimeout(5000)
+  await page.goto(`${base}${href}`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'Full-Stack Developer', { timeout: 60000 })
+  await page.waitForFunction(() => /Needs your answer|Verified work covers/.test(document.body.innerText), { timeout: 20000 }).catch(() => {})
   const detail = await page.locator('body').innerText()
   log(`screening panel: ${/Screening answers/i.test(detail)}`)
   log(`needs-human answers: ${(detail.match(/Needs your answer/g) ?? []).length}`)
@@ -54,13 +55,13 @@ if (href) {
   log('no prepared job to open')
 }
 
-// 5. Mobile viewport.
-const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } })
-await mobile.goto(`${base}/jobs?view=shortlist`, { waitUntil: 'networkidle' })
-await mobile.waitForTimeout(2000)
-const mobileTabs = await mobile.locator('nav[aria-label="Job views"] a').allInnerTexts()
+// 5. Mobile viewport (same session).
+await page.setViewportSize({ width: 390, height: 844 })
+await page.goto(`${base}/jobs?view=shortlist`, { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(4000)
+const mobileTabs = await page.locator('nav[aria-label="Job views"] a').allInnerTexts()
 log(`mobile tabs: ${JSON.stringify(mobileTabs)}`)
-await mobile.screenshot({ path: `${outDir}/05-mobile-jobs.png`, fullPage: true })
+await page.screenshot({ path: `${outDir}/05-mobile-jobs.png`, fullPage: true })
 
 await browser.close()
 log('done')
