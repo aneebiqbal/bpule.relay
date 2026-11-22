@@ -11,7 +11,9 @@ import {
   getOrganizationDailySummary,
   lanePersonalTarget,
   loadAccountabilityLanes,
+  reconcilePopulations,
   type AccountabilityLane,
+  type OrganizationDailySummary,
 } from '@/lib/execution/accountability'
 import { serviceDbClient } from '@/lib/db/client'
 
@@ -100,4 +102,56 @@ describe('ORGANIZATION_DAILY_ACCOUNTABILITY', () => {
       expect(row.completed).toBe(row.contributions.reduce((sum, entry) => sum + entry.completedCount, 0))
     }
   }, 60_000)
+})
+
+describe('RECONCILE_POPULATIONS', () => {
+  function summary(lanes: AccountabilityLane[], reps: OrganizationDailySummary['reps']): OrganizationDailySummary {
+    return {
+      organizationId: 'org',
+      businessDate: '2026-11-23',
+      timezone: 'UTC',
+      tracked: lanes.reduce((sum, row) => sum + row.targetCount, 0),
+      requirement: lanes.filter((row) => row.targetable).reduce((sum, row) => sum + row.targetCount, 0),
+      assigned: lanes.reduce(
+        (sum, row) => sum + (row.seats.length === 1 ? row.targetCount : row.allocations.reduce((inner, a) => inner + a.targetCount, 0)),
+        0,
+      ),
+      unseatedAllocationUnits: lanes.reduce(
+        (sum, row) => sum + row.allocations.filter((a) => !row.seats.includes(a.repId)).reduce((inner, a) => inner + a.targetCount, 0),
+        0,
+      ),
+      unallocated: 0,
+      completed: lanes.reduce((sum, row) => sum + row.completed, 0),
+      remaining: 0,
+      reps,
+      lanes,
+    }
+  }
+
+  it('keeps the tracked and targetable reconciliations separate', () => {
+    const lanes = [
+      lane({ targetCount: 30, seats: ['rep-1'] }), // solo, targetable
+      lane({ targetCount: 10, targetable: false, seats: ['rep-1'] }), // solo, tracked-only
+      lane({ targetCount: 8, seats: ['rep-1', 'rep-2'], allocations: [{ repId: 'rep-1', targetCount: 8 }] }), // shared allocated
+      lane({ targetCount: 6, seats: ['rep-1', 'rep-2'] }), // shared unallocated
+      lane({ targetCount: 2, seats: ['rep-1', 'rep-2'], allocations: [{ repId: 'rep-3', targetCount: 2 }] }), // unseated allocation
+    ]
+    const reps = [
+      { repId: 'rep-1', repName: 'One', assigned: 48, completed: 0, remaining: 48, sharedTarget: 6, lanes: [] },
+      { repId: 'rep-2', repName: 'Two', assigned: 0, completed: 0, remaining: 0, sharedTarget: 14, lanes: [] },
+    ]
+    const populations = reconcilePopulations(summary(lanes, reps))
+    expect(populations.tracked).toBe(56)
+    expect(populations.requirement).toBe(46)
+    expect(populations.trackedNonTargetable).toBe(10)
+    expect(populations.assigned).toBe(50) // 30 + 10 + 8 + 2
+    expect(populations.personal).toBe(48) // rep-1's solo lanes + allocation
+    expect(populations.unseatedAllocationUnits).toBe(2)
+    expect(populations.unallocated).toBe(6) // 56 - 50
+    expect(populations.requirementAssigned).toBe(38) // 30 + 8
+    expect(populations.requirementUnallocated).toBe(8) // 46 - 38
+    // The two equations are distinct and both hold.
+    expect(populations.assigned + populations.unallocated).toBe(populations.tracked)
+    expect(populations.requirementAssigned + populations.requirementUnallocated).toBe(populations.requirement)
+  })
 })

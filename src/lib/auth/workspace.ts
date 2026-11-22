@@ -187,6 +187,7 @@ async function resolveDailyWorkspace(): Promise<{
         targetId: string
         activityType: string
         targetCount: number
+        personalTargetCount: number
         completedCount: number
         remaining: number
         status: string
@@ -275,6 +276,7 @@ async function resolveDailyWorkspace(): Promise<{
       targetId: t.targetId,
       activityType: t.activityType,
       targetCount: t.targetCount,
+      personalTargetCount: t.personalTargetCount ?? t.targetCount,
       completedCount: t.completedCount,
       remaining: t.remaining,
       status: t.status,

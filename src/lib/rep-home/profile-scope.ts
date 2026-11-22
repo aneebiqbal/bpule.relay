@@ -43,7 +43,10 @@ export interface RepWorkspaceIdentityTargets {
   targets: Array<{
     targetId: string
     activityType: string
+    /** The channel lane's full requirement. */
     targetCount: number
+    /** This rep's personal expectation (allocation or solo lane). */
+    personalTargetCount: number
     completedCount: number
     remaining: number
     status: string
@@ -54,7 +57,7 @@ export function sumTargets(rows: RepWorkspaceIdentityTargets[]) {
   return rows.reduce(
     (acc, row) => {
       for (const t of row.targets) {
-        acc.totalTarget += t.targetCount
+        acc.totalTarget += t.personalTargetCount ?? t.targetCount
         acc.totalCompleted += t.completedCount
         acc.totalRemaining += t.remaining
       }

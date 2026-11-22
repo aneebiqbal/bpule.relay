@@ -43,13 +43,26 @@ const pool = new pg.Pool({ connectionString: url, max: 1, ssl: resolveSsl() })
 const FILE_PATTERN = /^(\d+)_.*\.sql$/
 
 async function main() {
-  await pool.query(`
-    create schema if not exists supabase_migrations;
-    create table if not exists supabase_migrations.schema_migrations (
-      version text primary key,
-      installed_at timestamptz not null default now()
-    );
-  `)
+  // relay_service is DML-only on Aiven: no CREATE on the database or schema.
+  // Only bootstrap when absent, so a fully-migrated production database does
+  // not require DDL privileges to be read and verified.
+  const schemaExists =
+    (await pool.query(`select 1 from pg_namespace where nspname = 'supabase_migrations'`)).rows.length > 0
+  if (!schemaExists) await pool.query('create schema supabase_migrations')
+
+  const tableExists = (
+    await pool.query(
+      `select 1 from pg_tables where schemaname = 'supabase_migrations' and tablename = 'schema_migrations'`,
+    )
+  ).rows.length > 0
+  if (!tableExists) {
+    await pool.query(`
+      create table supabase_migrations.schema_migrations (
+        version text primary key,
+        installed_at timestamptz not null default now()
+      );
+    `)
+  }
 
   const recorded = new Set(
     (await pool.query('select version from supabase_migrations.schema_migrations')).rows.map((row) => row.version),

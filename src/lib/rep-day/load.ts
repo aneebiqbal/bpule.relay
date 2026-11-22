@@ -97,7 +97,7 @@ export async function loadRepDay(): Promise<RepDayView> {
   const targets = workspace.targetSummary.byIdentity.flatMap((identity) =>
     identity.targets.map((target) => ({
       activityType: target.activityType,
-      targetCount: target.targetCount,
+      targetCount: target.personalTargetCount ?? target.targetCount,
       completedCount: target.completedCount,
     })),
   )

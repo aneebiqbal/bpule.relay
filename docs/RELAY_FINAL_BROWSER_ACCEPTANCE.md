@@ -26,7 +26,9 @@ for each case.
 | 6 | Prepared job detail | ✅ match 78/100, eligibility reasoning, suggestions |
 | 7 | Screening answers panel | ✅ renders; 3 drafts from evidence, 5 needs-human |
 | 8 | Mobile (390×844) | ✅ workspace collapses to one column |
-| 9 | Admin accounting reconciliation | ⛔ not browser-verified (no production credentials) |
+| 9 | Midnight rollover, authenticated session | ✅ SUN, NOV 22 → MON, NOV 23, no reload/logout |
+| 10 | Admin headline vs canonical API | ✅ `0 / 30 required` and `30 allocated · 0 shared unallocated · 30 tracked` match the API |
+| 11 | Admin accounting reconciliation | ⛔ not verified against production (no production credentials) |
 
 ### 2.1 Screening answer evidence (real API response)
 
@@ -57,8 +59,10 @@ See `docs/RELAY_V8_JOB_MATCHING_AND_STUDIO.md`.
 - The 20-case suite from Phase 12 (strong/weak/excluded/unknown/expired/
   suspended/wrong-profile/AI-failure/retry/duplicate/edited/concurrent/mobile
   for every role).
+- A **Rep**-role midnight session. The staging workspace has only an admin
+  user, so the Rep rollover was not browser-driven; the same `BusinessDayRefresh`
+  shell component wraps the Rep home, and the boundary arithmetic is unit-tested.
 - Admin / Team Lead role journeys.
-- The midnight rollover in a live browser (covered by unit tests instead).
 - Cross-organization access denial in a browser.
 
 These are the remaining browser gaps before production.

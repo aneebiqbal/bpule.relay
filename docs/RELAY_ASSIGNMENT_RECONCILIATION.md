@@ -84,3 +84,18 @@ silently.
 acknowledgements, duplicate coverage, or recreate targets. Regression coverage
 lives in `tests/assignment-writers.test.ts` and
 `tests/operator-visibility.live.test.ts`.
+
+## 7. Live lifecycle verification (2026-11-23)
+
+`vitest.live.config.mts` → `tests/operator-visibility.live.test.ts`, 8/8 passed
+against the real organization with self-cleaning fixtures:
+
+- a seated operator sees the channel even without an eligibility row;
+- adding an operator preserves every existing seat;
+- a transfer opened from an operator never strips the real owner;
+- a suspended channel is not executable and can be restored;
+- the scanner proposes a repair for an active plan with no primary;
+- drift is found and repaired without touching history;
+- removing one operator does not affect the other;
+- **saving an unchanged chain duplicates nothing** (seats and acknowledgements
+  byte-identical before and after).

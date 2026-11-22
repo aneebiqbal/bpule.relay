@@ -24,6 +24,7 @@ export interface RepWorkspaceData {
       targetId: string
       activityType: string
       targetCount: number
+      personalTargetCount: number
       completedCount: number
       remaining: number
       status: string
@@ -46,6 +47,7 @@ export interface RepWorkspaceData {
         targetId: string
         activityType: string
         targetCount: number
+        personalTargetCount: number
         completedCount: number
         remaining: number
         status: string

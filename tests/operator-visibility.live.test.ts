@@ -15,11 +15,12 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 import { listExecutableIdentitiesForRep, listExecutableIdentitiesForOrg } from '@/lib/coverage/access'
-import { addOperatorResponsibility, removeOperatorResponsibility, transferResponsibility, assignPrimaryResponsibility, readResponsibilityChain } from '@/lib/profiles/assignment'
+import { addOperatorResponsibility, removeOperatorResponsibility, transferResponsibility, assignPrimaryResponsibility, readResponsibilityChain, saveResponsibilityChain } from '@/lib/profiles/assignment'
 import { scanAssignmentDrift, repairAssignmentDrift } from '@/lib/profiles/reconcile'
 import { setIdentityLifecycle } from '@/lib/profiles/lifecycle'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { runWithRequestScope } from '@/lib/request-scope'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const AHMAD = 'aaaaaaaa-0000-0000-0000-000000000004'
@@ -155,14 +156,14 @@ describeLive('OPERATOR_VISIBILITY', () => {
     }).select('id').single()
     try {
       await addOperatorResponsibility(client, { orgId: ORG, identityId: identity.id, repId: AHMAD, actorRepId: ACTOR })
-      const before = await listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client))
+      const before = await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client)))
       expect(before.some((row) => row.id === identity.id)).toBe(true)
 
       const suspended = await setIdentityLifecycle(client, {
         organizationId: ORG, identityId: identity.id, to: 'SUSPENDED', reason: 'Credentials expired', actorRepId: ACTOR,
       })
       expect(suspended.ok).toBe(true)
-      const afterSuspend = await listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client))
+      const afterSuspend = await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client)))
       expect(afterSuspend.some((row) => row.id === identity.id)).toBe(false)
       const orgScope = await listExecutableIdentitiesForOrg(client, ORG, await businessDate(client))
       expect(orgScope.some((row) => row.id === identity.id)).toBe(false)
@@ -171,7 +172,7 @@ describeLive('OPERATOR_VISIBILITY', () => {
         organizationId: ORG, identityId: identity.id, to: 'ACTIVE', reason: '', actorRepId: ACTOR,
       })
       expect(restored.ok).toBe(true)
-      const afterRestore = await listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client))
+      const afterRestore = await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client)))
       expect(afterRestore.some((row) => row.id === identity.id)).toBe(true)
 
       // Invalid transition: archived cannot jump to inactive.
@@ -266,6 +267,40 @@ describeLive('OPERATOR_VISIBILITY', () => {
       expect(removed.some((row) => row.id === identityId)).toBe(false)
       const kept = await listExecutableIdentitiesForRep(client, ORG, DAWOOD, date)
       expect(kept.some((row) => row.id === identityId)).toBe(true)
+    } finally {
+      await cleanupFixture(client, profileId, identityId)
+    }
+  }, 180_000)
+
+  it('saving an unchanged chain duplicates nothing', async () => {
+    const client = serviceDbClient()
+    const { profileId, identityId } = await seedFixture(client)
+    try {
+      await assignPrimaryResponsibility(client, { orgId: ORG, identityId, repId: AHMAD, actorRepId: ACTOR, ensureTargets: false })
+      await addOperatorResponsibility(client, { orgId: ORG, identityId, repId: DAWOOD, actorRepId: ACTOR })
+
+      const count = async (table: string) =>
+        (await client.from(table).select('id', { count: 'exact', head: true }).eq('profile_id', profileId)).count ?? 0
+      const before = { seats: await count('profile_coverage'), acknowledgements: await count('responsibility_acknowledgements') }
+
+      const saved = await saveResponsibilityChain(client, {
+        orgId: ORG,
+        profileId,
+        identityId,
+        primaryRepId: AHMAD,
+        operators: [{ repId: DAWOOD, priority: 1 }],
+        backups: [],
+        actorRepId: ACTOR,
+        auditEventType: 'assignment_changed',
+        ensureTargets: false,
+      })
+      expect(saved.ok).toBe(true)
+
+      const after = { seats: await count('profile_coverage'), acknowledgements: await count('responsibility_acknowledgements') }
+      expect(after).toEqual(before)
+      const chain = await readResponsibilityChain(client, ORG, profileId)
+      expect(chain.primaryRepId).toBe(AHMAD)
+      expect(chain.operators.map((seat) => seat.repId)).toEqual([DAWOOD])
     } finally {
       await cleanupFixture(client, profileId, identityId)
     }

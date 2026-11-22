@@ -99,15 +99,16 @@ const COPY: Record<string, { title: string; short: string; hint: string; href: s
 }
 
 export function jobsFromTargets(
-  identities: Array<{ targets: Array<{ activityType: string; targetCount: number; completedCount: number; remaining: number }> }>,
+  identities: Array<{ targets: Array<{ activityType: string; targetCount: number; personalTargetCount?: number; completedCount: number; remaining: number }> }>,
 ): DailyJob[] {
   const totals = new Map<string, { done: number; goal: number }>()
   for (const identity of identities) {
     for (const target of identity.targets) {
-      if (target.targetCount <= 0) continue
+      const goal = target.personalTargetCount ?? target.targetCount
+      if (goal <= 0) continue
       const current = totals.get(target.activityType) ?? { done: 0, goal: 0 }
       current.done += target.completedCount
-      current.goal += target.targetCount
+      current.goal += goal
       totals.set(target.activityType, current)
     }
   }
