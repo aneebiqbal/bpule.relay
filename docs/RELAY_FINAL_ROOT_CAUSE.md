@@ -75,6 +75,19 @@ The 179 → 171 difference is exactly the 8 spurious Dawood units. The owner's
 "approximately 170" is consistent with 171; the remaining 1 unit is inside the
 owner's stated approximation, not a hidden record.
 
+Rep Today now uses the same rule. `getRepTodayAccountability` reads active
+allocations and seats and computes a per-target `personalTargetCount`
+(`allocation ?? (shared ? 0 : lane target)`), so a shared operator sees their
+allocation instead of the channel requirement:
+
+| Rep | Before (lane sum) | After (personal) |
+|---|---:|---:|
+| Ahmad | 148 | **81** |
+| Madiha | 180 | **90** |
+| Dawood | 149 | **0** |
+| Hassan | 97 | **0** |
+| Aneeb | 85 | **0** |
+
 ## 4. The canonical reconciliation (the number that actually matters)
 
 `src/lib/execution/accountability.ts` computes, from unique active lanes:
