@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext } from '@/lib/auth/organization'
-import { listJobs, listApplications, listDocuments, listSources, ensureJobMatches, type JobsView, type JobFilters } from '@/lib/job-discovery/service'
+import { listJobs, listApplications, listDocuments, listSources, listPreparedJobs, ensureJobMatches, type JobsView, type JobFilters, type PreparedCard } from '@/lib/job-discovery/service'
 import { JobsWorkspace } from '@/components/jobs/jobs-workspace'
 
 export const dynamic = 'force-dynamic'
 
-const VIEWS: JobsView[] = ['for-you', 'shortlist', 'latest', 'verified-remote', 'saved', 'applications', 'documents', 'sources']
+const VIEWS: JobsView[] = ['for-you', 'shortlist', 'prepared', 'latest', 'verified-remote', 'saved', 'applications', 'documents', 'sources']
 
 export default async function JobsPage({
   searchParams,
@@ -54,14 +54,19 @@ export default async function JobsPage({
   if ((view === 'for-you' || view === 'shortlist') && profileId) {
     await ensureJobMatches(store.getSupabaseClient(), auth.orgId, profileId)
   }
-  const { jobs, hasMore } = await listJobs(store.getSupabaseClient(), auth.orgId, {
-    view,
-    profileId,
-    search,
-    filters,
-    limit,
-    offset,
-  })
+  const prepared = view === 'prepared'
+    ? await listPreparedJobs(store.getSupabaseClient(), auth.orgId, profileId)
+    : []
+  const { jobs, hasMore } = view === 'prepared'
+    ? { jobs: [], hasMore: false }
+    : await listJobs(store.getSupabaseClient(), auth.orgId, {
+        view,
+        profileId,
+        search,
+        filters,
+        limit,
+        offset,
+      })
 
   const [applications, documents, sources] = await Promise.all([
     view === 'applications' ? listApplications(store.getSupabaseClient(), auth.orgId, profileId) : Promise.resolve([]),
@@ -83,6 +88,7 @@ export default async function JobsPage({
       activeProfileId={profileId ?? null}
       applications={applications}
       documents={documents}
+      prepared={prepared}
       sources={sources as unknown as Array<Record<string, unknown>>}
       isAdmin={Boolean(auth.isAdmin || auth.isOwner)}
     />

@@ -52,14 +52,19 @@ export function buildResumeData(profile: Profile, evidence: ProfileEvidence): Re
     ...evidence.proofCards.flatMap((card) => card.tags),
     ...evidence.portfolioProjects.flatMap((project) => project.technologies),
   ]
-  const proofClaims = evidence.proofCards
+  const claims = evidence.proofCards
     .filter((card) => Boolean(card.safeClaim && card.safeClaim.trim()) && (card.verified || card.strength === 'strong'))
-    .map((card) => ({ id: card.id, capability: card.capability, tags: card.tags, claim: card.safeClaim }))
+    .map((card) => ({ id: card.id, capability: card.capability, tags: card.tags, claim: card.safeClaim, sourceType: card.sourceType }))
+
+  // Employment bullets come only from client work that matches the role.
+  // Project / personal achievements are never attached to an employer.
+  const employmentClaims = claims.filter((card) => card.sourceType !== 'project')
+  const projectClaims = claims.filter((card) => card.sourceType === 'project')
 
   const assigned = new Set<string>()
   const experience = evidence.experience.map((item) => {
     const roleWords = `${item.role ?? ''} ${item.company ?? ''}`.toLowerCase().split(/\s+/).filter((word) => word.length > 3)
-    const matched = proofClaims.filter((card) => {
+    const matched = employmentClaims.filter((card) => {
       if (assigned.has(card.id)) return false
       const cardText = `${card.capability} ${card.tags.join(' ')}`.toLowerCase()
       return roleWords.some((word) => cardText.includes(word))
@@ -71,13 +76,31 @@ export function buildResumeData(profile: Profile, evidence: ProfileEvidence): Re
       period: formatPeriod(item.startDate, item.endDate),
       // Every bullet is a verbatim approved proof claim, never invented.
       bullets: matched.map((card) => card.claim),
+      bulletSources: matched.map((card) => card.id),
     }
   })
-  // Approved proof that does not name a role still belongs on the CV, attached
-  // to the most recent role so it stays traceable.
-  const remaining = proofClaims.filter((card) => !assigned.has(card.id))
-  if (remaining.length > 0 && experience.length > 0) {
-    experience[experience.length - 1].bullets.push(...remaining.slice(0, 3).map((card) => card.claim))
+  const achievements = [
+    ...employmentClaims.filter((card) => !assigned.has(card.id)).map((card) => card.claim),
+    ...projectClaims.map((card) => card.claim),
+  ]
+
+  // Flag overlapping employment claims instead of silently rendering them.
+  const warnings: string[] = []
+  const ranges = evidence.experience
+    .filter((item) => item.startDate)
+    .map((item) => ({
+      role: item.role ?? 'role',
+      start: new Date(item.startDate as string).getTime(),
+      end: item.endDate ? new Date(item.endDate).getTime() : Number.POSITIVE_INFINITY,
+    }))
+  for (let i = 0; i < ranges.length; i++) {
+    for (let j = i + 1; j < ranges.length; j++) {
+      const a = ranges[i]
+      const b = ranges[j]
+      if (Number.isFinite(a.start) && Number.isFinite(b.start) && a.start <= b.end && b.start <= a.end) {
+        warnings.push(`Overlapping employment dates: ${a.role} and ${b.role}.`)
+      }
+    }
   }
   const projects: ResumeProject[] = evidence.portfolioProjects.map((project) => ({
     name: project.title,
@@ -102,6 +125,9 @@ export function buildResumeData(profile: Profile, evidence: ProfileEvidence): Re
     education: [],
     certifications,
     links: extractPortfolioLinks(profile, evidence).map((link) => link.url),
+    location: profile.location ?? undefined,
+    achievements,
+    warnings,
   }
 }
 
@@ -281,7 +307,10 @@ export function buildCvDocument(profile: Profile, evidence: ProfileEvidence, job
     text: resumeToText(tailored),
     content: tailored as unknown as Record<string, unknown>,
     ats,
-    warnings: ats.missing.length > 0 ? [`Missing required skills: ${ats.missing.join(', ')}`] : [],
+    warnings: [
+      ...(tailored.warnings ?? []),
+      ...(ats.missing.length > 0 ? [`Missing required skills: ${ats.missing.join(', ')}`] : []),
+    ],
     unsupportedClaims: [],
     evidenceUsed: evidence.proofCards.slice(0, 6).map((card) => ({ id: card.id, title: card.capability, url: card.sourceReference })),
     attachments: extractPortfolioLinks(profile, evidence),
@@ -291,6 +320,9 @@ export function buildCvDocument(profile: Profile, evidence: ProfileEvidence, job
 export function resumeToText(resume: ResumeData): string {
   const lines: string[] = [resume.name, resume.title, '']
   if (resume.summary) lines.push(resume.summary, '')
+  if (resume.location || (resume.links && resume.links.length > 0)) {
+    lines.push([resume.location, ...(resume.links ?? [])].filter(Boolean).join(' · '), '')
+  }
   if (resume.skills.length > 0) lines.push(`Skills: ${resume.skills.join(', ')}`, '')
   if (resume.experience.length > 0) {
     lines.push('Experience')
@@ -310,6 +342,11 @@ export function resumeToText(resume: ResumeData): string {
     lines.push('')
   }
   if (resume.certifications.length > 0) lines.push(`Certifications: ${resume.certifications.join(', ')}`, '')
+  if (resume.achievements && resume.achievements.length > 0) {
+    lines.push('Selected achievements')
+    for (const achievement of resume.achievements) lines.push(`- ${achievement}`)
+    lines.push('')
+  }
   if (resume.links && resume.links.length > 0) {
     lines.push('Links')
     for (const link of resume.links) lines.push(`- ${link}`)

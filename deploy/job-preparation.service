@@ -1,0 +1,18 @@
+[Unit]
+Description=Relay application preparation sweep (verified high-fit jobs)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+WorkingDirectory=/home/deploy/apps/relay-current
+EnvironmentFile=/home/deploy/apps/relay/.env.production
+# Bounded: at most 3 packages per run. Idempotent; never submits anything.
+ExecStart=/bin/sh -c 'exec /usr/bin/curl -fsS --max-time 280 -H "Authorization: Bearer $CRON_SECRET" "http://127.0.0.1:3000/api/cron/job-preparation?limit=3"'
+TimeoutStartSec=290
+MemoryMax=260M
+CPUQuota=40%
+Nice=10
+IOSchedulingClass=idle
+Restart=no

@@ -71,7 +71,7 @@ export async function GET(
       'Confirm submission and record the outcome',
     ]
     const files = [
-      { name: 'cv.pdf', data: renderResumePdf(cvText, layout, paper) },
+      { name: 'cv.pdf', data: await renderResumePdf(cvText, layout, paper) },
       { name: 'cv.docx', data: renderResumeDocx(cvText, layout, paper) },
       { name: 'cover-letter.txt', data: Buffer.from(String(coverDoc?.text ?? ''), 'utf8') },
       { name: 'checklist.txt', data: Buffer.from(checklist.map((item, index) => `${index + 1}. ${item}`).join('\n'), 'utf8') },
@@ -107,7 +107,7 @@ export async function GET(
     })
   }
   const { renderResumePdf } = await import('@/lib/job-discovery/pdf')
-  const buffer = renderResumePdf(text, layout, paper)
+  const buffer = await renderResumePdf(text, layout, paper)
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {

@@ -37,22 +37,15 @@ generated CV:
 and content survive. The ATS panel reports the same coverage (100% in the
 browser run).
 
-## 4. Known limitation — non-Latin scripts in the PDF
+## 4. Non-Latin scripts in the PDF — FIXED in V6
 
-The hand-rolled PDF renderer uses a base-14 Helvetica font with a Latin-1 text
-layer. Accented Latin characters survive; **Urdu / Arabic / Devanagari
-degrade to `?`** in the PDF. The DOCX path preserves full Unicode.
+> **Superseded by V6.** The PDF renderer now embeds a subset Unicode font
+> (`assets/fonts/RelaySans.ttf`) via PDFKit; Urdu and Arabic render with
+> connected glyphs and correct RTL. See
+> `docs/RELAY_V6_RESUME_STUDIO_AND_AUTONOMOUS_PREPARATION.md` §3.
 
-```
-PDF : Ayesha Khan - ?????
-DOCX: Ayesha Khan — ایجنس
-```
-
-`shortcut: base-14 PDF font is Latin-1 only, non-Latin names degrade to "?".
-Upgrade by embedding a Unicode TTF (pdfkit / Noto) if a non-Latin name matters.`
-
-Most Relay profiles use a Latin display name, so the practical impact is low,
-but it is reported rather than hidden.
+V5 used a base-14 Helvetica font with a Latin-1 text layer, so Urdu / Arabic /
+Devanagari degraded to `?`. That limitation no longer applies.
 
 ## 5. DOCX validity
 

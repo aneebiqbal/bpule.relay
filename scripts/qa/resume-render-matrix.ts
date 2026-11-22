@@ -56,7 +56,7 @@ async function main() {
   for (const item of cases) {
     for (const layout of layouts) {
       for (const paper of papers) {
-        const pdf = renderResumePdf(item.text, layout, paper)
+        const pdf = await renderResumePdf(item.text, layout, paper)
         const extracted = await extractPdfText(pdf)
         const name = `${item.name}-${layout}-${paper}`
         fs.writeFileSync(`${outDir}/${name}.pdf`, pdf)

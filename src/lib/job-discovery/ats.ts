@@ -50,6 +50,7 @@ function resumeText(resume: ResumeData): string {
     resume.skills.join(', '),
     ...resume.experience.flatMap((item) => [`${item.role} ${item.company} ${item.period}`, ...item.bullets]),
     ...resume.projects.flatMap((project) => [project.name, project.description, ...project.technologies, project.outcome ?? '']),
+    ...(resume.achievements ?? []),
     ...resume.education,
     ...resume.certifications,
   ].join('\n')

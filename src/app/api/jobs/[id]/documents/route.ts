@@ -79,7 +79,7 @@ export async function POST(
   const cv = documents.find((doc) => doc.kind === 'cv')
   if (cv) {
     const resume = tailorResumeForJob(buildResumeData(profile, evidence), job)
-    const pdf = renderResumePdf(resumeToText(resume), layout, paper)
+    const pdf = await renderResumePdf(resumeToText(resume), layout, paper)
     const ats = await evaluateResumeAgainstJob(resume, job, pdf)
     const links = extractPortfolioLinks(profile, evidence)
     const assessment = assessResume({

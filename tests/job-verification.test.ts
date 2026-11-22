@@ -47,7 +47,7 @@ describe('verifyPendingJobs', () => {
   })
 
   it('never closes a job on an ambiguous check', async () => {
-    for (const status of [403, 429, 500, null]) {
+    for (const status of [500, null]) {
       const { db, updates } = fakeDb([{ id: 'j1', apply_url: 'https://employer.example.com/jobs/1' }])
       const result = await verifyPendingJobs(db, { now: NOW, limit: 1, fetchFn: fetchReturning(status) })
       expect(result.failed).toBe(1)
@@ -55,6 +55,19 @@ describe('verifyPendingJobs', () => {
       expect(updates[0].params[0]).toBe('recently_seen')
       const evidence = JSON.parse(String(updates[0].params[3]))
       expect(evidence.at(-1).type).toBe('check_failed')
+    }
+  })
+
+  it('records bot protection as blocked rather than confirmed or closed', async () => {
+    for (const status of [403, 429]) {
+      const { db, updates } = fakeDb([{ id: 'j1', apply_url: 'https://employer.example.com/jobs/1' }])
+      const result = await verifyPendingJobs(db, { now: NOW, limit: 1, fetchFn: fetchReturning(status) })
+      expect(result.failed).toBe(1)
+      expect(result.verified).toBe(0)
+      expect(result.closed).toBe(0)
+      expect(updates[0].params[0]).toBe('verification_blocked')
+      const evidence = JSON.parse(String(updates[0].params[3]))
+      expect(evidence.at(-1).type).toBe('verification_blocked')
     }
   })
 })

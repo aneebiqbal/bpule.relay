@@ -51,7 +51,7 @@ export interface AtsAssessment {
 }
 
 const BANNED = /\b(synergy|guru|ninja|rockstar|wizard|thought leader|results[- ]driven|go[- ]getter|detail[- ]oriented|self[- ]starter)\b/i
-const ACTION = /\b(built|led|designed|launched|shipped|scaled|reduced|improved|automated|delivered|migrated|owned|drove|created|implemented|optimized)\b/i
+const ACTION = /\b(built|rebuilt|designed|redesigned|engineered|architected|launched|shipped|scaled|reduced|improved|automated|delivered|migrated|owned|drove|created|implemented|optimized|developed|maintained|led|managed|mentored|coached|wrote|ran)\b/i
 
 function clamp(value: number, max: number): number
 function clamp(value: number, min: number, max: number): number
@@ -117,7 +117,7 @@ export function scoreDocumentQuality(input: AtsInput): AtsAssessment['documentQu
   })
   if (resume.experience.length > 0 && dated < resume.experience.length) issues.push('Every role needs a dated period.')
 
-  const bullets = resume.experience.flatMap((item) => item.bullets)
+  const bullets = [...resume.experience.flatMap((item) => item.bullets), ...(resume.achievements ?? [])]
   const actionBullets = bullets.filter((bullet) => ACTION.test(bullet)).length
   const bannedHits = bullets.filter((bullet) => BANNED.test(bullet)).length
   const readabilityScore = bullets.length === 0
@@ -131,14 +131,16 @@ export function scoreDocumentQuality(input: AtsInput): AtsAssessment['documentQu
   })
   if (bullets.length > 0 && actionBullets < bullets.length / 2) issues.push('Rewrite bullets to start with action verbs.')
 
-  const contactScore = (contact.email ? 5 : 0) + (contact.phone ? 3 : 0) + (contact.links.length > 0 ? 4 : 0) + (contact.location ? 3 : 0)
+  // A remote CV's primary contact signals are a verifiable location and a
+  // portfolio / profile link; email and phone are bonuses where Relay has them.
+  const contactScore = (contact.links.length > 0 ? 6 : 0) + (contact.location ? 4 : 0) + (contact.email ? 3 : 0) + (contact.phone ? 2 : 0)
   dimensions.push({
     label: 'Contact & links',
     score: clamp(contactScore, 0, 15),
     max: 15,
-    note: `${contact.email ? 'email' : 'no email'} · ${contact.phone ? 'phone' : 'no phone'} · ${contact.links.length} links`,
+    note: `${contact.location ? 'location' : 'no location'} · ${contact.email ? 'email' : 'no email'} · ${contact.links.length} links`,
   })
-  if (!contact.email && !contact.phone && contact.links.length === 0) issues.push('Add a valid contact channel or portfolio link.')
+  if (contact.links.length === 0 && !contact.location) issues.push('Add a verifiable location or portfolio link.')
 
   let extractionScore = 12
   if (extraction) {
@@ -171,7 +173,10 @@ export function scoreJobMatch(input: AtsInput): AtsAssessment['jobMatch'] {
     else strengths.push(skill)
   }
 
-  const experienceText = resume.experience.flatMap((item) => [item.role, item.company, ...item.bullets]).join(' ').toLowerCase()
+  const experienceText = [
+    ...resume.experience.flatMap((item) => [item.role, item.company, ...item.bullets]),
+    ...(resume.achievements ?? []),
+  ].join(' ').toLowerCase()
   const responsibilityHits = requirements.responsibilities.filter((line) => {
     const words = line.toLowerCase().split(/\s+/).filter((word) => word.length > 4)
     return words.length > 0 && words.filter((word) => experienceText.includes(word)).length / words.length >= 0.25
@@ -189,8 +194,9 @@ export function scoreJobMatch(input: AtsInput): AtsAssessment['jobMatch'] {
 
   const evidencedRoles = resume.experience.filter((item) => item.bullets.length > 0).length
   const projectsWithOutcome = resume.projects.filter((project) => Boolean(project.outcome)).length
-  const evidenceScore = clamp((resume.experience.length > 0 ? (evidencedRoles / resume.experience.length) * 9 : 0) + Math.min(projectsWithOutcome, 3) * 2, 0, 15)
-  dimensions.push({ label: 'Evidence quality', score: evidenceScore, max: 15, note: `${evidencedRoles} evidenced roles · ${projectsWithOutcome} projects with outcomes` })
+  const achievementCount = (resume.achievements ?? []).length
+  const evidenceScore = clamp((resume.experience.length > 0 ? (evidencedRoles / resume.experience.length) * 9 : 0) + Math.min(projectsWithOutcome + achievementCount, 3) * 2, 0, 15)
+  dimensions.push({ label: 'Evidence quality', score: evidenceScore, max: 15, note: `${evidencedRoles} evidenced roles · ${projectsWithOutcome} projects with outcomes · ${achievementCount} selected achievements` })
 
   const domainHits = requirements.domains.filter((domain) => experienceText.includes(domain)).length
   const domainScore = requirements.domains.length > 0 ? clamp((domainHits / requirements.domains.length) * 10, 0, 10) : 5

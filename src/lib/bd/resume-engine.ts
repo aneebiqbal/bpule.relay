@@ -14,6 +14,12 @@ export interface ResumeData {
   certifications: string[]
   /** Verified portfolio / profile URLs rendered as clickable links. */
   links?: string[]
+  /** Location shown in the contact line. */
+  location?: string
+  /** Approved achievements that are NOT attributed to an employer. */
+  achievements?: string[]
+  /** Data-quality warnings (for example overlapping employment dates). */
+  warnings?: string[]
 }
 
 export interface ResumeExperience {
@@ -21,6 +27,8 @@ export interface ResumeExperience {
   role: string
   period: string
   bullets: string[]
+  /** Proof-card ids for each bullet, in the same order as `bullets`. */
+  bulletSources?: string[]
 }
 
 export interface ResumeProject {

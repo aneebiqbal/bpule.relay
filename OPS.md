@@ -308,6 +308,31 @@ Full V5 record: `docs/RELAY_V5_CV_ARCHITECTURE.md`,
 
 ---
 
+## 9f. Application preparation sweep
+
+A fourth systemd timer calls `GET /api/cron/job-preparation` with `CRON_SECRET`.
+For each authorized profile it selects the strongest verified, eligible,
+high-fit job, builds the versioned master resume, tailors it, renders and
+assesses it, stores the package in `prepared_jobs` and notifies the operator
+once. Idempotent by `job + profile + content_hash + template + paper`.
+
+Units: `deploy/job-preparation.{service,timer}` (installed by
+`deploy/install-job-discovery.sh`). Surface: `/jobs?view=prepared`.
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
+  "http://127.0.0.1:3000/api/cron/job-preparation?dryRun=1"
+sudo systemctl start job-preparation.service
+journalctl -u job-preparation.service -e
+```
+
+`master_resumes` is a versioned, job-independent derived copy of the profile
+evidence; safe to rebuild.
+
+Full V6 record: `docs/RELAY_V6_RESUME_STUDIO_AND_AUTONOMOUS_PREPARATION.md`.
+
+---
+
 ## 10. Verification
 
 After every deploy:

@@ -12,7 +12,7 @@ import type { JobEligibility } from './eligibility'
 import { computeJobMatch, MATCH_SCORE_VERSION, type MatchProfile } from './match'
 import type { DiscoveryJob } from './types'
 
-export type JobsView = 'for-you' | 'shortlist' | 'latest' | 'verified-remote' | 'saved' | 'applications' | 'documents' | 'sources'
+export type JobsView = 'for-you' | 'shortlist' | 'prepared' | 'latest' | 'verified-remote' | 'saved' | 'applications' | 'documents' | 'sources'
 
 export interface JobCard {
   id: string
@@ -533,6 +533,53 @@ export async function saveDocuments(
       ats: doc.ats ?? null,
     })
   }
+}
+
+export interface PreparedCard {
+  id: string
+  jobId: string
+  profileId: string
+  title: string
+  company: string | null
+  matchScore: number | null
+  matchCategory: string | null
+  documentQuality: number | null
+  jobMatch: number | null
+  readiness: number | null
+  status: string
+  createdAt: string
+  documents: Array<Record<string, unknown>>
+}
+
+export async function listPreparedJobs(db: DbClient, orgId: string, profileId?: string): Promise<PreparedCard[]> {
+  const result = await db.raw!<Array<Record<string, unknown>>>(
+    `select p.id, p.job_id, p.profile_id, p.match_score, p.match_category, p.status, p.created_at,
+            p.documents, p.assessment, j.title, j.company
+     from prepared_jobs p
+     join jobs j on j.id = p.job_id
+     where p.organization_id = ? ${profileId ? 'and p.profile_id = ?' : ''}
+     order by p.created_at desc limit 100`,
+    profileId ? [orgId, profileId] : [orgId],
+  )
+  if (result.error) throw new Error(result.error.message)
+  return (result.data ?? []).map((row) => {
+    const assessment = row.assessment as { documentQuality?: { score?: number }; jobMatch?: { score?: number }; readiness?: number } | null
+    return {
+      id: String(row.id),
+      jobId: String(row.job_id),
+      profileId: String(row.profile_id),
+      title: String(row.title ?? ''),
+      company: (row.company as string | null) ?? null,
+      matchScore: (row.match_score as number | null) ?? null,
+      matchCategory: (row.match_category as string | null) ?? null,
+      documentQuality: assessment?.documentQuality?.score ?? null,
+      jobMatch: assessment?.jobMatch?.score ?? null,
+      readiness: assessment?.readiness ?? null,
+      status: String(row.status ?? 'ready'),
+      createdAt: String(row.created_at ?? ''),
+      documents: Array.isArray(row.documents) ? row.documents as Array<Record<string, unknown>> : [],
+    }
+  })
 }
 
 export interface SourceHealthRow {

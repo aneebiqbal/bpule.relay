@@ -105,8 +105,13 @@ export async function verifyPendingJobs(db: DbClient, options: VerifyOptions = {
         status = { verification_status: 'closed', closed_at: now.toISOString(), last_verified_at: now.toISOString() }
         entry = { at: now.toISOString(), type: 'closed', http_status: outcome.status, final_url: outcome.finalUrl }
         result.closed++
+      } else if (outcome.status === 403 || outcome.status === 429) {
+        // Bot protection: reachable, but we cannot confirm the job is open.
+        status = { verification_status: 'verification_blocked', last_verified_at: now.toISOString() }
+        entry = { at: now.toISOString(), type: 'verification_blocked', http_status: outcome.status, final_url: outcome.finalUrl }
+        result.failed++
       } else {
-        // 403/429/5xx/timeouts are ambiguous. Leave the job recently_seen.
+        // 5xx / timeouts / network: reachable but unconfirmed. Never close.
         status = { verification_status: 'recently_seen', last_verified_at: now.toISOString() }
         entry = { at: now.toISOString(), type: 'check_failed', http_status: outcome.status, final_url: outcome.finalUrl }
         result.failed++

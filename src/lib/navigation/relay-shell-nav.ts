@@ -100,6 +100,7 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
     visible: everyone,
     secondary: [
       { id: 'shortlist', label: 'Ready Today', href: '/jobs?view=shortlist', group: 'Discover' },
+      { id: 'prepared', label: 'Prepared', href: '/jobs?view=prepared', group: 'Pipeline' },
       { id: 'for-you', label: 'For You', href: '/jobs?view=for-you', group: 'Discover' },
       { id: 'latest', label: 'Latest', href: '/jobs?view=latest', group: 'Discover' },
       { id: 'verified-remote', label: 'Verified Remote', href: '/jobs?view=verified-remote', group: 'Discover' },

@@ -97,10 +97,39 @@ describe('ATS Resume Studio documents', () => {
     expect(resume.certifications).toEqual([])
   })
 
-  it('populates experience bullets from approved proof claims only', () => {
+  it('never attaches unrelated claims to an employer', () => {
     const resume = buildResumeData(profile, evidence)
-    expect(resume.experience[0].bullets).toContain('Integrated a payment provider and reduced failed payments.')
+    expect(resume.experience[0].bullets).toEqual([])
+    expect(resume.achievements).toContain('Integrated a payment provider and reduced failed payments.')
     expect(resumeToText(resume)).not.toMatch(/\d+\+?\s*years/)
+  })
+
+  it('attaches a matching client-work claim to the role with a source id', () => {
+    const matching: ProfileEvidence = {
+      ...evidence,
+      proofCards: [{
+        ...evidence.proofCards[0],
+        capability: 'Backend Engineer work',
+        tags: ['Backend', 'Engineer'],
+        safeClaim: 'Built the backend.',
+      }],
+    }
+    const resume = buildResumeData(profile, matching)
+    expect(resume.experience[0].bullets).toContain('Built the backend.')
+    expect(resume.experience[0].bulletSources).toEqual([evidence.proofCards[0].id])
+    expect(resume.achievements ?? []).not.toContain('Built the backend.')
+  })
+
+  it('flags overlapping employment dates instead of hiding them', () => {
+    const overlapping: ProfileEvidence = {
+      ...evidence,
+      experience: [
+        { id: 'e1', role: 'Engineer A', company: 'X', startDate: '2020-01-01', endDate: '2022-01-01', isCurrent: false },
+        { id: 'e2', role: 'Engineer B', company: 'Y', startDate: '2021-01-01', endDate: null, isCurrent: true },
+      ],
+    }
+    const resume = buildResumeData(profile, overlapping)
+    expect(resume.warnings?.some((line) => /Overlapping employment dates/.test(line))).toBe(true)
   })
 
   it('never leaks another profile evidence into the resume', () => {
@@ -126,22 +155,31 @@ describe('ATS Resume Studio documents', () => {
   it('renders a PDF with a real text layer and re-extracts it', async () => {
     const resume = tailorResumeForJob(buildResumeData(profile, evidence), job)
     const text = resumeToText(resume)
-    const pdf = renderResumePdf(text)
-    expect(pdf.subarray(0, 8).toString('latin1')).toBe('%PDF-1.4')
+    const pdf = await renderResumePdf(text)
+    expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-')
     const extracted = await extractPdfText(pdf)
     expect(extracted).toContain('Ada Lovelace')
     expect(extracted).toContain('Senior Backend Engineer')
     expect(extracted).toContain('Realtime dashboard')
   })
 
-  it('renders A4 with the correct media box and clickable links', () => {
+  it('renders A4 with the correct media box and clickable links', async () => {
     const resume = tailorResumeForJob(buildResumeData(profile, evidence), job)
     const withLinks = { ...resume, links: ['https://github.com/ada'] }
-    const pdf = renderResumePdf(resumeToText(withLinks), 'ultra', 'a4')
+    const pdf = await renderResumePdf(resumeToText(withLinks), 'ultra', 'a4')
     const raw = pdf.toString('latin1')
     expect(raw).toContain('/MediaBox [0 0 595 842]')
     expect(raw).toContain('/Subtype /Link')
     expect(raw).toContain('https://github.com/ada')
+  })
+
+  it('embeds a Unicode font so Urdu and Arabic render with real glyphs', async () => {
+    const pdf = await renderResumePdf('Ayesha Khan — ایجنس\nمهندس برمجيات\nSkills: React, پایتون, Français', 'ultra', 'a4')
+    const extracted = await extractPdfText(pdf)
+    expect(extracted).toContain('ایجنس')
+    expect(extracted).toContain('پایتون')
+    expect(extracted).toContain('Français')
+    expect(extracted).not.toContain('�')
   })
 
   it('renders a DOCX zip that contains the OOXML parts', () => {
@@ -155,7 +193,7 @@ describe('ATS Resume Studio documents', () => {
 
   it('evaluates ATS readiness and separates matched, missing and unverified', async () => {
     const resume = tailorResumeForJob(buildResumeData(profile, evidence), job)
-    const pdf = renderResumePdf(resumeToText(resume))
+    const pdf = await renderResumePdf(resumeToText(resume))
     const evaluation = await evaluateResumeAgainstJob(resume, job, pdf)
     expect(evaluation.matchedRequirements.map((item) => item.text)).toEqual(expect.arrayContaining(['Node.js', 'PostgreSQL']))
     expect(evaluation.missingRequirements.map((item) => item.text)).toContain('Kubernetes')
