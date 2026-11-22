@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DbClient } from '@/lib/db/types'
-import { verifyPendingJobs } from '@/lib/job-discovery/verify'
+import { verifyPendingJobs, isJobSpecificUrl } from '@/lib/job-discovery/verify'
 
 const NOW = new Date('2026-11-20T12:00:00.000Z')
 
@@ -24,6 +24,20 @@ function fetchReturning(status: number | null): typeof fetch {
     return new Response('ok', { status })
   }) as typeof fetch
 }
+
+function fetchWithUrl(status: number, url: string): typeof fetch {
+  return (async () => ({ status, url, body: { cancel: () => Promise.resolve() } })) as unknown as typeof fetch
+}
+
+describe('isJobSpecificUrl', () => {
+  it('distinguishes a job page from a generic careers index', () => {
+    expect(isJobSpecificUrl('https://employer.example.com/jobs/123')).toBe(true)
+    expect(isJobSpecificUrl('https://employer.example.com/companies/acme/jobs/backend-engineer')).toBe(true)
+    expect(isJobSpecificUrl('https://employer.example.com/careers')).toBe(false)
+    expect(isJobSpecificUrl('https://employer.example.com/jobs')).toBe(false)
+    expect(isJobSpecificUrl('https://employer.example.com/')).toBe(false)
+  })
+})
 
 describe('verifyPendingJobs', () => {
   it('promotes a live listing to verified_open and records the final destination', async () => {
@@ -56,6 +70,15 @@ describe('verifyPendingJobs', () => {
       const evidence = JSON.parse(String(updates[0].params[3]))
       expect(evidence.at(-1).type).toBe('check_failed')
     }
+  })
+
+  it('never calls a generic careers page confirmed open', async () => {
+    const { db, updates } = fakeDb([{ id: 'j1', apply_url: 'https://employer.example.com/careers' }])
+    const result = await verifyPendingJobs(db, { now: NOW, limit: 1, fetchFn: fetchWithUrl(200, 'https://employer.example.com/careers') })
+    expect(result.verified).toBe(0)
+    expect(updates[0].params[0]).toBe('reachable_unconfirmed')
+    const evidence = JSON.parse(String(updates[0].params[3]))
+    expect(evidence.at(-1).type).toBe('reachable_unconfirmed')
   })
 
   it('records bot protection as blocked rather than confirmed or closed', async () => {

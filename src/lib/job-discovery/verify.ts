@@ -32,6 +32,25 @@ interface Candidate {
 
 const USER_AGENT = 'RelayJobVerification/1.0 (+https://relay.bpulse.dev)'
 
+const GENERIC_LAST_SEGMENT = /^(careers?|jobs?|join|work-with-us|employment|openings|vacancies|hiring)$/i
+
+/**
+ * A reachable page is only proof of an open job when it is the job's own page,
+ * not a generic careers / jobs index. Redirects to a listing are recorded as
+ * "reachable but unconfirmed".
+ */
+export function isJobSpecificUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    const segments = parsed.pathname.split('/').filter(Boolean)
+    const last = segments[segments.length - 1] ?? ''
+    if (GENERIC_LAST_SEGMENT.test(last)) return false
+    return segments.length >= 2
+  } catch {
+    return false
+  }
+}
+
 function appendEvidence(existing: unknown, entry: Record<string, unknown>): unknown[] {
   const list = Array.isArray(existing) ? [...existing] : []
   list.push(entry)
@@ -98,9 +117,15 @@ export async function verifyPendingJobs(db: DbClient, options: VerifyOptions = {
       let entry: Record<string, unknown>
 
       if (outcome.status !== null && outcome.status >= 200 && outcome.status < 400) {
-        status = { verification_status: 'verified_open', closed_at: null, last_verified_at: now.toISOString() }
-        entry = { at: now.toISOString(), type: 'verified_open', http_status: outcome.status, final_url: outcome.finalUrl }
-        result.verified++
+        if (isJobSpecificUrl(outcome.finalUrl)) {
+          status = { verification_status: 'verified_open', closed_at: null, last_verified_at: now.toISOString() }
+          entry = { at: now.toISOString(), type: 'verified_open', http_status: outcome.status, final_url: outcome.finalUrl }
+          result.verified++
+        } else {
+          status = { verification_status: 'reachable_unconfirmed', last_verified_at: now.toISOString() }
+          entry = { at: now.toISOString(), type: 'reachable_unconfirmed', http_status: outcome.status, final_url: outcome.finalUrl }
+          result.failed++
+        }
       } else if (outcome.status === 404 || outcome.status === 410) {
         status = { verification_status: 'closed', closed_at: now.toISOString(), last_verified_at: now.toISOString() }
         entry = { at: now.toISOString(), type: 'closed', http_status: outcome.status, final_url: outcome.finalUrl }
