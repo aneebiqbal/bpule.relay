@@ -41,16 +41,20 @@ await setClock(BEFORE)
 await page.goto(`${base}/dashboard`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(3000)
 const beforeText = await page.locator('body').innerText()
-const beforeDate = (beforeText.match(/Today · ([A-Za-z]+ \d{1,2}, \d{4})/) ?? [])[1] ?? null
+const beforeDate = (beforeText.match(/TODAY · ([A-Z]{3}, [A-Z]{3} \d{1,2})/) ?? [])[1] ?? null
 log(`before: business date label = ${beforeDate}`)
 await page.screenshot({ path: `${outDir}/06-midnight-before.png`, fullPage: false })
 
 // Advance past local midnight WITHOUT reloading the page.
 await setClock(AFTER)
-// The shell schedules a refresh at the boundary (capped at 60s); give it time.
-await page.waitForTimeout(12000)
-const afterText = await page.locator('body').innerText()
-const afterDate = (afterText.match(/Today · ([A-Za-z]+ \d{1,2}, \d{4})/) ?? [])[1] ?? null
+// The shell re-checks on a capped timer and on focus; poll for the change.
+let afterDate = null
+for (let attempt = 0; attempt < 15; attempt += 1) {
+  await page.waitForTimeout(5000)
+  const text = await page.locator('body').innerText()
+  afterDate = (text.match(/TODAY · ([A-Z]{3}, [A-Z]{3} \d{1,2})/) ?? [])[1] ?? null
+  if (afterDate && afterDate !== beforeDate) break
+}
 log(`after: business date label = ${afterDate}`)
 await page.screenshot({ path: `${outDir}/07-midnight-after.png`, fullPage: false })
 

@@ -59,7 +59,7 @@ export function sumTargets(rows: RepWorkspaceIdentityTargets[]) {
       for (const t of row.targets) {
         acc.totalTarget += t.personalTargetCount ?? t.targetCount
         acc.totalCompleted += t.completedCount
-        acc.totalRemaining += Math.max(0, (t.personalTargetCount ?? t.targetCount) - t.completedCount)
+        acc.totalRemaining += t.remaining
       }
       return acc
     },

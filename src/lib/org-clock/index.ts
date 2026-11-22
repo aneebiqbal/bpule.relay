@@ -18,7 +18,7 @@ import {
 } from './policy'
 
 export * from './policy'
-export { currentInstant, setTestNow, testClockEnabled } from './clock'
+export { clearTestNow, currentInstant, setTestNow, testClockEnabled } from './clock'
 
 const MS_PER_MINUTE = 60_000
 const MS_PER_DAY = 86_400_000
