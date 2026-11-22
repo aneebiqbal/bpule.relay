@@ -20,6 +20,7 @@ import { scanAssignmentDrift, repairAssignmentDrift } from '@/lib/profiles/recon
 import { setIdentityLifecycle } from '@/lib/profiles/lifecycle'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { runWithRequestScope } from '@/lib/request-scope'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const AHMAD = 'aaaaaaaa-0000-0000-0000-000000000004'
@@ -155,14 +156,14 @@ describeLive('OPERATOR_VISIBILITY', () => {
     }).select('id').single()
     try {
       await addOperatorResponsibility(client, { orgId: ORG, identityId: identity.id, repId: AHMAD, actorRepId: ACTOR })
-      const before = await listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client))
+      const before = await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client)))
       expect(before.some((row) => row.id === identity.id)).toBe(true)
 
       const suspended = await setIdentityLifecycle(client, {
         organizationId: ORG, identityId: identity.id, to: 'SUSPENDED', reason: 'Credentials expired', actorRepId: ACTOR,
       })
       expect(suspended.ok).toBe(true)
-      const afterSuspend = await listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client))
+      const afterSuspend = await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client)))
       expect(afterSuspend.some((row) => row.id === identity.id)).toBe(false)
       const orgScope = await listExecutableIdentitiesForOrg(client, ORG, await businessDate(client))
       expect(orgScope.some((row) => row.id === identity.id)).toBe(false)
@@ -171,7 +172,7 @@ describeLive('OPERATOR_VISIBILITY', () => {
         organizationId: ORG, identityId: identity.id, to: 'ACTIVE', reason: '', actorRepId: ACTOR,
       })
       expect(restored.ok).toBe(true)
-      const afterRestore = await listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client))
+      const afterRestore = await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, AHMAD, await businessDate(client)))
       expect(afterRestore.some((row) => row.id === identity.id)).toBe(true)
 
       // Invalid transition: archived cannot jump to inactive.
