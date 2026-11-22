@@ -283,7 +283,7 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 lg:py-12">
-      <Link href="/jobs?view=for-you" className="mb-6 inline-flex items-center gap-1.5 text-sm text-graphite transition-colors hover:text-ink">
+      <Link href="/jobs?view=shortlist" className="mb-6 inline-flex items-center gap-1.5 text-sm text-graphite transition-colors hover:text-ink">
         <ArrowLeft className="size-4" aria-hidden /> Back to Jobs
       </Link>
 
