@@ -13,6 +13,8 @@ import { ActiveIdentityProvider } from "@/components/workspace/active-identity-p
 import { ACTIVE_IDENTITY_COOKIE, isIdentityId, type WorkspaceIdentity } from "@/lib/workspace/active-identity";
 import { loadSidebarCounts, type SidebarCounts } from "@/lib/operations/sidebar-counts";
 import { loadOperatingPolicy } from "@/lib/org-clock/load";
+import { currentInstant, orgDate } from "@/lib/org-clock";
+import { BusinessDayRefresh } from "@/components/clock/business-day-refresh";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,10 @@ export default async function AppLayout({
     redirect("/login");
   }
   if (!user.profile) redirect("/onboarding");
+
+  // The organization clock drives every "today" on every page. Read once here
+  // so the shell can keep an open session on the current business date.
+  const policy = await loadOperatingPolicy(user.organization.id);
 
   // The store, the auth context and the identity list are independent: run
   // them concurrently instead of as a sequential waterfall (BUG-001).
@@ -150,6 +156,7 @@ export default async function AppLayout({
         }}
       />
       <AnalyticsProvider />
+      <BusinessDayRefresh timezone={policy.timezone} businessDate={orgDate(currentInstant(), policy.timezone)} />
       <AppIdentifyWrapper
         userId={user.rep.id}
         orgId={user.organization.id}

@@ -19,6 +19,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { JobCard } from '@/lib/job-discovery/service'
 import { isSafeApplicationUrl } from '@/lib/job-discovery/url'
+import { SCORE_METRICS } from '@/lib/job-discovery/score-contract'
+import { ScreeningAnswers } from '@/components/jobs/screening-answers'
 
 interface ProfileOption {
   id: string
@@ -458,21 +460,21 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                 {ats && (
                   <div className="rounded-xl bg-bone p-3 ring-1 ring-line">
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-stone">ATS readiness (internal heuristic)</p>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-stone">{SCORE_METRICS.internal_readiness.label} (heuristic)</p>
                       <span className="text-sm font-semibold text-ink">{String(ats.score)}/100</span>
                     </div>
                     {(ats as Record<string, unknown>).readiness !== undefined && (
                       <div className="mb-2 grid grid-cols-3 gap-2 text-center">
                         <div className="rounded-lg bg-bone p-2 ring-1 ring-line">
-                          <p className="text-[10px] uppercase tracking-wide text-stone">Document quality</p>
+                          <p className="text-[10px] uppercase tracking-wide text-stone">{SCORE_METRICS.resume_quality.shortLabel}</p>
                           <p className="text-sm font-semibold text-ink">{Number((ats.documentQuality as Record<string, unknown>)?.score ?? 0)}/100</p>
                         </div>
                         <div className="rounded-lg bg-bone p-2 ring-1 ring-line">
-                          <p className="text-[10px] uppercase tracking-wide text-stone">Job match</p>
+                          <p className="text-[10px] uppercase tracking-wide text-stone">{SCORE_METRICS.resume_to_job_coverage.shortLabel}</p>
                           <p className="text-sm font-semibold text-ink">{Number((ats.jobMatch as Record<string, unknown>)?.score ?? 0)}/100</p>
                         </div>
                         <div className="rounded-lg bg-bone p-2 ring-1 ring-line">
-                          <p className="text-[10px] uppercase tracking-wide text-stone">ATS readiness</p>
+                          <p className="text-[10px] uppercase tracking-wide text-stone">{SCORE_METRICS.internal_readiness.shortLabel}</p>
                           <p className="text-sm font-semibold text-ink">{Number((ats as Record<string, unknown>).readiness ?? 0)}/100</p>
                         </div>
                       </div>
@@ -516,6 +518,7 @@ export function JobDetail({ job, detail, profiles, activeProfileId }: { job: Job
                     </div>
                   )
                 })()}
+                <ScreeningAnswers jobId={job.id} profileId={profileId} />
                 {preview && documents.some((doc) => doc.kind === 'cv') && profileId && (
                   <div className="overflow-hidden rounded-xl bg-bone ring-1 ring-line">
                     <iframe

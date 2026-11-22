@@ -14,6 +14,7 @@ import type { ReconcileReport, ReconcileFinding, ReconcileKind } from '@/lib/pro
 const LABELS: Record<ReconcileKind, string> = {
   eligibility_without_seat: 'Eligibility without a seat',
   seat_without_eligibility: 'Seat without eligibility',
+  allocation_without_seat: 'Allocation without a seat',
   multiple_active_primaries: 'Multiple active primaries',
   active_plan_without_primary: 'Active plan without a primary',
   seat_on_archived_identity: 'Seat on an archived channel',

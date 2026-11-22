@@ -31,6 +31,7 @@ import { loadOutcomeEventCounts } from '@/lib/operations/outcome-events'
 import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
 import { groupMetrics, identityResolver, PERFORMANCE_ACTION_TYPES, type PerfEvent } from '@/lib/operations/performance'
 import { getInboxCountsForOrg } from '@/lib/operations/inbox-counts'
+import { getOrganizationDailySummary } from '@/lib/execution/accountability'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { taskCompletionCountsSql } from '@/lib/analytics/aggregates'
 import { buildAdminExecutionByRep } from '@/lib/admin/v3-command-present'
@@ -102,6 +103,10 @@ function emptyAdmin(orgName: string, isOwner: boolean): AdminCommandCenterData {
     },
     teamTarget: 0,
     teamCompleted: 0,
+    orgRequirement: 0,
+    orgTracked: 0,
+    orgAssigned: 0,
+    orgUnallocated: 0,
     profileExecution: [],
     movement: emptyMovement(),
     yesterday: emptyYesterday(),
@@ -141,7 +146,7 @@ export async function loadAdminCommandCenter(): Promise<{
     const weekStart = new Date(dayRange.start)
     weekStart.setUTCDate(weekStart.getUTCDate() - 7)
 
-    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, waitingAndTransfers, unreadTaskUpdates, todayOutcomes, weekOutcomes, yesterdayAccountabilityResult, todayNewLeadsResult, yesterdayNewLeadsResult, yesterdayEventsResult, yesterdayOutcomes, todayApplicationsResult, inboxCounts] =
+    const [teamDay, teamLiveFull, leadsResult, identitiesResult, assignmentsResult, profileEventsResult, activityResult, repsResult, overdueTasksByRep, unassignedTasks, waitingAndTransfers, unreadTaskUpdates, todayOutcomes, weekOutcomes, yesterdayAccountabilityResult, todayNewLeadsResult, yesterdayNewLeadsResult, yesterdayEventsResult, yesterdayOutcomes, todayApplicationsResult, inboxCounts, accountabilitySummary] =
       await perfTrace('admin:main-batch', () => Promise.all([
         loadTeamDay(),
         loadTeamLive(ctx.orgId),
@@ -227,6 +232,11 @@ export async function loadAdminCommandCenter(): Promise<{
           .gte('submitted_at', dayRange.start)
           .lt('submitted_at', dayRange.end),
         getInboxCountsForOrg(supabase, { orgId: ctx.orgId }).catch(() => null),
+        getOrganizationDailySummary(supabase, {
+          orgId: ctx.orgId,
+          businessDate,
+          timezone: policy.timezone,
+        }).catch(() => null),
       ]))
 
     const allowed = new Set(teamDay.reps.map((r) => r.repId))
@@ -300,8 +310,15 @@ export async function loadAdminCommandCenter(): Promise<{
       return band === 'STRONG' || band === 'WORTH_PURSUING'
     }).length
 
-    const teamTarget = teamLive.people.reduce((sum, person) => sum + person.totalTarget, 0)
-    const teamCompleted = teamLive.people.reduce((sum, person) => sum + person.totalCompleted, 0)
+    const canonicalSummary = accountabilitySummary ?? null
+    // The canonical accountability projection is the authority. The teamLive sum
+    // is only a fallback for a failed read, and is labelled as such by the UI.
+    const teamTarget = canonicalSummary
+      ? canonicalSummary.requirement
+      : teamLive.people.reduce((sum, person) => sum + person.totalTarget, 0)
+    const teamCompleted = canonicalSummary
+      ? canonicalSummary.completed
+      : teamLive.people.reduce((sum, person) => sum + person.totalCompleted, 0)
 
     const movement: AdminMovement = {
       newLeadsToday: todayNewLeadsResult.count ?? 0,
@@ -434,6 +451,10 @@ export async function loadAdminCommandCenter(): Promise<{
       yesterday,
       teamTarget,
       teamCompleted,
+      orgRequirement: canonicalSummary?.requirement ?? teamTarget,
+      orgTracked: canonicalSummary?.tracked ?? teamTarget,
+      orgAssigned: canonicalSummary?.assigned ?? 0,
+      orgUnallocated: canonicalSummary?.unallocated ?? 0,
       inboxCounts: inboxCounts ?? undefined,
     })
 

@@ -6,7 +6,10 @@ import { JobsWorkspace } from '@/components/jobs/jobs-workspace'
 
 export const dynamic = 'force-dynamic'
 
-const VIEWS: JobsView[] = ['for-you', 'shortlist', 'prepared', 'latest', 'verified-remote', 'saved', 'applications', 'documents', 'sources']
+// The primary workspace: five action-oriented views plus a broader discovery
+// feed. The legacy views (`for-you`, `verified-remote`, `saved`, `applications`,
+// `documents`) remain valid deep links but are no longer competing tabs.
+const VIEWS: JobsView[] = ['shortlist', 'prepared', 'in-progress', 'history', 'latest', 'sources']
 
 export default async function JobsPage({
   searchParams,
@@ -19,7 +22,7 @@ export default async function JobsPage({
 
   const params = await searchParams
   const rawView = typeof params.view === 'string' ? params.view : 'shortlist'
-  const view: JobsView = (VIEWS.includes(rawView as JobsView) ? rawView : 'for-you') as JobsView
+  const view: JobsView = (VIEWS.includes(rawView as JobsView) ? rawView : 'shortlist') as JobsView
   const search = typeof params.search === 'string' ? params.search : undefined
   const num = (key: string): number | undefined => {
     const value = Number(params[key])

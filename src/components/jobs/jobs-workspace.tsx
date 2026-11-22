@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { JobCard, JobFilters, JobsView, PreparedCard } from '@/lib/job-discovery/service'
 import { isSafeApplicationUrl } from '@/lib/job-discovery/url'
+import { SCORE_METRICS } from '@/lib/job-discovery/score-contract'
 
 interface ProfileOption {
   id: string
@@ -48,7 +49,9 @@ const VIEW_LABELS: Record<JobsView, string> = {
   'for-you': 'For You',
   shortlist: 'Ready Today',
   prepared: 'Prepared',
-  latest: 'Latest',
+  'in-progress': 'In Progress',
+  history: 'History',
+  latest: 'Discover',
   'verified-remote': 'Verified Remote',
   saved: 'Saved',
   applications: 'Applications',
@@ -57,10 +60,10 @@ const VIEW_LABELS: Record<JobsView, string> = {
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
-  excellent: 'Excellent match',
-  strong: 'Strong match',
-  possible: 'Possible match',
-  stretch: 'Stretch opportunity',
+  excellent: 'Excellent fit',
+  strong: 'Strong fit',
+  possible: 'Possible fit',
+  stretch: 'Stretch fit',
   not_eligible: 'Not eligible',
   requires_verification: 'Requires verification',
 }
@@ -537,7 +540,7 @@ function JobCardView({ job, profileId, busy, onSave }: { job: JobCard; profileId
       {job.match && (
         <div className="mb-3">
           <div className="mb-1 flex items-center justify-between text-[11px] text-stone">
-            <span>Fit (heuristic)</span>
+            <span>{SCORE_METRICS.candidate_fit.shortLabel} (heuristic)</span>
             <span className="tabular-nums">{job.match.score}/100</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-line">
@@ -657,15 +660,15 @@ function PreparedView({ prepared }: { prepared: PreparedCard[] }) {
           </div>
           <div className="mb-2 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg bg-bone p-1.5 ring-1 ring-line">
-              <p className="text-[9px] uppercase tracking-wide text-stone">Match</p>
+              <p className="text-[9px] uppercase tracking-wide text-stone">{SCORE_METRICS.candidate_fit.shortLabel}</p>
               <p className="text-xs font-semibold text-ink">{item.matchScore ?? '—'}</p>
             </div>
             <div className="rounded-lg bg-bone p-1.5 ring-1 ring-line">
-              <p className="text-[9px] uppercase tracking-wide text-stone">Document</p>
+              <p className="text-[9px] uppercase tracking-wide text-stone">{SCORE_METRICS.resume_quality.shortLabel}</p>
               <p className="text-xs font-semibold text-ink">{item.documentQuality ?? '—'}</p>
             </div>
             <div className="rounded-lg bg-bone p-1.5 ring-1 ring-line">
-              <p className="text-[9px] uppercase tracking-wide text-stone">Readiness</p>
+              <p className="text-[9px] uppercase tracking-wide text-stone">{SCORE_METRICS.internal_readiness.shortLabel}</p>
               <p className="text-xs font-semibold text-ink">{item.readiness ?? '—'}</p>
             </div>
           </div>

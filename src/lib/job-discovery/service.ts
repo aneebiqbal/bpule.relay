@@ -12,7 +12,7 @@ import type { JobEligibility } from './eligibility'
 import { computeJobMatch, MATCH_SCORE_VERSION, type MatchProfile } from './match'
 import type { DiscoveryJob } from './types'
 
-export type JobsView = 'for-you' | 'shortlist' | 'prepared' | 'latest' | 'verified-remote' | 'saved' | 'applications' | 'documents' | 'sources'
+export type JobsView = 'for-you' | 'shortlist' | 'prepared' | 'latest' | 'verified-remote' | 'saved' | 'applications' | 'documents' | 'sources' | 'in-progress' | 'history'
 
 export interface JobCard {
   id: string
@@ -185,9 +185,29 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
   const profileId = options.profileId ?? null
   const search = options.search?.trim()
   let join = ''
-  let where = `j.verification_status not in ('closed','expired','source_unavailable')`
+  const isHistory = options.view === 'history'
+  let where = isHistory
+    ? `(
+        j.verification_status in ('closed','expired')
+        or exists(
+          select 1 from applications ah
+          where ah.job_id = j.id and ah.organization_id = ? and ah.profile_id = ?
+            and ah.status in ('applied','replied','interview','offer','hired','rejected','withdrawn')
+        )
+        or exists(
+          select 1 from saved_jobs sh
+          where sh.job_id = j.id and sh.organization_id = ? and sh.profile_id = ?
+        )
+      )`
+    : `j.verification_status not in ('closed','expired','source_unavailable')`
   const joinParams: unknown[] = []
-  const whereParams: unknown[] = []
+  const whereParams: unknown[] = isHistory
+    ? [orgId, profileId, orgId, profileId]
+    : []
+  if (isHistory && !profileId) {
+    // History is profile-scoped (a person's applications and saved jobs).
+    return { jobs: [], hasMore: false }
+  }
 
   const feedView = options.view === 'latest' || options.view === 'verified-remote' || options.view === 'for-you' || options.view === 'shortlist'
   if (options.view === 'shortlist') {
@@ -215,6 +235,17 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
     join = `join lateral (select max(d.updated_at) as updated_at from application_documents d where d.job_id = j.id and d.organization_id = ? and d.profile_id = ?) d on true`
     joinParams.push(orgId, profileId)
     where += ` and d.updated_at is not null`
+  }
+
+  if (options.view === 'in-progress') {
+    if (!profileId) return { jobs: [], hasMore: false }
+    where += ` and (
+      exists(select 1 from saved_jobs s where s.job_id = j.id and s.organization_id = ? and s.profile_id = ?)
+      or exists(select 1 from applications a where a.job_id = j.id and a.organization_id = ? and a.profile_id = ?
+        and a.status in ('draft','saved','reviewed','prepared','applied','replied','interview','offer'))
+      or exists(select 1 from application_documents d where d.job_id = j.id and d.organization_id = ? and d.profile_id = ?)
+    )`
+    whereParams.push(orgId, profileId, orgId, profileId, orgId, profileId)
   }
 
   if (options.view === 'verified-remote') {
