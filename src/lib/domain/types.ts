@@ -1626,7 +1626,10 @@ export interface RepAssignedIdentityView {
 export interface TargetProgressView {
   targetId: string
   activityType: ActivityType
+  /** The channel lane's full requirement. */
   targetCount: number
+  /** This rep's personal expectation: allocation, or the full solo lane target. */
+  personalTargetCount: number
   completedCount: number
   remaining: number
   status: AccountabilityStatus

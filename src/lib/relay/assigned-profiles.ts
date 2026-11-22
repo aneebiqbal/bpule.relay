@@ -82,13 +82,15 @@ function targetOf(value: unknown, index: number): TargetProgressView {
   const row = record(value) ?? {}
   const targetCount = number(row.targetCount ?? row.target_count)
   const completedCount = number(row.completedCount ?? row.completed_count)
+  const personalTargetCount = number(row.personalTargetCount ?? row.personal_target_count ?? targetCount)
   const status = text(row.status) ?? 'on_track'
   return {
     targetId: text(row.targetId) ?? text(row.id) ?? `target-${index}`,
     activityType: (text(row.activityType) ?? text(row.activity_type) ?? 'other') as ActivityType,
     targetCount,
+    personalTargetCount,
     completedCount,
-    remaining: number(row.remaining ?? Math.max(0, targetCount - completedCount)),
+    remaining: number(row.remaining ?? Math.max(0, personalTargetCount - completedCount)),
     status: status as AccountabilityStatus,
     accountabilityId: text(row.accountabilityId) ?? text(row.accountability_id),
   }

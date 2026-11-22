@@ -59,6 +59,7 @@ async function loadWorkspaceDetail(identityId: string, admin: boolean) {
     targetId: target.targetId,
     activityType: target.activityType,
     targetCount: target.targetCount,
+    personalTargetCount: target.personalTargetCount,
     completedCount: target.completedCount,
     remaining: target.remaining,
     status: target.status,

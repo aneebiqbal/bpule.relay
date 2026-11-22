@@ -83,16 +83,28 @@ owner's stated approximation, not a hidden record.
 |---|---:|---|
 | `tracked` | **413** | every unique lane, targetable and tracked-only |
 | `requirement` | **399** | unique **targetable** lanes — the org's real requirement |
-| `assigned` | **175** | solo lanes + explicit allocations |
+| `trackedNonTargetable` | 14 | proposals and other tracked-only lanes |
+| `assigned` | **175** | solo lanes + allocation rows |
+| `personal` | **171** | sum over reps of their expectation (`assigned − unseated`) |
 | `unseatedAllocationUnits` | **4** | Madiha's Aneeb-Upwork allocation with no seat |
-| `unallocated` | **238** | shared work nobody holds an explicit share of |
+| `unallocated` | **238** | `tracked − assigned` |
+| `requirementAssigned` | **165** | personal expectation on targetable lanes |
+| `requirementUnallocated` | **234** | `requirement − requirementAssigned` |
 
-Invariant enforced by test (`tests/accountability-service.test.ts`):
+Two distinct, both-tested equations:
 
 ```
-assigned + unallocated = tracked        175 + 238 = 413
-requirement ≤ tracked                   399 ≤ 413
+assigned + unallocated = tracked              175 + 238 = 413
+requirementAssigned + requirementUnallocated = requirement   165 + 234 = 399
 ```
+
+`175 + 238 = 413` is **not** a reconciliation of the 399 requirement — 14 of the
+413 tracked units are non-targetable proposals, and 4 of the 175 assigned units
+are unseated allocations. The targetable requirement reconciles separately.
+
+The full per-lane ledger (channel, profile, owner seats, allocations,
+completion) is available from `getAccountabilityLedger` and
+`GET /api/admin/accountability`.
 
 The Admin Command Center now headlines `requirement` (399) and prints the
 reconciliation line `175 allocated · 238 shared unallocated · 413 tracked`.

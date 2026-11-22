@@ -28,24 +28,36 @@ loadAccountabilityLanes(client, { orgId, businessDate })
 | **lane** | one `(identity, activity_type)` target. It belongs to the **channel**, never to an operator. |
 | `tracked` | `sum(target_count)` over every unique active lane. |
 | `requirement` | `sum(target_count)` over unique **targetable** lanes. Tracked-only lanes (e.g. proposals) are not a requirement. |
-| `assigned` | solo lane → full target; allocated lane → the rep's allocation; shared unallocated lane → 0. |
-| `unallocated` | `tracked - assigned`. Shared work with no explicit share. |
+| `trackedNonTargetable` | `tracked - requirement`. |
+| `assigned` | solo lane → full target; allocated lane → the sum of allocation rows; shared unallocated lane → 0. |
+| `personal` | sum over reps of `lanePersonalTarget` (seated allocations + solo lanes). |
+| `unseatedAllocationUnits` | allocation units whose rep holds no active seat. |
+| `unallocated` | `tracked - assigned`. |
+| `requirementAssigned` | personal expectation restricted to targetable lanes. |
+| `requirementUnallocated` | `requirement - requirementAssigned`. |
 | `completed` | sum over lanes of the lane's `completed_count` (each lane once). |
-| `remaining` | `max(0, tracked - completed)`. |
 
 A lane's completion is the **sum of its operators' contributions** — a shared
 lane is never duplicated into a personal total.
 
+`lanePersonalTarget(lane, repId)`:
+```
+allocation for repId  ??  (seats.length > 1 ? 0 : lane.targetCount)
+```
+
 ## 3. Invariants (tested)
 
 ```
-assigned + unallocated = tracked
+assigned + unallocated = tracked              (all lanes)
+requirementAssigned + requirementUnallocated = requirement   (targetable lanes)
+personal = assigned - unseatedAllocationUnits
 requirement ≤ tracked
 lane.completed = Σ lane.contributions
 ```
 
-`tests/accountability-service.test.ts` asserts all three against the live
-organization.
+**The two equations are distinct.** `175 + 238 = 413` reconciles the *tracked*
+population; it is not a statement about the 399 targetable requirement. The
+requirement reconciles as `165 + 234 = 399`.
 
 ## 4. API
 
@@ -56,8 +68,12 @@ organization.
 | `getProfileDailySummary` | one channel's lanes |
 | `getAssignmentAllocations` | every explicit allocation |
 | `getActivityCredits` | raw `daily_accountability` rows |
+| `getAccountabilityLedger` | every lane with owner, profile, channel, allocation, completion |
+| `reconcilePopulations` | the population definitions above (pure) |
 | `getOverdueWork` | delegates to `countOverdueAssignedByRep` |
 | `getAttendanceSummary` | `rep_day` check-in / close rows |
+
+`GET /api/admin/accountability` returns `{ summary, populations, ledger }`.
 
 ## 5. Activity-credit policy
 

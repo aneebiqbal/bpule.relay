@@ -13,6 +13,7 @@ interface TargetView {
   targetId: string
   activityType: string
   targetCount: number
+  personalTargetCount?: number
   completedCount: number
   remaining: number
   status: string

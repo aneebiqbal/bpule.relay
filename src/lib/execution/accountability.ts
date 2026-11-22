@@ -423,3 +423,125 @@ export async function getAttendanceSummary(
     state: (row.state as string | null) ?? null,
   }))
 }
+
+// ---------------------------------------------------------------------------
+// Reconciliation ledger
+// ---------------------------------------------------------------------------
+
+export interface AccountabilityLedgerRow {
+  businessDate: string
+  planId: string
+  identityId: string
+  identityName: string
+  channel: string
+  profileId: string | null
+  activityType: string
+  targetCount: number
+  targetable: boolean
+  seats: string[]
+  shared: boolean
+  allocated: boolean
+  allocations: Array<{ repId: string; repName: string; targetCount: number; seated: boolean }>
+  /** Sum of personal expectations across seats (solo target or allocations). */
+  lanePersonal: number
+  completed: number
+}
+
+/**
+ * The populations behind the totals. Every number here is a distinct set; the
+ * equation `assigned + unallocated = tracked` is true but is NOT a statement
+ * about the targetable requirement.
+ */
+export interface AccountabilityPopulations {
+  /** Every unique lane, targetable and tracked-only. */
+  tracked: number
+  /** Unique targetable lanes — the organization's requirement. */
+  requirement: number
+  /** tracked - requirement (proposals and other tracked-only lanes). */
+  trackedNonTargetable: number
+  /** Sum over lanes of the personal expectation (solo target or allocations). */
+  assigned: number
+  /** Sum over reps of their personal expectation. assigned - unseated. */
+  personal: number
+  /** Allocation units whose rep holds no active seat. */
+  unseatedAllocationUnits: number
+  /** tracked - assigned. */
+  unallocated: number
+  /** Personal expectation restricted to targetable lanes. */
+  requirementAssigned: number
+  /** requirement - requirementAssigned. */
+  requirementUnallocated: number
+  /** Sum of lane completions, each lane once. */
+  completed: number
+}
+
+export function reconcilePopulations(summary: OrganizationDailySummary): AccountabilityPopulations {
+  const targetable = summary.lanes.filter((lane) => lane.targetable)
+  const requirement = targetable.reduce((sum, lane) => sum + lane.targetCount, 0)
+  const requirementAssigned = targetable.reduce(
+    (sum, lane) => sum + lane.seats.reduce((inner, repId) => inner + lanePersonalTarget(lane, repId), 0),
+    0,
+  )
+  const personal = summary.reps.reduce((sum, rep) => sum + rep.assigned, 0)
+  return {
+    tracked: summary.tracked,
+    requirement,
+    trackedNonTargetable: summary.tracked - requirement,
+    assigned: summary.assigned,
+    personal,
+    unseatedAllocationUnits: summary.unseatedAllocationUnits,
+    unallocated: summary.tracked - summary.assigned,
+    requirementAssigned,
+    requirementUnallocated: Math.max(0, requirement - requirementAssigned),
+    completed: summary.completed,
+  }
+}
+
+export interface AccountabilityLedger {
+  businessDate: string
+  populations: AccountabilityPopulations
+  rows: AccountabilityLedgerRow[]
+}
+
+/**
+ * The full contribution ledger: one row per lane, naming the channel, profile,
+ * owner seats, allocations and completion. This is the export an operator uses
+ * to see exactly which records produce each total.
+ */
+export async function getAccountabilityLedger(
+  client: DbClient,
+  input: { orgId: string; businessDate: string; timezone?: string },
+): Promise<AccountabilityLedger> {
+  const [summary, repsRes] = await Promise.all([
+    getOrganizationDailySummary(client, input),
+    client.from('reps').select('id, name').eq('organization_id', input.orgId).limit(500),
+  ])
+  if (repsRes.error) throw repsRes.error
+  const repNameById = new Map((repsRes.data ?? []).map((row) => [row.id as string, row.name as string]))
+  return {
+    businessDate: input.businessDate,
+    populations: reconcilePopulations(summary),
+    rows: summary.lanes.map((lane) => ({
+      businessDate: input.businessDate,
+      planId: lane.planId,
+      identityId: lane.identityId,
+      identityName: lane.identityName,
+      channel: lane.channel,
+      profileId: lane.profileId,
+      activityType: lane.activityType,
+      targetCount: lane.targetCount,
+      targetable: lane.targetable,
+      seats: lane.seats,
+      shared: lane.shared,
+      allocated: lane.allocated,
+      allocations: lane.allocations.map((row) => ({
+        repId: row.repId,
+        repName: repNameById.get(row.repId) ?? 'Unknown',
+        targetCount: row.targetCount,
+        seated: lane.seats.includes(row.repId),
+      })),
+      lanePersonal: lane.seats.reduce((sum, repId) => sum + lanePersonalTarget(lane, repId), 0),
+      completed: lane.completed,
+    })),
+  }
+}

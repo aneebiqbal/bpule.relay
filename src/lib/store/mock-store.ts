@@ -3389,7 +3389,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
           const completed = t.activityType === 'dm' ? 22 : t.activityType === 'connection_request' ? 14 : 6
           totalTarget += t.targetCount
           totalCompleted += completed
-          return { targetId: t.id, activityType: t.activityType, targetCount: t.targetCount, completedCount: completed, remaining: Math.max(0, t.targetCount - completed), status: 'on_track' as const, accountabilityId: null }
+          return { targetId: t.id, activityType: t.activityType, targetCount: t.targetCount, personalTargetCount: t.targetCount, completedCount: completed, remaining: Math.max(0, t.targetCount - completed), status: 'on_track' as const, accountabilityId: null }
         })
         return [{ assignmentId: a.id, identity, targets }]
       })

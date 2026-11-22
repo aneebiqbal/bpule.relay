@@ -3,7 +3,7 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import { currentInstant, orgDate } from '@/lib/org-clock'
-import { getOrganizationDailySummary } from '@/lib/execution/accountability'
+import { getAccountabilityLedger, getOrganizationDailySummary } from '@/lib/execution/accountability'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,10 +21,21 @@ export async function GET() {
   }
   const policy = await loadOperatingPolicy(auth.orgId).catch(() => null)
   const businessDate = orgDate(currentInstant(), policy?.timezone ?? 'UTC')
-  const summary = await getOrganizationDailySummary(await createServerSupabase(), {
-    orgId: auth.orgId,
-    businessDate,
-    timezone: policy?.timezone ?? 'UTC',
-  })
-  return NextResponse.json(summary, { headers: { 'Cache-Control': 'no-store' } })
+  const client = await createServerSupabase()
+  const [summary, ledger] = await Promise.all([
+    getOrganizationDailySummary(client, {
+      orgId: auth.orgId,
+      businessDate,
+      timezone: policy?.timezone ?? 'UTC',
+    }),
+    getAccountabilityLedger(client, {
+      orgId: auth.orgId,
+      businessDate,
+      timezone: policy?.timezone ?? 'UTC',
+    }),
+  ])
+  return NextResponse.json(
+    { summary, populations: ledger.populations, ledger: ledger.rows },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
 }

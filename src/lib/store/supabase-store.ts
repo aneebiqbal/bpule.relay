@@ -6958,27 +6958,63 @@ export class SupabaseStore implements ScoutStore {
       ]),
     )
     const identityIds = [...executable.keys()]
-    const { data: targets } = await this.client.from('daily_target_plans').select('*').in('revenue_identity_id', identityIds).eq('active', true)
-    const { data: accountability } = await this.client.from('daily_accountability').select('*').eq('rep_id', repId).eq('target_date', today).eq('organization_id', this.orgId)
-    const targetList = (targets ?? []) as Record<string, unknown>[]
-    const accMap = new Map(((accountability ?? []) as Record<string, unknown>[]).map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]))
+    const [targetsRes, accountabilityRes, allocationsRes, seatsRes, identityRes] = await Promise.all([
+      this.client.from('daily_target_plans').select('*').in('revenue_identity_id', identityIds).eq('active', true),
+      this.client.from('daily_accountability').select('*').eq('rep_id', repId).eq('target_date', today).eq('organization_id', this.orgId),
+      this.client.from('daily_plan_allocations').select('plan_id, rep_id, target_count').eq('organization_id', this.orgId).eq('active', true).limit(2000),
+      this.client.from('profile_coverage').select('profile_id, rep_id, role').eq('organization_id', this.orgId).eq('active', true).in('role', ['PRIMARY', 'OPERATOR']).limit(2000),
+      this.client.from('revenue_identities').select('*').in('id', identityIds).limit(500),
+    ])
+    const targetList = (targetsRes.data ?? []) as Record<string, unknown>[]
+    const accMap = new Map(((accountabilityRes.data ?? []) as Record<string, unknown>[]).map((a) => [`${a.revenue_identity_id}:${a.activity_type}`, a]))
+    const identityById = new Map(((identityRes.data ?? []) as Record<string, unknown>[]).map((row) => [row.id as string, row]))
+
+    // Seats per profile decide whether a lane is shared. A lane with more than
+    // one seat is one shared requirement; a rep's personal expectation is their
+    // explicit allocation, never the whole lane.
+    const seatsByProfile = new Map<string, string[]>()
+    for (const row of (seatsRes.data ?? []) as Array<{ profile_id: string; rep_id: string }>) {
+      const list = seatsByProfile.get(row.profile_id) ?? []
+      if (!list.includes(row.rep_id)) list.push(row.rep_id)
+      seatsByProfile.set(row.profile_id, list)
+    }
+    const allocationByPlan = new Map<string, number>()
+    for (const row of (allocationsRes.data ?? []) as Array<{ plan_id: string; rep_id: string; target_count: number }>) {
+      if (row.rep_id !== repId) continue
+      allocationByPlan.set(row.plan_id, (allocationByPlan.get(row.plan_id) ?? 0) + row.target_count)
+    }
+
     let totalTarget = 0, totalCompleted = 0
-    const identityViews = (await Promise.all([...executable.entries()].map(async ([identityId, assignment]) => {
-      const idTargets = targetList.filter((t) => t.revenue_identity_id === identityId)
-      const { data: identityRows } = await this.client.from('revenue_identities').select('*').eq('id', identityId).maybeSingle()
-      const identity = identityRows ? this.mapRevenueIdentity(identityRows as Record<string, unknown>) : null
+    const identityViews = [...executable.entries()].flatMap(([identityId, assignment]) => {
+      const identityRow = identityById.get(identityId)
+      const identity = identityRow ? this.mapRevenueIdentity(identityRow as Record<string, unknown>) : null
       // An archived identity is not a working profile; it must not count.
-      if (!identity || identity.status === 'archived') return null
+      if (!identity || identity.status === 'archived') return []
+      const idTargets = targetList.filter((t) => t.revenue_identity_id === identityId)
+      const seats = identity.profileId ? (seatsByProfile.get(identity.profileId) ?? []) : []
+      const shared = seats.length > 1
       const targetViews = idTargets.map((t) => {
         const key = `${t.revenue_identity_id}:${t.activity_type}`
         const acc = accMap.get(key)
         const completed = (acc?.completed_count as number) ?? 0
-        totalTarget += t.target_count as number
+        const laneTarget = t.target_count as number
+        const allocation = allocationByPlan.get(t.id as string) ?? null
+        const personal = allocation ?? (shared ? 0 : laneTarget)
+        totalTarget += personal
         totalCompleted += completed
-        return { targetId: t.id as string, activityType: t.activity_type as ActivityType, targetCount: t.target_count as number, completedCount: completed, remaining: Math.max(0, (t.target_count as number) - completed), status: ((acc?.status as AccountabilityStatus) ?? 'on_track'), accountabilityId: (acc?.id as string) ?? null }
+        return {
+          targetId: t.id as string,
+          activityType: t.activity_type as ActivityType,
+          targetCount: laneTarget,
+          personalTargetCount: personal,
+          completedCount: completed,
+          remaining: Math.max(0, personal - completed),
+          status: ((acc?.status as AccountabilityStatus) ?? 'on_track'),
+          accountabilityId: (acc?.id as string) ?? null,
+        }
       })
-      return { assignmentId: assignment.assignmentId, identity, targets: targetViews }
-    }))).filter((view): view is NonNullable<typeof view> => view !== null)
+      return [{ assignmentId: assignment.assignmentId, identity, targets: targetViews }]
+    })
     return {
       repId, repName, timezone, isWorkingDay: true,
       totalTarget, totalCompleted, totalRemaining: Math.max(0, totalTarget - totalCompleted),
