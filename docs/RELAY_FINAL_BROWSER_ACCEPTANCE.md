@@ -27,7 +27,8 @@ for each case.
 | 7 | Screening answers panel | ✅ renders; 3 drafts from evidence, 5 needs-human |
 | 8 | Mobile (390×844) | ✅ workspace collapses to one column |
 | 9 | Midnight rollover, authenticated session | ✅ SUN, NOV 22 → MON, NOV 23, no reload/logout |
-| 10 | Admin accounting reconciliation | ⛔ not browser-verified (no production credentials) |
+| 10 | Admin headline vs canonical API | ✅ `0 / 30 required` and `30 allocated · 0 shared unallocated · 30 tracked` match the API |
+| 11 | Admin accounting reconciliation | ⛔ not verified against production (no production credentials) |
 
 ### 2.1 Screening answer evidence (real API response)
 

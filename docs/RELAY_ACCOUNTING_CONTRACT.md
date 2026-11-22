@@ -75,8 +75,22 @@ requirement reconciles as `165 + 234 = 399`.
 
 `GET /api/admin/accountability` returns `{ summary, populations, ledger }`.
 
-## 5. Activity-credit policy
+## 5. Surfaces
 
+| Surface | Reads |
+|---|---|
+| Admin Command Center | `getOrganizationDailySummary` → `requirement` / `completed` |
+| Team Command Center | `getOrganizationDailySummary` → `requirement` / `completed` |
+| Rep Today | `getRepTodayAccountability` → per-target `personalTargetCount` (same rule) |
+| Responsibility workspace | `personalTargetCount` via `jobsFromTargets` |
+| `GET /api/admin/accountability` | `{ summary, populations, ledger }` |
+
+`getRepTodayAccountability` applies `lanePersonalTarget` per lane, so a shared
+operator sees their allocation, not the channel requirement. Verified against
+the live organization: Ahmad 81 (was 148), Madiha 90 (was 180), Dawood 0 (was
+149), Hassan 0 (was 97), Aneeb 0 (was 85).
+
+## 6. Activity-credit policy
 - A completed unit is one `daily_accountability.completed_count` row for a
   `(rep, identity, activity, business_date)`.
 - Drafts, generated copy, recommendations and failed sends never count
@@ -89,7 +103,7 @@ requirement reconciles as `165 + 234 = 399`.
 - Progress and attendance are separate: `rep_day.check_in_at` never creates
   activity credit, and activity credit never implies a check-in.
 
-## 6. Business date
+## 7. Business date
 
 The business date is `orgDate(currentInstant(), policy.timezone)`. Storage stays
 UTC; boundaries are resolved with `businessDateRange`. A user's browser timezone
@@ -99,7 +113,7 @@ never participates.
 a `router.refresh()` at the next local midnight and re-checks on focus /
 visibility, so an open tab rolls over without a sign-out.
 
-## 7. Migration note
+## 8. Migration note
 
 The legacy `daily_targets` table is retained for history but is **not read** by
 any current surface. `daily_target_plans` is the authority.

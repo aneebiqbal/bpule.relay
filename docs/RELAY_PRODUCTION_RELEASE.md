@@ -113,9 +113,12 @@ Ready Today.
 |---|---|
 | `tsc --noEmit` | clean |
 | `eslint` (changed files) | 0 errors (pre-existing warnings only) |
-| `vitest run` | **5,905 passed**, 5 skipped |
+| `vitest run` (unit) | **5,908 passed**, 5 skipped |
+| `vitest.live.config.mts` (live DB/RLS) | see below |
 | `next build` | clean |
 | Browser (staging) | see `RELAY_FINAL_BROWSER_ACCEPTANCE.md` |
+
+Live-DB/RLS suite result is recorded in §8.
 
 ## 8. GO / NO-GO
 
