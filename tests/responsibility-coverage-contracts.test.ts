@@ -447,7 +447,7 @@ describe('CHANNEL_BADGE_PARITY', () => {
       'src/components/coverage/rep-profiles-today.tsx',
       'src/components/coverage/admin-coverage-panel.tsx',
       'src/components/v4/v4-admin-home.tsx',
-      'src/components/targets-manager.tsx',
+      'src/components/operations/work-setup.tsx',
       'src/components/shell/profile-switcher.tsx',
       'src/lib/daily-actions/project.ts',
     ]

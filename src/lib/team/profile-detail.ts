@@ -91,15 +91,21 @@ export async function loadTeamProfileDetail(
     : { data: [] as Array<{ id: string; name: string }> }
   const repNameById = new Map((repRows ?? []).map((rep) => [rep.id, rep.name]))
 
+  const completedByLane = new Map<string, number>()
+  const statusByLane = new Map<string, string | null>()
+  for (const row of accountabilityRes.data ?? []) {
+    const key = `${row.revenue_identity_id}:${row.activity_type}`
+    completedByLane.set(key, (completedByLane.get(key) ?? 0) + (row.completed_count ?? 0))
+    if (!statusByLane.has(key)) statusByLane.set(key, row.status ?? null)
+  }
+
   const targets = (targetRes.data ?? []).map((target) => {
-    const accountability = (accountabilityRes.data ?? []).find(
-      (row) => row.revenue_identity_id === target.revenue_identity_id && row.activity_type === target.activity_type,
-    )
+    const key = `${target.revenue_identity_id}:${target.activity_type}`
     return {
       activityType: target.activity_type,
       targetCount: target.target_count,
-      completedCount: accountability?.completed_count ?? 0,
-      status: accountability?.status ?? null,
+      completedCount: completedByLane.get(key) ?? 0,
+      status: statusByLane.get(key) ?? null,
     }
   })
 

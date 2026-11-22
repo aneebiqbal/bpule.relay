@@ -66,6 +66,32 @@ export async function GET() {
     .eq('rep_id', rep.id)
     .eq('target_date', today)
     .eq('organization_id', org.id)
+  // The personal-expectation rule: an explicit allocation wins; a lane with more
+  // than one seat is shared and carries no personal requirement until allocated.
+  const [allocations, coverage] = await Promise.all([
+    supabase
+      .from('daily_plan_allocations')
+      .select('plan_id, rep_id, target_count')
+      .eq('organization_id', org.id)
+      .eq('active', true)
+      .limit(2000),
+    supabase
+      .from('profile_coverage')
+      .select('profile_id, rep_id, role')
+      .eq('organization_id', org.id)
+      .eq('active', true)
+      .in('role', ['PRIMARY', 'OPERATOR'])
+      .limit(2000),
+  ])
+  const seatsByProfile = new Map<string, number>()
+  for (const row of coverage.data ?? []) {
+    seatsByProfile.set(row.profile_id, (seatsByProfile.get(row.profile_id) ?? 0) + 1)
+  }
+  const allocationByPlan = new Map<string, number>()
+  for (const row of allocations.data ?? []) {
+    if (row.rep_id !== rep.id) continue
+    allocationByPlan.set(row.plan_id, (allocationByPlan.get(row.plan_id) ?? 0) + (row.target_count ?? 0))
+  }
 
   const progress = workdayProgress(now, policy, businessDate)
   const targetList = targets ?? []
@@ -86,17 +112,21 @@ export async function GET() {
       const key = `${t.revenue_identity_id}:${t.activity_type}`
       const acc = accountabilityMap.get(key)
       const completed = acc?.completed_count ?? 0
-      const status = acc?.status ?? computeStatus(t.target_count, completed, progress)
+      const profileId = (identityById.get(a.revenue_identity_id)?.profile_id as string | null) ?? null
+      const seats = profileId ? (seatsByProfile.get(profileId) ?? 0) : 0
+      const allocation = allocationByPlan.get(t.id) ?? null
+      const personal = allocation ?? (seats > 1 ? 0 : t.target_count)
+      const status = acc?.status ?? computeStatus(personal, completed, progress)
 
-      totalTarget += t.target_count
+      totalTarget += personal
       totalCompleted += completed
 
       return {
         targetId: t.id,
         activityType: t.activity_type,
-        targetCount: t.target_count,
+        targetCount: personal,
         completedCount: completed,
-        remaining: Math.max(0, t.target_count - completed),
+        remaining: Math.max(0, personal - completed),
         status,
         accountabilityId: acc?.id ?? null,
       }

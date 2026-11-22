@@ -392,10 +392,15 @@ export async function loadProfileOperatingModel(
   const repNameById = new Map(((repRows ?? []) as Array<{ id: string; name: string }>).map((rep) => [rep.id, rep.name]))
 
   const contributionsByIdentity = new Map<string, Map<string, number>>()
+  const completedByLane = new Map<string, number>()
+  const statusByLane = new Map<string, string | null>()
   for (const row of accountability) {
     const byRep = contributionsByIdentity.get(row.revenue_identity_id) ?? new Map<string, number>()
     byRep.set(row.rep_id, (byRep.get(row.rep_id) ?? 0) + row.completed_count)
     contributionsByIdentity.set(row.revenue_identity_id, byRep)
+    const key = `${row.revenue_identity_id}:${row.activity_type}`
+    completedByLane.set(key, (completedByLane.get(key) ?? 0) + row.completed_count)
+    if (!statusByLane.has(key)) statusByLane.set(key, row.status)
   }
 
   const channels: ProfileChannelModel[] = identities.map((identity) => {
@@ -422,19 +427,15 @@ export async function loadProfileOperatingModel(
     const channelTargets = targets
       .filter((row) => row.revenue_identity_id === identityId && row.targetable)
       .map((row) => {
-        const accountabilityRow = accountability.find(
-          (entry) =>
-            entry.revenue_identity_id === identityId && entry.activity_type === row.activity_type,
-        )
+        const completedCount = completedByLane.get(`${identityId}:${row.activity_type}`) ?? 0
         const targetCount = row.target_count
-        const completedCount = accountabilityRow?.completed_count ?? 0
         return {
           targetId: row.id,
           activityType: row.activity_type,
           targetCount,
           completedCount,
           remaining: Math.max(0, targetCount - completedCount),
-          status: accountabilityRow?.status ?? null,
+          status: statusByLane.get(`${identityId}:${row.activity_type}`) ?? null,
         }
       })
     const chainRepIds = chain.map((row) => row.rep_id)

@@ -96,9 +96,10 @@ describe('TARGET_EDITING_SINGLE_AUTHORITY', () => {
     expect(source).not.toMatch(/fetch\('/)
   })
 
-  it('Admin → Daily Targets is the bulk editor', () => {
-    expect(read('src/app/(app)/admin/targets/page.tsx')).toMatch(/TargetsManager/)
-    expect(read('src/components/targets-manager.tsx')).toMatch(/patchTarget/)
+  it('Admin → Work Setup is the single assignment + target editor', () => {
+    expect(read('src/app/(app)/admin/targets/page.tsx')).toMatch(/WorkSetupManager/)
+    expect(read('src/components/operations/work-setup.tsx')).toMatch(/api\/admin\/work-setup/)
+    expect(read('src/components/operations/work-setup.tsx')).not.toMatch(/patchTarget/)
   })
 })
 
