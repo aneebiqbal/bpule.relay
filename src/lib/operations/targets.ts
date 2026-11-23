@@ -14,6 +14,7 @@ import type { DbClient } from '@/lib/db/types'
  */
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { isMissingRelation } from '@/lib/operations/db-errors'
+import { lanePersonalTarget } from '@/lib/execution/accountability'
 import { MEETING_EVENT } from '@/lib/sales/meetings'
 import { CONNECTION_EVENTS, SENT_MESSAGE_EVENTS } from '@/lib/sales/send-truth'
 import { targetProgressSql } from '@/lib/analytics/aggregates'
@@ -262,17 +263,21 @@ export async function loadTargets(
   const targetRows = planRows.flatMap((row) => {
     const profileId = profileByIdentity.get(row.revenue_identity_id) ?? null
     const seatList = profileId ? (seatsByProfile.get(profileId) ?? []) : []
-    const allocated = allocationByPlan.get(row.id)
-    if (allocated) {
-      return [...allocated.entries()].map(([repId, targetCount]) => ({
-        rep_id: repId,
-        activity_type: row.activity_type,
-        target_count: targetCount,
-      }))
-    }
-    const primary = seatList.find((seat) => seat.role === 'PRIMARY')?.rep_id ?? 'unassigned'
-    return [{ rep_id: primary, activity_type: row.activity_type, target_count: row.target_count }]
-  }).filter((row) => repIds.includes(row.rep_id))
+    // Canonical personal rule (lanePersonalTarget): explicit shares win; a lane
+    // target only becomes personal when the rep is the sole seat. Unallocated
+    // shared lanes therefore produce no personal row, matching Team Live,
+    // People and the accountability ledger instead of dumping the whole lane on
+    // the primary.
+    const seats = seatList.map((seat) => seat.rep_id)
+    const allocations = [...(allocationByPlan.get(row.id) ?? new Map<string, number>())].map(
+      ([repId, targetCount]) => ({ repId, targetCount }),
+    )
+    return seats.map((repId) => ({
+      rep_id: repId,
+      activity_type: row.activity_type,
+      target_count: lanePersonalTarget({ targetCount: row.target_count, seats, allocations }, repId),
+    }))
+  }).filter((row) => row.target_count > 0 && repIds.includes(row.rep_id))
   const assembled = assembleTargets({
     ...input,
     dailyTargets: targetRows,

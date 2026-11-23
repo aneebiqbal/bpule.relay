@@ -59,6 +59,7 @@ function pct(done: number, target: number): number {
 export function TeamProfileDetailView({
   model,
   canManage,
+  canManageTargets,
   reps,
   coveragePending = {},
   activeCoverage = [],
@@ -68,6 +69,8 @@ export function TeamProfileDetailView({
 }: {
   model: ProfileOperatingModel
   canManage: boolean
+  /** Target editing is a separate capability (MANAGE_TEAM_TARGETS). */
+  canManageTargets: boolean
   reps: Array<{ id: string; name: string }>
   /** Coverage decisions the plan derived for this person's channels. */
   coveragePending?: Record<string, CoveragePending>
@@ -143,6 +146,7 @@ export function TeamProfileDetailView({
         <ChannelsTab
           model={model}
           canManage={canManage}
+          canManageTargets={canManageTargets}
           reps={reps}
           coveragePending={coveragePending}
           activeCoverage={activeCoverage}
@@ -293,12 +297,14 @@ function OverviewTab({
 function ChannelsTab({
   model,
   canManage,
+  canManageTargets,
   reps,
   coveragePending,
   activeCoverage,
 }: {
   model: ProfileOperatingModel
   canManage: boolean
+  canManageTargets: boolean
   reps: Array<{ id: string; name: string }>
   coveragePending: Record<string, CoveragePending>
   activeCoverage: string[]
@@ -321,6 +327,7 @@ function ChannelsTab({
           key={channel.identityId}
           channel={channel}
           canManage={canManage}
+          canManageTargets={canManageTargets}
           reps={reps}
           pending={coveragePending[channel.profileId] ?? null}
           active={activeCoverage.includes(channel.profileId)}
@@ -333,12 +340,14 @@ function ChannelsTab({
 function ChannelBlock({
   channel,
   canManage,
+  canManageTargets,
   reps,
   pending,
   active,
 }: {
   channel: ProfileChannelModel
   canManage: boolean
+  canManageTargets: boolean
   reps: Array<{ id: string; name: string }>
   pending: CoveragePending | null
   active: boolean
@@ -455,7 +464,7 @@ function ChannelBlock({
             ))}
           </div>
         )}
-        {canManage && (
+        {canManageTargets && (
           <ChannelTargetsEditor channel={channel} repId={channel.primaryRepId} />
         )}
       </div>

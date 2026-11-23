@@ -181,12 +181,15 @@ export function SetupAssistant({
   open,
   onClose,
   reps,
+  canManageTargets,
 }: {
   open: boolean
   onClose: () => void
   profiles: Array<{ id: string; name: string }>
   reps: Array<{ id: string; name: string }>
   identities: Array<{ id: string; profileId: string; channel: string; name: string }>
+  /** Target writes require MANAGE_TEAM_TARGETS, which the setup entry gate may not grant. */
+  canManageTargets: boolean
 }) {
   const router = useRouter()
   const [mode, setMode] = useState<'guide' | 'describe'>('describe')
@@ -542,34 +545,38 @@ export function SetupAssistant({
       log.push(`${selected.profileName} · ${selected.channel}: ${row?.ok ? 'chain saved' : row?.error ?? 'failed'}`)
 
       if (guideTarget > 0) {
-        const target = await fetch('/api/admin/targets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            repId: primaryRepId || operatorIds[0],
-            revenueIdentityId: selected.identityId,
-            activityType: metric,
-            targetCount: guideTarget,
-          }),
-        })
-        const targetBody = await target.json().catch(() => ({}))
-        if (!target.ok) {
-          log.push(`${selected.identityName}: target failed (${targetBody.error ?? 'error'})`)
+        if (!canManageTargets) {
+          log.push(`${selected.identityName}: target not written (MANAGE_TEAM_TARGETS required)`)
         } else {
-          const plan = targetBody.target ?? (Array.isArray(targetBody.targets) ? targetBody.targets[0] : null)
-          const shares = Object.entries(allocations)
-            .filter(([, value]) => (Math.round(Number(value)) || 0) > 0)
-            .map(([repId, value]) => ({ repId, targetCount: Math.round(Number(value)) }))
-          if (plan?.id && shares.length > 0) {
-            const alloc = await fetch(`/api/admin/targets/${plan.id}/allocations`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ mode: 'allocated', allocations: shares }),
-            })
-            const allocBody = await alloc.json().catch(() => ({}))
-            log.push(`${selected.identityName}: ${alloc.ok ? 'targets allocated' : `allocation failed (${allocBody.error ?? 'error'})`}`)
+          const target = await fetch('/api/admin/targets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              repId: primaryRepId || operatorIds[0],
+              revenueIdentityId: selected.identityId,
+              activityType: metric,
+              targetCount: guideTarget,
+            }),
+          })
+          const targetBody = await target.json().catch(() => ({}))
+          if (!target.ok) {
+            log.push(`${selected.identityName}: target failed (${targetBody.error ?? 'error'})`)
           } else {
-            log.push(`${selected.identityName}: target set`)
+            const plan = targetBody.target ?? (Array.isArray(targetBody.targets) ? targetBody.targets[0] : null)
+            const shares = Object.entries(allocations)
+              .filter(([, value]) => (Math.round(Number(value)) || 0) > 0)
+              .map(([repId, value]) => ({ repId, targetCount: Math.round(Number(value)) }))
+            if (plan?.id && shares.length > 0) {
+              const alloc = await fetch(`/api/admin/targets/${plan.id}/allocations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: 'allocated', allocations: shares }),
+              })
+              const allocBody = await alloc.json().catch(() => ({}))
+              log.push(`${selected.identityName}: ${alloc.ok ? 'targets allocated' : `allocation failed (${allocBody.error ?? 'error'})`}`)
+            } else {
+              log.push(`${selected.identityName}: target set`)
+            }
           }
         }
       }

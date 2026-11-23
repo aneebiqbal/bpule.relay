@@ -2,6 +2,8 @@ import type { DbClient } from '@/lib/db/types'
 import { listExecutableIdentitiesForRep } from '@/lib/coverage/access'
 import { getInboxCountsForRep } from '@/lib/operations/inbox-counts'
 import { countOverdueAssignedByRep } from '@/lib/tasks/assigned-tasks'
+import { isMissingRelation } from '@/lib/operations/db-errors'
+import { lanePersonalTarget } from '@/lib/execution/accountability'
 import { personNameFromProfile } from '@/lib/profiles/person-name'
 import { normalizeChannel } from '@/lib/profiles/channel'
 import { businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
@@ -20,6 +22,8 @@ export interface OperatingTarget {
   targetId: string
   activityType: string
   targetCount: number
+  /** The personal expectation for one lane. */
+  personalTarget: number
   /** This rep's contribution today. */
   completedCount: number
   /** The profile's total for this lane across EVERY operator. */
@@ -41,7 +45,10 @@ export interface OperatingResponsibility {
   coveragePrimaryRepId: string | null
   readiness: boolean
   targets: OperatingTarget[]
+  /** Canonical personal expectation: explicit share, or the lane target when solo. */
   target: number
+  /** The channel's full lane target across every seat (may exceed `target`). */
+  profileTarget: number
   /** This rep's contribution today. */
   completed: number
   remaining: number
@@ -183,6 +190,49 @@ export async function loadRepOperatingPlan(
   )
   const readyProfileIds = new Set((readinessRows.data ?? []).map((row) => row.profile_id as string))
 
+  // Allocations and seats are what decide a personal expectation: an explicit
+  // share, else the lane target only when the rep is the sole seat. A shared
+  // lane with no shares gives nobody a personal number (canonical rule).
+  const planIds = (targetRows.data ?? []).map((row) => row.id as string)
+  const profileIds = [
+    ...new Set(executable.map((row) => row.profileId).filter((id): id is string => Boolean(id))),
+  ]
+  const [allocationRows, seatRows] = await Promise.all([
+    planIds.length
+      ? client
+          .from('daily_plan_allocations')
+          .select('plan_id, rep_id, target_count')
+          .eq('organization_id', input.orgId)
+          .eq('active', true)
+          .in('plan_id', planIds)
+          .limit(500)
+      : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null }),
+    profileIds.length
+      ? client
+          .from('profile_coverage')
+          .select('profile_id, rep_id, role')
+          .eq('organization_id', input.orgId)
+          .eq('active', true)
+          .in('role', ['PRIMARY', 'OPERATOR'])
+          .in('profile_id', profileIds)
+          .limit(500)
+      : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null }),
+  ])
+  if (allocationRows.error && !isMissingRelation(allocationRows.error)) throw allocationRows.error
+  if (seatRows.error && !isMissingRelation(seatRows.error)) throw seatRows.error
+  const allocationByPlan = new Map<string, Map<string, number>>()
+  for (const row of allocationRows.data ?? []) {
+    const byRep = allocationByPlan.get(row.plan_id as string) ?? new Map<string, number>()
+    byRep.set(row.rep_id as string, (row.target_count as number) ?? 0)
+    allocationByPlan.set(row.plan_id as string, byRep)
+  }
+  const seatsByProfile = new Map<string, string[]>()
+  for (const row of seatRows.data ?? []) {
+    const list = seatsByProfile.get(row.profile_id as string) ?? []
+    list.push(row.rep_id as string)
+    seatsByProfile.set(row.profile_id as string, list)
+  }
+
   const responsibilities: OperatingResponsibility[] = []
   for (const row of identityRows.data ?? []) {
     const executableRow = executableByIdentity.get(row.id as string)
@@ -193,19 +243,31 @@ export async function loadRepOperatingPlan(
       .filter((target) => target.revenue_identity_id === row.id)
       .map((target) => {
         const accountability = accountabilityByKey.get(`${row.id}:${target.activity_type}`)
-        const targetCount = (target.target_count as number) ?? 0
+        const laneTarget = (target.target_count as number) ?? 0
         const completedCount = (accountability?.completed_count as number | null) ?? 0
+        const personalTarget = lanePersonalTarget(
+          {
+            targetCount: laneTarget,
+            seats: profileId ? (seatsByProfile.get(profileId) ?? []) : [],
+            allocations: [...(allocationByPlan.get(target.id as string) ?? new Map<string, number>())].map(
+              ([repId, targetCount]) => ({ repId, targetCount }),
+            ),
+          },
+          input.repId,
+        )
         return {
           targetId: target.id as string,
           activityType: target.activity_type as string,
-          targetCount,
+          targetCount: laneTarget,
+          personalTarget,
           completedCount,
           profileCompletedCount: profileCompletedByActivity.get(`${row.id}:${target.activity_type as string}`) ?? completedCount,
-          remaining: Math.max(0, targetCount - completedCount),
+          remaining: Math.max(0, personalTarget - completedCount),
           status: (accountability?.status as string | null) ?? null,
         }
       })
-    const target = targets.reduce((sum, entry) => sum + entry.targetCount, 0)
+    const target = targets.reduce((sum, entry) => sum + entry.personalTarget, 0)
+    const profileTarget = targets.reduce((sum, entry) => sum + entry.targetCount, 0)
     const completed = targets.reduce((sum, entry) => sum + entry.completedCount, 0)
     const assignedAt = executableRow.assignedAt
     // NEW is derived from events, never a manual flag: it expires once access is
@@ -229,6 +291,8 @@ export async function loadRepOperatingPlan(
       readiness,
       targets,
       target,
+      /** The channel's full lane target across every seat, for shared plans. */
+      profileTarget,
       completed,
       remaining: Math.max(0, target - completed),
       profileCompleted: profileCompletedByIdentity.get(row.id as string) ?? 0,
@@ -261,12 +325,8 @@ export async function loadRepOperatingPlan(
 
   const todayTarget = owning.reduce((sum, row) => sum + row.target, 0)
   const todayCompleted = owning.reduce((sum, row) => sum + row.completed, 0)
-  // Remaining is the PROFILE's remaining, not the rep's personal share: a shared
-  // plan is never presented as one rep's private target.
-  const todayRemaining = owning.reduce(
-    (sum, row) => sum + Math.max(0, row.target - row.profileCompleted),
-    0,
-  )
+  // Personal remaining: a shared plan is never presented as one rep's private target.
+  const todayRemaining = owning.reduce((sum, row) => sum + row.remaining, 0)
 
   const needsSetup = owning
     .filter((row) => row.target === 0 || !row.readiness)

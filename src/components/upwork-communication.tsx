@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Send, Reply, Loader2 } from 'lucide-react'
+import { Reply, Loader2 } from 'lucide-react'
 import { cn } from 'cn'
 import { V4Panel, V4PanelHeader } from '@/components/v4/primitives'
 import type { UpworkJob } from '@/lib/domain/types'
@@ -23,16 +23,21 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
   const [replyGenerating, setReplyGenerating] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [replyError, setReplyError] = useState<string | null>(null)
+  const [logError, setLogError] = useState<string | null>(null)
   const [lastClientMsg, setLastClientMsg] = useState('')
 
   const logInbound = useCallback(async () => {
     if (!inboundText.trim()) return
+    setLogError(null)
     try {
-      await fetch(`/api/upwork/jobs/${jobId}/message`, {
+      const res = await fetch(`/api/upwork/jobs/${jobId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: inboundText.trim(), direction: 'inbound', type: 'reply' }),
       })
+      // Nothing is appended optimistically: the row must exist before the UI
+      // claims it was recorded.
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       setMessages((prev) => [
         {
           id: `inbound-${Date.now()}`,
@@ -47,7 +52,9 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
       setLastClientMsg(inboundText.trim())
       setInboundText('')
       setShowInbound(false)
-    } catch { /* ignore */ }
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : 'Could not log the message.')
+    }
   }, [inboundText, jobId])
 
   const generateReply = useCallback(async () => {
@@ -78,12 +85,15 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
 
   const saveReply = useCallback(async () => {
     if (!replyText.trim()) return
+    setLogError(null)
     try {
-      await fetch(`/api/upwork/jobs/${jobId}/message`, {
+      const res = await fetch(`/api/upwork/jobs/${jobId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: replyText.trim(), direction: 'outbound', type: 'reply' }),
       })
+      // The endpoint records history only; it never delivers to Upwork.
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       setMessages((prev) => [
         {
           id: `outbound-${Date.now()}`,
@@ -96,7 +106,9 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
         ...prev,
       ])
       setReplyText('')
-    } catch { /* ignore */ }
+    } catch (err) {
+      setLogError(err instanceof Error ? err.message : 'Could not log the reply.')
+    }
   }, [replyText, jobId])
 
   return (
@@ -170,9 +182,13 @@ export function UpworkCommunication({ jobId, job, actingRepId = null }: { jobId:
             onClick={saveReply}
             className="flex items-center gap-1.5 rounded bg-cobalt px-3 py-1.5 text-[11px] text-on-accent"
           >
-            <Send className="size-3" /> Save & send
+            <Reply className="size-3" /> Log reply
           </button>
         </div>
+      )}
+
+      {logError && (
+        <p role="alert" className="mb-3 text-[11px] text-status-danger">{logError}</p>
       )}
 
       {replyError && (
