@@ -215,7 +215,7 @@ function WorkspaceInner({
       </div>
 
       {density === 'table' ? (
-        <TeamProfilesTable profiles={profiles} businessDate={businessDate} error={error} reps={reps} canManageIdentities={canManageIdentities} />
+        <TeamProfilesTable profiles={filtered} businessDate={businessDate} error={error} reps={reps} canManageIdentities={canManageIdentities} />
       ) : filtered.length === 0 ? (
         <V4Empty title="No people match this view" body="Adjust the filters or add an account." />
       ) : (

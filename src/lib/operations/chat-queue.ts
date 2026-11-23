@@ -446,8 +446,8 @@ export async function loadChatQueue(
   }
 
   // Thread review needs the latest message's verification flag; read it with
-  // the previews for the visible page only (below). For counts, review is
-  // computed on that page — documented in the UI as "on this page".
+  // the previews for the visible page only (below). The view therefore counts
+  // matches on that page, and `total` below reports the same population.
   const viewFiltered = all.filter((r) => chatViewMatches(r, query.view === 'review' ? 'all' : query.view))
   // Stage is a lead-pipeline drill-down. Won/lost conversations are closed, so a
   // stage must be able to reach them even though the default All view hides
@@ -478,5 +478,8 @@ export async function loadChatQueue(
   const rows = query.view === 'review' ? page.filter((r) => r.needsReview).slice(0, limit) : page
   if (query.view === 'review' || includeManager) counts.review = page.filter((r) => r.needsReview).length
 
-  return { rows, counts, total: filtered.length, truncated: leads.length >= LEAD_CAP }
+  // Thread review is counted on the scanned page, so the reported total must be
+  // the same population rather than every open conversation.
+  const total = query.view === 'review' ? counts.review : filtered.length
+  return { rows, counts, total, truncated: leads.length >= LEAD_CAP }
 }

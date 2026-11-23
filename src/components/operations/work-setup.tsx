@@ -213,7 +213,7 @@ export function WorkSetupManager() {
           primaryRepId: draft.primaryRepId,
           operators: draft.operatorIds.map((repId) => ({ repId })),
           backups: draft.backupIds.map((repId) => ({ repId })),
-          targets: draft.targets.filter((row) => row.targetCount > 0),
+          targets: draft.targets,
           allocations: draft.allocations,
           expectedRevision: draft.expectedRevision ?? undefined,
         }),
