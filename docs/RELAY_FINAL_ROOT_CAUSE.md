@@ -115,6 +115,15 @@ requirementAssigned + requirementUnallocated = requirement   165 + 234 = 399
 413 tracked units are non-targetable proposals, and 4 of the 175 assigned units
 are unseated allocations. The targetable requirement reconciles separately.
 
+> **Data changed during the session.** The figures above were captured at the
+> start of the investigation. During the session the approved targets and seats
+> were edited in production (2026-11-22 23:24–23:48 UTC): Aneeb/Fizza/Hassan lane
+> counts changed and Aleena Saman gained a second operator seat. The canonical
+> populations on 2026-11-23 are now `tracked 431 · requirement 419 · assigned 97
+> · personal 93 · unseated 4 · unallocated 334 · requirementAssigned 87 ·
+> requirementUnallocated 332`, and both equations still hold
+> (`97 + 334 = 431`, `87 + 332 = 419`). No target was changed by this work.
+
 The full per-lane ledger (channel, profile, owner seats, allocations,
 completion) is available from `getAccountabilityLedger` and
 `GET /api/admin/accountability`.
