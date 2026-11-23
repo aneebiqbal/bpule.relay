@@ -146,7 +146,7 @@ describe('INBOX_QUEUE_PREVIEW_BOUNDED', () => {
 describe('INBOX_THREAD_SELECTED_ONLY', () => {
   it('intelligence is loaded for the selected lead only, never by the queue', () => {
     const page = read('src/app/(app)/chats/page.tsx')
-    expect(page).toContain('getIntelligence(leadId)')
+    expect(page).toContain('getIntelligence(leadId, repIds, authorizedIdentityIds)')
     expect(page).toContain('loadChatIntelligence')
     const queue = read('src/lib/operations/chat-queue.ts')
     expect(queue).not.toContain('loadChatIntelligence')
