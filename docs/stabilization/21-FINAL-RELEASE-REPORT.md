@@ -7,11 +7,19 @@
 
 ## 1. Exact Git SHA
 
-See §3 (commits). The release candidate is the branch tip recorded there.
+**Release candidate:** `87ccbeaa` (full: `git rev-parse HEAD`)
+**Base of this closure pass:** `60ab5204e7733cacdb52c36d6b25a9bd0e57ff7c`
 
 ## 2. Commits integrated
 
-Recorded in `12-FIXES-AND-COMMITS.md` and the closure commit list below.
+```
+87ccbeaa feat(stabilization): atomic Work Setup, fail-closed test isolation, allocation rule fixes
+60ab5204 docs(stabilization): reconciliation/schema artifacts and cleanup+deploy runbook
+fa55a728 docs(stabilization): record final gate results
+2dbf4543 fix(security,integrity): org-validate Work Setup seats and harden allocations
+```
+
+Local only. Not pushed, not merged, not deployed.
 
 ## 3. Findings
 
@@ -104,7 +112,17 @@ New columns/indexes: none required for these fixes.
 `15-CLEANUP-AND-DEPLOYMENT.md` §§2–4. Production app on `postgres` uses the
 atomic Work Setup path.
 
-## 14. GO / NO-GO
+## 14. Gate results (this pass)
+
+| Gate | Result |
+|---|---|
+| `npx tsc --noEmit` | exit 0 |
+| `npm test` | **423 files passed / 1 skipped (424); 5954 passed / 5 skipped (5959)** |
+| `npm run build` | pass, route table emitted, no errors/warnings |
+| `npx eslint` (changed files) | 0 errors (pre-existing `any` warnings only) |
+| `npm run test:live` | **refuses to start** without `RELAY_TEST_DATABASE=1`; production URL rejected |
+
+## 15. GO / NO-GO
 
 **GO** for the closure changes to be reviewed and merged to staging.
 

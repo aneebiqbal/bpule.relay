@@ -3,7 +3,7 @@
   "generated": "2026-11-23",
   "repository": "/Users/mac/Desktop/products/scout",
   "branch": "feat/relay-job-intelligence-v2",
-  "head": "433489da187fb0d87e218a11868fa796210c976b",
+  "head": "87ccbeaa",
   "counts": {
     "hypothesesInvestigated": 42,
     "confirmed": 15,
@@ -264,7 +264,19 @@
   "closure": {
     "date": "2026-11-23",
     "baseHead": "60ab5204e7733cacdb52c36d6b25a9bd0e57ff7c",
-    "commits": [],
-    "gates": {}
+    "rcHead": "87ccbeaa",
+    "commits": [
+      "2dbf4543 fix(security,integrity): org-validate Work Setup seats and harden allocations",
+      "fa55a728 docs(stabilization): record final gate results",
+      "60ab5204 docs(stabilization): reconciliation/schema artifacts and cleanup+deploy runbook",
+      "87ccbeaa feat(stabilization): atomic Work Setup, fail-closed test isolation, allocation rule fixes"
+    ],
+    "gates": {
+      "unit": "423 files passed / 1 skipped (424); 5954 passed / 5 skipped (5959)",
+      "tsc": "exit 0",
+      "build": "pass",
+      "eslint": "0 errors",
+      "liveSuite": "NOT RUN (guarded; no disposable DB configured)"
+    }
   }
 }
