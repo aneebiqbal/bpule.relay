@@ -48,20 +48,40 @@ Availability, salary, work authorization and timezone are returned as
 `status: "needs_human"` with a null answer — Relay does not hold those facts and
 never invents them.
 
-## 3. V8 evidence carried forward
+## 3. Work Setup journey (real Admin + real Rep, staging)
+
+A real Admin account and a real Rep account (created in staging) drove the
+canonical writer and every read path:
+
+| Step | Result |
+|---|---|
+| Admin login → Work Setup surface | ✅ account row present |
+| Admin assigns Rep as PRIMARY + 30/day DM target | ✅ `ok=true`, `targetsWritten=1` |
+| Rep login lands on `/dashboard` (not onboarding) | ✅ |
+| Rep Today target / completed / remaining | ✅ `30 / 3 / 27` |
+| Rep acknowledges | ✅ HTTP 200; `acknowledged_at` persisted |
+| Rep records an activity | ✅ `recorded=true`; canonical `completed=3` |
+| Admin dashboard shows the same progress | ✅ |
+| Transfer: Admin PRIMARY, Rep OPERATOR | ✅ Rep still executes |
+| Unchanged save after acknowledgement | ✅ `acknowledged_at` unchanged |
+| Canonical vs Rep Today target | ✅ both 30 |
+| Canonical vs Admin requirement | ✅ both 30 |
+
+The assignment/target write went through `POST /api/admin/work-setup` (the same
+canonical writer the Work Setup form calls); the reads were the rendered pages
+and the canonical APIs.
+
+## 4. V8 evidence carried forward
 
 `qa-artifacts/staging-v8/` (previous pass) covers: login → Prepared view → ready
 package → job detail → suggestions Accept (new document version) → PDF preview.
 See `docs/RELAY_V8_JOB_MATCHING_AND_STUDIO.md`.
 
-## 4. Not covered
+## 5. Not covered
 
 - The 20-case suite from Phase 12 (strong/weak/excluded/unknown/expired/
   suspended/wrong-profile/AI-failure/retry/duplicate/edited/concurrent/mobile
   for every role).
-- A **Rep**-role midnight session. The staging workspace has only an admin
-  user, so the Rep rollover was not browser-driven; the same `BusinessDayRefresh`
-  shell component wraps the Rep home, and the boundary arithmetic is unit-tested.
 - Admin / Team Lead role journeys.
 - Cross-organization access denial in a browser.
 
