@@ -293,6 +293,7 @@ export function ProspectsWorkspace({
           onRowClick={(row) => {
             if (row.convertedLeadId) router.push(`/leads/${row.convertedLeadId}`)
           }}
+          isRowClickable={(row) => Boolean(row.convertedLeadId)}
           footer={<p className="px-1 text-[12px] text-graphite">{recent.length} analyzed</p>}
         />
       ) : (

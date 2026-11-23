@@ -1,5 +1,5 @@
 import { displayContactName } from '@/lib/prospect/paste-normalize'
-import type { LeadDetail, ScoutStore } from '@/lib/store/types'
+import type { LeadDetail, LeadReadScope, ScoutStore } from '@/lib/store/types'
 import type { MessageType } from '@/lib/domain/types'
 import { deriveNextLeadAction, type LeadActionResult } from '@/lib/relay/lead-state-machine'
 import { computeEditDelta, classifySendDisposition, inferFeedbackReasons } from '@/lib/relay/edit-learning'
@@ -107,8 +107,8 @@ export async function notifyRequestIntent(
 }
 
 /** Load the conversation and bring its memory up to date (cheap when nothing changed). */
-export async function loadConversation(store: ScoutStore, leadId: string): Promise<{ view: ConversationView; lead: LeadDetail } | null> {
-  const lead = await store.getLead(leadId)
+export async function loadConversation(store: ScoutStore, leadId: string, scope?: LeadReadScope | null): Promise<{ view: ConversationView; lead: LeadDetail } | null> {
+  const lead = await store.getLead(leadId, scope)
   if (!lead) return null
   const state = await store.getConversationState(leadId).catch(() => null)
   const thread = buildThread(lead)
@@ -148,8 +148,9 @@ export async function composeForLead(
   store: ScoutStore,
   leadId: string,
   input: ComposeInput & { profileId?: string | null },
+  scope?: LeadReadScope | null,
 ): Promise<{ result: ComposeResult; draft: ComposerDraft } | null> {
-  const loaded = await loadConversation(store, leadId)
+  const loaded = await loadConversation(store, leadId, scope)
   if (!loaded) return null
   const ctx = await loadComposeContext(store, loaded.lead, loaded.view.thread, loaded.view.memory, input.profileId)
   const result = await composeMessage(ctx, input)
@@ -214,8 +215,9 @@ export async function logSentMessage(
   text: string,
   intent: ComposeIntent,
   idempotencyKey?: string | null,
+  scope?: LeadReadScope | null,
 ): Promise<SendOutcome> {
-  const lead = await store.getLead(leadId)
+  const lead = await store.getLead(leadId, scope)
   if (!lead) return { ok: false, error: 'Lead not found.', status: 404 }
   const sentText = text.trim()
   const type = messageTypeFor(intent, buildThread(lead))
@@ -231,7 +233,7 @@ export async function logSentMessage(
     sendDisposition: disposition,
     rejectReasons,
     idempotencyKey: idempotencyKey?.trim() || null,
-  })
+  }, scope)
   if (!result.allowed) return { ok: false, error: result.message ?? 'Send limit reached.', status: 429 }
 
   if (!result.idempotent && state?.composerDraft?.originalText) {

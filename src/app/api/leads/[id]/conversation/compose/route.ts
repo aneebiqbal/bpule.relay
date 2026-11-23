@@ -6,6 +6,7 @@ import type { ComposeIntent } from '@/lib/conversation/types'
 import { captureMessageGeneration, findLatestSampleForLead } from '@/lib/dataset/service'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { getAuthContext } from '@/lib/auth/organization'
+import { resolveConversationAuthz } from '@/lib/operations/conversation-authz'
 
 export const maxDuration = 120
 
@@ -29,12 +30,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
   try {
+    const authz = await resolveConversationAuthz(store.getSupabaseClient())
+    if (!authz) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
     const composed = await composeForLead(store, id, {
       intent,
       instruction: typeof body.instruction === 'string' ? body.instruction.slice(0, 600) : null,
       previousText: typeof body.previousText === 'string' ? body.previousText.slice(0, 3000) : null,
       profileId: typeof body.profileId === 'string' ? body.profileId : null,
-    })
+    }, authz)
     if (!composed) return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
 
     // Dataset: capture MESSAGE_GENERATION (uses service role for system capture).

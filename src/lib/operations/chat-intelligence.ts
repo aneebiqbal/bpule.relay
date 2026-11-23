@@ -7,7 +7,7 @@ import type { DbClient } from '@/lib/db/types'
  * deriveConversationRow (the parity rule shared with Rep 360 / Accounts).
  */
 import type { AuthContext } from '@/lib/auth/organization'
-import { repInScope, type OperationalScope } from '@/lib/operations/scope'
+import type { OperationalScope } from '@/lib/operations/scope'
 import { deriveConversationRow, type ConversationRow } from '@/lib/operations/conversations'
 import { isMissingRelation } from '@/lib/operations/db-errors'
 import { loadTimeline, type TimelineRow } from '@/lib/operations/activity'
@@ -104,12 +104,33 @@ export function buyerIntentLevel(raw: unknown): string | null {
   return ['HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'].includes(v) ? v : null
 }
 
-export async function loadChatIntelligence(
+/**
+ * Pure: may this viewer open one conversation? Same authority as the queue:
+ * a lead is visible when its owner rep is in scope OR its sending profile is
+ * one of the viewer's authorized identities (primary assignment or active
+ * coverage). The queue includes covered leads on purpose, so the thread context
+ * must accept them too.
+ */
+export function canOpenConversationLead(
+  scope: { repIds: readonly string[] | null },
+  ownerRepId: string | null,
+  identityId: string | null,
+  authorizedIdentityIds: readonly string[] | null,
+): boolean {
+  if (ownerRepId && (scope.repIds === null || scope.repIds.includes(ownerRepId))) return true
+  if (identityId && authorizedIdentityIds?.includes(identityId)) return true
+  return false
+}export async function loadChatIntelligence(
   client: DbClient,
   auth: AuthContext,
   scope: OperationalScope,
   leadId: string,
-  opts: { tasks: boolean },
+  opts: {
+    tasks: boolean
+    /** Effective queue rep ids; defaults to the raw operational scope. */
+    repIds?: readonly string[] | null
+    authorizedIdentityIds?: readonly string[] | null
+  },
   now = Date.now(),
 ): Promise<ChatIntelligence | null> {
   const { data: lead, error } = await client
@@ -125,10 +146,15 @@ export async function loadChatIntelligence(
   if (error || !lead) return null
   const row = lead as unknown as Record<string, unknown>
   const ownerRepId = (row.owner_rep_id as string | null) ?? null
-  // Out-of-scope leads are indistinguishable from missing ones.
-  if (scope.repIds !== null && !(ownerRepId && repInScope(scope, ownerRepId))) return null
-
   const identityId = (row.revenue_identity_id as string | null) ?? null
+  // Out-of-scope leads are indistinguishable from missing ones. The authority
+  // is the queue's: its effective rep ids plus the viewer's executable profiles,
+  // so `scope=me`, coverage and direct deep links all behave identically.
+  const effectiveRepIds = opts.repIds !== undefined ? opts.repIds : scope.repIds
+  if (effectiveRepIds !== null && !canOpenConversationLead({ repIds: effectiveRepIds }, ownerRepId, identityId, opts.authorizedIdentityIds ?? null)) {
+    return null
+  }
+
   const [stateRes, ownerRes, identityRes, tasksRes, noteCountRes, historyRes] = await Promise.all([
     client
       .from('conversation_states')

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { safeErrorResponse } from '@/lib/errors'
 import { loadConversation } from '@/lib/conversation/service'
+import { resolveConversationAuthz } from '@/lib/operations/conversation-authz'
 
 export const maxDuration = 60
 
@@ -14,8 +15,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   } catch {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
+  const authz = await resolveConversationAuthz(store.getSupabaseClient())
+  if (!authz) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   try {
-    const loaded = await loadConversation(store, id)
+    const loaded = await loadConversation(store, id, authz)
     if (!loaded) return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
     return NextResponse.json(loaded.view)
   } catch (error) {

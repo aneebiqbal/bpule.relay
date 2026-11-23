@@ -1,7 +1,6 @@
 import { Suspense } from 'react'
-import { redirect } from 'next/navigation'
-import { getCurrentUser } from '@/lib/auth/current'
 import { getAuthContext } from '@/lib/auth/organization'
+import { requireProductAdmin } from '@/lib/auth/admin-page'
 import { createScoutStore } from '@/lib/store'
 import { PeopleView } from '@/components/admin/people-view'
 import { PeopleViewSkeleton } from '@/components/admin/people-view'
@@ -66,13 +65,8 @@ async function loadPeopleData() {
 }
 
 export default async function PeoplePage() {
-  const user = await getCurrentUser()
-  if (!user) redirect('/login')
-
-  const authCtx = await getAuthContext()
-  if (user.rep.role !== 'admin' && !authCtx?.isOwner && !authCtx?.isAdmin) {
-    redirect('/dashboard')
-  }
+  // Auth context is canonical: a stale reps.role must never admit a demoted admin.
+  await requireProductAdmin()
 
   const dataPromise = loadPeopleData()
 

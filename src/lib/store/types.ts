@@ -219,6 +219,12 @@ export interface RateMetric {
  */
 export interface LeadReadScope {
   repIds: string[] | null
+  /**
+   * Sending profiles the caller may act for (primary assignments plus active
+   * coverage). A lead owned by another rep is readable/actable when its profile
+   * is in this set — the same authority the Inbox queue uses.
+   */
+  identityIds?: readonly string[] | null
 }
 
 export interface LeadDetail extends Lead {
@@ -464,7 +470,7 @@ export interface ScoutStore {
     idempotencyKey?: string | null
     /** Distinguishes an email follow-up from a LinkedIn follow-up (§19). */
     channel?: 'linkedin' | 'email'
-  }): Promise<DosageResult>
+  }, scope?: LeadReadScope | null): Promise<DosageResult>
   /** Explicit rep confirmation that a LinkedIn connection request was accepted — never inferred. */
   markConnectionAccepted(leadId: string): Promise<void>
   /**
@@ -472,7 +478,7 @@ export interface ScoutStore {
    * 'replied', record the outcome, and emit a CLIENT_REPLIED event. Returns
    * the inserted message. Owner-scoped.
    */
-  recordProspectReply(leadId: string, replyText: string, options?: { receivedAt?: string | null; threadStatus?: string | null }): Promise<Message>
+  recordProspectReply(leadId: string, replyText: string, options?: { receivedAt?: string | null; threadStatus?: string | null; scope?: LeadReadScope | null }): Promise<Message>
   /**
    * Admin override: clear a lead's connection-pacing lock immediately. No-op
    * if the lead is not locked. Admin/owner-scoped.

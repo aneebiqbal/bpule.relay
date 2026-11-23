@@ -624,10 +624,12 @@ export function TaskWorkspaceView({
 
 function QuickComplete({ taskId, onChanged }: { taskId: string; onChanged: () => void }) {
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   async function complete() {
     const id = assignedTaskIdFromUnified(taskId)
     if (!id) return
     setBusy(true)
+    setError(null)
     try {
       const res = await fetch(`/api/tasks/${id}`, {
         method: 'PATCH',
@@ -639,22 +641,31 @@ function QuickComplete({ taskId, onChanged }: { taskId: string; onChanged: () =>
         throw new Error(json.error || 'Failed')
       }
       onChanged()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not complete the task.')
     } finally {
       setBusy(false)
     }
   }
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={(e) => {
-        e.stopPropagation()
-        void complete()
-      }}
-      className="text-[12px] font-medium text-ink hover:underline"
-    >
-      Complete
-    </button>
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={(e) => {
+          e.stopPropagation()
+          void complete()
+        }}
+        className="text-[12px] font-medium text-ink hover:underline"
+      >
+        Complete
+      </button>
+      {error && (
+        <span role="alert" className="text-[11px] text-status-danger">
+          {error}
+        </span>
+      )}
+    </span>
   )
 }
 

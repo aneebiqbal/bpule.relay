@@ -33,6 +33,8 @@ export function RepDayControl({ repDay }: { repDay?: RepDayLike }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // "Complete" is attempted first; only a real shortfall offers the incomplete path.
+  const [shortfall, setShortfall] = useState(false)
 
   const timeZone = repDay?.timezone ?? 'UTC'
   const checkedIn = Boolean(repDay?.checkInAt)
@@ -42,6 +44,7 @@ export function RepDayControl({ repDay }: { repDay?: RepDayLike }) {
   async function call(url: string, body?: unknown) {
     setBusy(true)
     setError(null)
+    setShortfall(false)
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -51,6 +54,7 @@ export function RepDayControl({ repDay }: { repDay?: RepDayLike }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(data.error ?? 'Something went wrong. Try again.')
+        setShortfall(Boolean(data.error))
         return
       }
       setOpen(false)
@@ -99,10 +103,20 @@ export function RepDayControl({ repDay }: { repDay?: RepDayLike }) {
             <button
               type="button"
               disabled={busy}
-              onClick={() => call('/api/rep/day/close', { mode: 'incomplete' })}
+              onClick={() => call('/api/rep/day/close', { mode: 'complete' })}
               className={ITEM}
             >
               End day
+            </button>
+          )}
+          {checkedIn && shortfall && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => call('/api/rep/day/close', { mode: 'incomplete' })}
+              className={cn(ITEM, 'text-status-danger')}
+            >
+              End day anyway
             </button>
           )}
           <button

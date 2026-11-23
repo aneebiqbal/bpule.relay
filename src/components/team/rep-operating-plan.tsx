@@ -224,7 +224,9 @@ function ResponsibilityRow({
               >
                 Transfer
               </button>
-              {row.target > 0 && (
+              {/* Channel plans belong to the account, so only the primary row can
+                  remove one — deactivating it would strip every seat's target. */}
+              {row.target > 0 && row.role === 'primary' && (
                 <button
                   type="button"
                   onClick={onRemovePlan}

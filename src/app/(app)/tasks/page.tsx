@@ -126,7 +126,13 @@ async function loadDerivedActionsForCurrentUser(): Promise<RelayTodayAction[]> {
     getDailyWorkspace(),
     resolveActiveWorkspace(),
     store.getTodayDashboard(),
-    store.getRelayQueueData(),
+    // Optional sections must never take the task list down.
+    store.getRelayQueueData().catch(() => ({
+      conversations: new Map(),
+      messagesByLead: new Map(),
+      messagesByJob: new Map(),
+      assignedProfiles: [],
+    })),
   ])
 
   // Work is the rep's whole day, not one sending profile — the same scope rule
@@ -149,7 +155,7 @@ async function loadDerivedActionsForCurrentUser(): Promise<RelayTodayAction[]> {
     assignedProfiles: relayData.assignedProfiles,
     allReps: undefined,
     allLeads: [],
-    suppressedLeadIds: await store.getSuppressedLeadIds(),
+    suppressedLeadIds: await store.getSuppressedLeadIds().catch(() => new Set<string>()),
   })
 
   const visibleTasks = filterQueueByRole(queue, roleContext.role)

@@ -915,9 +915,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (!lead) return null
       const leadOwner = lead.ownerRepId ?? null
       if (scope) {
-        if (leadOwner !== null && scope.repIds !== null && !scope.repIds.includes(leadOwner)) {
-          throw new Error('You are not the owner of this lead.')
-        }
+        const ownerOk = leadOwner === null || scope.repIds === null || scope.repIds.includes(leadOwner)
+        const identityOk = scope.identityIds?.includes((lead as { revenueIdentityId?: string | null }).revenueIdentityId ?? '') ?? false
+        if (!ownerOk && !identityOk) throw new Error('You are not the owner of this lead.')
       } else if (rep.role !== 'admin' && leadOwner !== null && leadOwner !== rep.id) {
         throw new Error('You are not the owner of this lead.')
       }
@@ -1111,10 +1111,17 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       sentText: string,
       messageType: MessageType = 'dm',
       feedback?: { originalDraft?: string | null; sendDisposition?: SendDisposition | null; rejectReasons?: SendFeedbackReason[]; idempotencyKey?: string | null },
+      scope?: LeadReadScope | null,
     ): Promise<DosageResult> {
       const lead = leads.find((l) => l.id === leadId)
       if (!lead) throw new Error('Lead not found')
-      if (lead.ownerRepId !== rep.id) {
+      const ownerOk = scope
+        ? lead.ownerRepId === null ||
+            scope.repIds === null ||
+            scope.repIds.includes(lead.ownerRepId) ||
+            Boolean(scope.identityIds?.includes((lead as { revenueIdentityId?: string | null }).revenueIdentityId ?? ''))
+        : lead.ownerRepId === rep.id
+      if (!ownerOk) {
         throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
       }
       if (lead.status === 'no' || lead.status === 'dead') {
@@ -1262,9 +1269,16 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       lead.lockedUntil = null
       lead.lockedReason = null
     },
-    async recordProspectReply(leadId: string, replyText: string, options?: { receivedAt?: string | null }): Promise<Message> {
+    async recordProspectReply(leadId: string, replyText: string, options?: { receivedAt?: string | null; scope?: LeadReadScope | null }): Promise<Message> {
       const lead = leads.find((l) => l.id === leadId)
-      if (!lead || lead.ownerRepId !== rep.id) throw new Error('Lead not found')
+      if (!lead) throw new Error('Lead not found')
+      const ownerOk = options?.scope
+        ? lead.ownerRepId === null ||
+            options.scope.repIds === null ||
+            options.scope.repIds.includes(lead.ownerRepId) ||
+            Boolean(options.scope.identityIds?.includes((lead as { revenueIdentityId?: string | null }).revenueIdentityId ?? ''))
+        : lead.ownerRepId === rep.id
+      if (!ownerOk) throw new Error('You are not the owner of this lead.')
       if (lead.status === 'no' || lead.status === 'dead') throw new Error('This lead is locked.')
       const received = options?.receivedAt ? new Date(options.receivedAt).getTime() : NaN
       const now = new Date(Number.isFinite(received) && received <= Date.now() ? received : Date.now()).toISOString()

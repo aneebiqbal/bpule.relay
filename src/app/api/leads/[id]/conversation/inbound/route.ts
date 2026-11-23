@@ -6,6 +6,7 @@ import { captureClientReply, findLatestSampleForLead } from '@/lib/dataset/servi
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { getAuthContext } from '@/lib/auth/organization'
 import { validateThreadIdentity } from '@/lib/conversation/thread-integrity'
+import { resolveConversationAuthz } from '@/lib/operations/conversation-authz'
 
 export const maxDuration = 60
 
@@ -38,20 +39,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
   try {
+    const authz = await resolveConversationAuthz(store.getSupabaseClient())
+    if (!authz) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
     // Thread integrity: an inbound message must belong to this lead. If the
     // caller supplies a sender identity, a mismatch refuses to attach silently.
     if (senderUrl || senderEmail) {
-      const lead = await store.getLead(id)
+      const lead = await store.getLead(id, authz)
       const check = validateThreadIdentity({ senderUrl, senderEmail, leadUrl: lead?.url })
       if (!check.ok) {
         return NextResponse.json({ error: check.code, reason: check.reason }, { status: 409 })
       }
       // Identity verified against the lead.
-      await store.recordProspectReply(id, text, { receivedAt, threadStatus: 'VERIFIED' })
+      await store.recordProspectReply(id, text, { receivedAt, threadStatus: 'VERIFIED', scope: authz })
     } else {
       // No identity supplied: mark the thread UNVERIFIED so it is never
       // treated as strongly linked.
-      await store.recordProspectReply(id, text, { receivedAt, threadStatus: 'UNVERIFIED' })
+      await store.recordProspectReply(id, text, { receivedAt, threadStatus: 'UNVERIFIED', scope: authz })
     }
 
     // Dataset: capture CLIENT_REPLY event (uses service role for system capture).
@@ -60,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const sampleId = auth ? await findLatestSampleForLead(datasetClient, auth.orgId, id) : null
     if (sampleId) void captureClientReply(datasetClient, sampleId, text).catch(() => {})
 
-    const loaded = await loadConversation(store, id)
+    const loaded = await loadConversation(store, id, authz)
     if (!loaded) return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
     return NextResponse.json(loaded.view)
   } catch (error) {

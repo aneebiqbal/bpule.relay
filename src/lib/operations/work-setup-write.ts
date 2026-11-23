@@ -401,22 +401,21 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
         byActivity.set(row.activityType, map)
       }
 
-      // An explicit empty list clears the affected lanes. With targets
-      // supplied those lanes are known; otherwise use the account's active plan
-      // lanes so an omitted target list still clears the right rows.
-      if (input.allocations.length === 0) {
-        if (input.targets) {
-          for (const lane of input.targets) activities.add(lane.activityType)
-        } else {
-          const { data: planRows } = await c
-            .from('daily_target_plans')
-            .select('activity_type')
-            .eq('organization_id', input.orgId)
-            .eq('revenue_identity_id', input.identityId)
-            .eq('active', true)
-            .limit(50)
-          for (const row of (planRows ?? []) as Array<{ activity_type: string }>) activities.add(row.activity_type)
-        }
+      // Every supplied target lane is in scope for this write, so blanking one
+      // lane's shares while another keeps them still clears the blanked lane.
+      if (input.targets) {
+        for (const lane of input.targets) activities.add(lane.activityType)
+      } else if (input.allocations.length === 0) {
+        // No target list supplied: fall back to the account's active plan lanes
+        // so an omitted list still clears the right rows.
+        const { data: planRows } = await c
+          .from('daily_target_plans')
+          .select('activity_type')
+          .eq('organization_id', input.orgId)
+          .eq('revenue_identity_id', input.identityId)
+          .eq('active', true)
+          .limit(50)
+        for (const row of (planRows ?? []) as Array<{ activity_type: string }>) activities.add(row.activity_type)
       }
 
       for (const activityType of activities) {
