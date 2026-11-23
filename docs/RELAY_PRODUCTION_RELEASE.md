@@ -116,11 +116,9 @@ Ready Today.
 | `tsc --noEmit` | clean |
 | `eslint` (changed files) | 0 errors (pre-existing warnings only) |
 | `vitest run` (unit) | **5,908 passed**, 5 skipped |
-| `vitest.live.config.mts` (live DB/RLS) | see below |
+| `vitest.live.config.mts` (live DB/RLS) | **144 passed**, 17 skipped, 0 failed |
 | `next build` | clean |
 | Browser (staging) | see `RELAY_FINAL_BROWSER_ACCEPTANCE.md` |
-
-Live-DB/RLS suite result is recorded in §8.
 
 ## 8. GO / NO-GO
 
@@ -128,9 +126,19 @@ Live-DB/RLS suite result is recorded in §8.
 
 **NO-GO for production** until:
 
-1. the `avnadmin` credential is rotated and the old one verified dead;
-2. the VPS benchmark is measured and accepted;
+1. the `avnadmin` credential is rotated and the old one verified dead
+   (console-only; steps in §1);
+2. the VPS benchmark is measured and accepted (no VPS access in this session);
 3. the owner authorizes the merge/deploy.
+
+External blockers, stated plainly:
+
+- **`avnadmin` rotation** requires the Aiven console. The exact steps and the
+  verification command are in §1. Until then the exposed credential remains.
+- **VPS/PM2 benchmark** was not measured; no access. The command set is in §2.
+- **20-case browser matrix**: Admin/Team-Lead journeys and a Rep-role midnight
+  session were not browser-driven (staging has one admin user). The Jobs,
+  accounting, screening and Admin midnight journeys were browser-verified.
 
 Exact Git SHA and deployment commands are recorded at release time in the
 pull-request description; the deploy workflow stamps `RELAY_GIT_SHA` and
