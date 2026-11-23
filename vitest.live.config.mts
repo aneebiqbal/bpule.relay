@@ -19,6 +19,8 @@ config({ path: path.resolve(dirname, '.env.local') })
 assertLiveTestIsolation()
 
 export const LIVE_TEST_FILES = [
+  'tests/accountability-service.test.ts',
+  'tests/job-retention-contracts.test.ts',
   'tests/lead-sender-profile-visibility.test.ts',
   'tests/migration-version-contracts.test.ts',
   'tests/neon-adapter-contracts.test.ts',

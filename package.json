@@ -15,6 +15,7 @@
     "qa:release": "node scripts/qa/qa-release.mjs",
     "qa:production-release": "node scripts/qa/qa-production-release.mjs",
     "qa:live-provider": "vitest run --config vitest.smoke.config.mts",
+    "qa:txn": "npx tsx scripts/qa/postgres-txn-integration.mjs",
     "qa:deployed": "node scripts/qa/qa-deployed.mjs",
     "qa:manifest": "node scripts/qa/release-manifest.mjs",
     "test:watch": "vitest",

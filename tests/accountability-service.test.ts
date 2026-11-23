@@ -19,6 +19,9 @@ import { serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
 const TODAY = new Date().toISOString().slice(0, 10)
+// These assertions read a populated database; without one (CI unit job) skip
+// rather than fail. The live suite supplies a disposable database.
+const liveDb = Boolean(process.env.DATABASE_URL || process.env.SERVICE_DATABASE_URL)
 
 function lane(partial: Partial<AccountabilityLane> & Pick<AccountabilityLane, 'targetCount' | 'seats'>): AccountabilityLane {
   return {
@@ -64,7 +67,7 @@ describe('lanePersonalTarget', () => {
   })
 })
 
-describe('ORGANIZATION_DAILY_ACCOUNTABILITY', () => {
+describe.skipIf(!liveDb)('ORGANIZATION_DAILY_ACCOUNTABILITY', () => {
   it('assigned plus unallocated reconciles to the tracked total', async () => {
     const summary = await getOrganizationDailySummary(serviceDbClient(), {
       orgId: ORG,
