@@ -36,19 +36,31 @@
 - deactivates removed shares,
 - preserves existing shares when an insert fails.
 
-## 4. Final gate re-run
-
-Recorded here after the fixes:
+## 4. Final gate re-run (after the fixes)
 
 | Gate | Result |
 |---|---|
-| `npx tsc --noEmit` | recorded in §5 |
-| `npm test` | recorded in §5 |
-| `npm run build` | recorded in §5 |
+| `npx tsc --noEmit` | **exit 0, 0 errors** |
+| `npm test` | **419 files passed / 1 skipped (420); 5921 passed / 5 skipped (5926)** |
+| `npm run build` | **pass**, route table emitted, no errors/warnings |
+| `npx eslint` (changed files) | **0 errors** (test file ignored by config) |
+| `npm run test:live` | **not run** — writes to production (R-03) |
 
-(See the bottom of this file — updated after the final run.)
+Baseline before fixes: 418 files / 5915 tests passed. Delta: +1 file, +6 tests,
+0 failures.
 
 ## 5. Commit
 
-A single scoped local commit was created on the feature branch. **Not pushed, not
-merged, not deployed.** Exact SHA recorded below after commit.
+**SHA:** `2dbf4543` (full: recorded by `git rev-parse HEAD`)
+**Branch:** `feat/relay-job-intelligence-v2`
+**Pushed:** no. **Merged:** no. **Deployed:** no.
+
+```
+2dbf4543 fix(security,integrity): org-validate Work Setup seats and harden allocations
+```
+
+Working tree after commit: clean.
+
+The final-gate table above was recorded in a follow-up docs commit; the release
+candidate for the code and stabilization docs is `2dbf4543`. See
+`git log --oneline -2`.
