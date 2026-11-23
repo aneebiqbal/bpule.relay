@@ -60,6 +60,9 @@ activating production is not yet justified.
 ## Owner actions required
 
 1. Provision a disposable populated database (or restore staging tables) and run the role matrix
-   plus two-org denial.
+   plus two-org denial. **Since this certification was written, a disposable local environment
+   has been provisioned and the critical journeys now pass: see
+   `../staging-recovery/00-STAGING-RECOVERY.md`. The remaining blockers are policy-level RLS
+   adversarial testing and deployment to the real staging/VPS.**
 2. Resolve the external blockers: Vercel billing; Aiven admin credential and GitHub PAT rotation.
 3. Re-run CI after pushing the branch.

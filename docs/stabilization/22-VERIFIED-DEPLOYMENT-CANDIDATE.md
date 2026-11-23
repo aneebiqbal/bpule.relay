@@ -132,7 +132,7 @@ remains unverified.
 | `npm run build` | pass, route table emitted |
 | `npm run qa:txn` | ALL REAL-POSTGRES CHECKS PASSED |
 | `npm run test:live` | refuses to start (no marker / production URL) |
-| browser role matrix | BLOCKED (§4) |
+| browser role matrix | PARTIAL — see `../sprints/staging-recovery/02-AUTHENTICATED-E2E.md` |
 | VPS worker benchmark | BLOCKED (§4) |
 | Vercel preview deploys | BLOCKED — account blocked (external) |
 
@@ -140,7 +140,18 @@ remains unverified.
 
 **GO** for the candidate to be reviewed and merged to staging.
 
-**NO-GO for production** until: staging is provisioned (empty `relay_staging`,
-or an authorized disposable DB) and the role×route matrix passes; VPS benchmark
-accepted; Aiven `avnadmin` and the GitHub PAT are rotated; owner authorizes
+**NO-GO for production** until: staging is provisioned and the role×route matrix passes;
+VPS benchmark accepted; Aiven `avnadmin` and the GitHub PAT are rotated; owner authorizes
 merge/deploy. Blocked tests are **not** claimed as passed.
+
+---
+
+## 11. Update after the staging-recovery program
+
+A disposable local environment now provisions the full schema (198 migrations, 0 failures)
+and runs real Better Auth sessions: manager Inbox, member scope, cross-org denial, suspended
+refusal, Work Setup save/409/invalid-allocation all pass (**19/19**), and three defects found
+by that exposure were fixed — including a P1 where `GET /api/admin/work-setup` returned 500
+because `identity_assignments.updated_at` did not exist. See
+`docs/sprints/staging-recovery/`. Policy-level RLS adversarial testing remains outstanding,
+so the production NO-GO above stands.
