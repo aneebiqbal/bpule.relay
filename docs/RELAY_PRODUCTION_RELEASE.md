@@ -1,7 +1,7 @@
 # Relay — Production Release Certification
 
 **Branch:** `feat/relay-job-intelligence-v2`
-**Release candidate:** `4436fc5b` (last code commit; subsequent commits are docs only)
+**Release candidate:** `293afd75` (branch tip at certification)
 **Authorization:** not deployed. No merge, no production worker activation.
 
 ---
