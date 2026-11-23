@@ -1,0 +1,2518 @@
+{
+  "schema": "relay.stabilization/route-role-manifest@1",
+  "generated": "2026-11-23",
+  "head": "433489da187fb0d87e218a11868fa796210c976b",
+  "counts": {
+    "pages": 112,
+    "apis": 263,
+    "byGroup": {
+      "landing": 1,
+      "public": 29,
+      "app": 78,
+      "standalone": 4
+    }
+  },
+  "roles": {
+    "organization": [
+      "OWNER",
+      "ADMIN",
+      "MANAGER",
+      "MEMBER"
+    ],
+    "team": [
+      "MANAGER",
+      "MEMBER"
+    ],
+    "repLegacy": [
+      "rep",
+      "sourcer",
+      "admin",
+      "manager"
+    ]
+  },
+  "pages": [
+    {
+      "url": "",
+      "group": "landing",
+      "file": "src/app/(landing)/page.tsx"
+    },
+    {
+      "url": "/acceptable-use",
+      "group": "public",
+      "file": "src/app/(public)/acceptable-use/page.tsx"
+    },
+    {
+      "url": "/account",
+      "group": "app",
+      "file": "src/app/(app)/account/page.tsx"
+    },
+    {
+      "url": "/accountability",
+      "group": "app",
+      "file": "src/app/(app)/accountability/page.tsx"
+    },
+    {
+      "url": "/accounts",
+      "group": "app",
+      "file": "src/app/(app)/accounts/page.tsx"
+    },
+    {
+      "url": "/accounts/:",
+      "group": "app",
+      "file": "src/app/(app)/accounts/[company]/page.tsx"
+    },
+    {
+      "url": "/activate",
+      "group": "app",
+      "file": "src/app/(app)/activate/page.tsx"
+    },
+    {
+      "url": "/admin",
+      "group": "app",
+      "file": "src/app/(app)/admin/page.tsx"
+    },
+    {
+      "url": "/admin/accountability",
+      "group": "app",
+      "file": "src/app/(app)/admin/accountability/page.tsx"
+    },
+    {
+      "url": "/admin/activity",
+      "group": "app",
+      "file": "src/app/(app)/admin/activity/page.tsx"
+    },
+    {
+      "url": "/admin/ai-usage",
+      "group": "app",
+      "file": "src/app/(app)/admin/ai-usage/page.tsx"
+    },
+    {
+      "url": "/admin/command",
+      "group": "app",
+      "file": "src/app/(app)/admin/command/page.tsx"
+    },
+    {
+      "url": "/admin/command-center",
+      "group": "app",
+      "file": "src/app/(app)/admin/command-center/page.tsx"
+    },
+    {
+      "url": "/admin/command/:",
+      "group": "app",
+      "file": "src/app/(app)/admin/command/[repId]/page.tsx"
+    },
+    {
+      "url": "/admin/control-center",
+      "group": "app",
+      "file": "src/app/(app)/admin/control-center/page.tsx"
+    },
+    {
+      "url": "/admin/dataset",
+      "group": "app",
+      "file": "src/app/(app)/admin/dataset/page.tsx"
+    },
+    {
+      "url": "/admin/growth",
+      "group": "app",
+      "file": "src/app/(app)/admin/growth/page.tsx"
+    },
+    {
+      "url": "/admin/health",
+      "group": "app",
+      "file": "src/app/(app)/admin/health/page.tsx"
+    },
+    {
+      "url": "/admin/people",
+      "group": "app",
+      "file": "src/app/(app)/admin/people/page.tsx"
+    },
+    {
+      "url": "/admin/providers",
+      "group": "app",
+      "file": "src/app/(app)/admin/providers/page.tsx"
+    },
+    {
+      "url": "/admin/qa",
+      "group": "app",
+      "file": "src/app/(app)/admin/qa/page.tsx"
+    },
+    {
+      "url": "/admin/revenue-identities",
+      "group": "app",
+      "file": "src/app/(app)/admin/revenue-identities/page.tsx"
+    },
+    {
+      "url": "/admin/revenue-intelligence",
+      "group": "app",
+      "file": "src/app/(app)/admin/revenue-intelligence/page.tsx"
+    },
+    {
+      "url": "/admin/scoring-qa",
+      "group": "app",
+      "file": "src/app/(app)/admin/scoring-qa/page.tsx"
+    },
+    {
+      "url": "/admin/system",
+      "group": "app",
+      "file": "src/app/(app)/admin/system/page.tsx"
+    },
+    {
+      "url": "/admin/targets",
+      "group": "app",
+      "file": "src/app/(app)/admin/targets/page.tsx"
+    },
+    {
+      "url": "/admin/training-data",
+      "group": "app",
+      "file": "src/app/(app)/admin/training-data/page.tsx"
+    },
+    {
+      "url": "/ai-policy",
+      "group": "public",
+      "file": "src/app/(public)/ai-policy/page.tsx"
+    },
+    {
+      "url": "/archive",
+      "group": "app",
+      "file": "src/app/(app)/archive/page.tsx"
+    },
+    {
+      "url": "/chats",
+      "group": "app",
+      "file": "src/app/(app)/chats/page.tsx"
+    },
+    {
+      "url": "/content",
+      "group": "app",
+      "file": "src/app/(app)/content/page.tsx"
+    },
+    {
+      "url": "/content-v2/:/today",
+      "group": "app",
+      "file": "src/app/(app)/content-v2/[id]/today/page.tsx"
+    },
+    {
+      "url": "/content-v2/growth",
+      "group": "app",
+      "file": "src/app/(app)/content-v2/growth/page.tsx"
+    },
+    {
+      "url": "/content/:",
+      "group": "app",
+      "file": "src/app/(app)/content/[id]/page.tsx"
+    },
+    {
+      "url": "/content/growth",
+      "group": "app",
+      "file": "src/app/(app)/content/growth/page.tsx"
+    },
+    {
+      "url": "/content/ideas",
+      "group": "app",
+      "file": "src/app/(app)/content/ideas/page.tsx"
+    },
+    {
+      "url": "/content/new",
+      "group": "app",
+      "file": "src/app/(app)/content/new/page.tsx"
+    },
+    {
+      "url": "/dashboard",
+      "group": "app",
+      "file": "src/app/(app)/dashboard/page.tsx"
+    },
+    {
+      "url": "/docs",
+      "group": "public",
+      "file": "src/app/(public)/docs/page.tsx"
+    },
+    {
+      "url": "/docs/account",
+      "group": "public",
+      "file": "src/app/(public)/docs/account/page.tsx"
+    },
+    {
+      "url": "/docs/analytics",
+      "group": "public",
+      "file": "src/app/(public)/docs/analytics/page.tsx"
+    },
+    {
+      "url": "/docs/bd-workflow",
+      "group": "public",
+      "file": "src/app/(public)/docs/bd-workflow/page.tsx"
+    },
+    {
+      "url": "/docs/faq",
+      "group": "public",
+      "file": "src/app/(public)/docs/faq/page.tsx"
+    },
+    {
+      "url": "/docs/follow-ups",
+      "group": "public",
+      "file": "src/app/(public)/docs/follow-ups/page.tsx"
+    },
+    {
+      "url": "/docs/founder-setup",
+      "group": "public",
+      "file": "src/app/(public)/docs/founder-setup/page.tsx"
+    },
+    {
+      "url": "/docs/getting-started",
+      "group": "public",
+      "file": "src/app/(public)/docs/getting-started/page.tsx"
+    },
+    {
+      "url": "/docs/identities",
+      "group": "public",
+      "file": "src/app/(public)/docs/identities/page.tsx"
+    },
+    {
+      "url": "/docs/jobs",
+      "group": "public",
+      "file": "src/app/(public)/docs/jobs/page.tsx"
+    },
+    {
+      "url": "/docs/leads",
+      "group": "public",
+      "file": "src/app/(public)/docs/leads/page.tsx"
+    },
+    {
+      "url": "/docs/outreach",
+      "group": "public",
+      "file": "src/app/(public)/docs/outreach/page.tsx"
+    },
+    {
+      "url": "/docs/oversight",
+      "group": "public",
+      "file": "src/app/(public)/docs/oversight/page.tsx"
+    },
+    {
+      "url": "/docs/prospect-check",
+      "group": "public",
+      "file": "src/app/(public)/docs/prospect-check/page.tsx"
+    },
+    {
+      "url": "/docs/studio",
+      "group": "public",
+      "file": "src/app/(public)/docs/studio/page.tsx"
+    },
+    {
+      "url": "/docs/team",
+      "group": "public",
+      "file": "src/app/(public)/docs/team/page.tsx"
+    },
+    {
+      "url": "/docs/usage",
+      "group": "public",
+      "file": "src/app/(public)/docs/usage/page.tsx"
+    },
+    {
+      "url": "/facts",
+      "group": "app",
+      "file": "src/app/(app)/facts/page.tsx"
+    },
+    {
+      "url": "/forgot-password",
+      "group": "public",
+      "file": "src/app/(public)/forgot-password/page.tsx"
+    },
+    {
+      "url": "/home",
+      "group": "app",
+      "file": "src/app/(app)/home/page.tsx"
+    },
+    {
+      "url": "/inbox-fixture",
+      "group": "standalone",
+      "file": "src/app/inbox-fixture/page.tsx"
+    },
+    {
+      "url": "/jobs",
+      "group": "app",
+      "file": "src/app/(app)/jobs/page.tsx"
+    },
+    {
+      "url": "/jobs/:",
+      "group": "app",
+      "file": "src/app/(app)/jobs/[id]/page.tsx"
+    },
+    {
+      "url": "/leads",
+      "group": "app",
+      "file": "src/app/(app)/leads/page.tsx"
+    },
+    {
+      "url": "/leads/:",
+      "group": "app",
+      "file": "src/app/(app)/leads/[id]/page.tsx"
+    },
+    {
+      "url": "/leads/import",
+      "group": "app",
+      "file": "src/app/(app)/leads/import/page.tsx"
+    },
+    {
+      "url": "/leads/new",
+      "group": "app",
+      "file": "src/app/(app)/leads/new/page.tsx"
+    },
+    {
+      "url": "/login",
+      "group": "public",
+      "file": "src/app/(public)/login/page.tsx"
+    },
+    {
+      "url": "/manage-profiles",
+      "group": "app",
+      "file": "src/app/(app)/manage-profiles/page.tsx"
+    },
+    {
+      "url": "/notifications",
+      "group": "app",
+      "file": "src/app/(app)/notifications/page.tsx"
+    },
+    {
+      "url": "/onboarding",
+      "group": "standalone",
+      "file": "src/app/onboarding/page.tsx"
+    },
+    {
+      "url": "/performance",
+      "group": "app",
+      "file": "src/app/(app)/performance/page.tsx"
+    },
+    {
+      "url": "/pricing",
+      "group": "public",
+      "file": "src/app/(public)/pricing/page.tsx"
+    },
+    {
+      "url": "/privacy",
+      "group": "public",
+      "file": "src/app/(public)/privacy/page.tsx"
+    },
+    {
+      "url": "/profile-intelligence",
+      "group": "app",
+      "file": "src/app/(app)/profile-intelligence/page.tsx"
+    },
+    {
+      "url": "/profile-intelligence/:",
+      "group": "app",
+      "file": "src/app/(app)/profile-intelligence/[id]/page.tsx"
+    },
+    {
+      "url": "/profiles",
+      "group": "app",
+      "file": "src/app/(app)/profiles/page.tsx"
+    },
+    {
+      "url": "/prospect",
+      "group": "app",
+      "file": "src/app/(app)/prospect/page.tsx"
+    },
+    {
+      "url": "/qa-v4",
+      "group": "app",
+      "file": "src/app/(app)/qa-v4/page.tsx"
+    },
+    {
+      "url": "/relay",
+      "group": "app",
+      "file": "src/app/(app)/relay/page.tsx"
+    },
+    {
+      "url": "/relay/persona-daily",
+      "group": "app",
+      "file": "src/app/(app)/relay/persona-daily/page.tsx"
+    },
+    {
+      "url": "/rep/assigned-profiles",
+      "group": "app",
+      "file": "src/app/(app)/rep/assigned-profiles/page.tsx"
+    },
+    {
+      "url": "/reports",
+      "group": "app",
+      "file": "src/app/(app)/reports/page.tsx"
+    },
+    {
+      "url": "/reports/activity",
+      "group": "app",
+      "file": "src/app/(app)/reports/activity/page.tsx"
+    },
+    {
+      "url": "/reports/pipeline",
+      "group": "app",
+      "file": "src/app/(app)/reports/pipeline/page.tsx"
+    },
+    {
+      "url": "/reports/revenue",
+      "group": "app",
+      "file": "src/app/(app)/reports/revenue/page.tsx"
+    },
+    {
+      "url": "/reports/sales",
+      "group": "app",
+      "file": "src/app/(app)/reports/sales/page.tsx"
+    },
+    {
+      "url": "/reports/team",
+      "group": "app",
+      "file": "src/app/(app)/reports/team/page.tsx"
+    },
+    {
+      "url": "/reset-password",
+      "group": "public",
+      "file": "src/app/(public)/reset-password/page.tsx"
+    },
+    {
+      "url": "/revenue/email",
+      "group": "app",
+      "file": "src/app/(app)/revenue/email/page.tsx"
+    },
+    {
+      "url": "/security",
+      "group": "public",
+      "file": "src/app/(public)/security/page.tsx"
+    },
+    {
+      "url": "/settings",
+      "group": "app",
+      "file": "src/app/(app)/settings/page.tsx"
+    },
+    {
+      "url": "/signup",
+      "group": "public",
+      "file": "src/app/(public)/signup/page.tsx"
+    },
+    {
+      "url": "/studio/drafts/:",
+      "group": "standalone",
+      "file": "src/app/studio/drafts/[id]/page.tsx"
+    },
+    {
+      "url": "/studio/drafts/new",
+      "group": "standalone",
+      "file": "src/app/studio/drafts/new/page.tsx"
+    },
+    {
+      "url": "/studio/post-detail",
+      "group": "app",
+      "file": "src/app/(app)/studio/post-detail/page.tsx"
+    },
+    {
+      "url": "/tasks",
+      "group": "app",
+      "file": "src/app/(app)/tasks/page.tsx"
+    },
+    {
+      "url": "/team",
+      "group": "app",
+      "file": "src/app/(app)/team/page.tsx"
+    },
+    {
+      "url": "/team/:",
+      "group": "app",
+      "file": "src/app/(app)/team/[repId]/page.tsx"
+    },
+    {
+      "url": "/team/eval",
+      "group": "app",
+      "file": "src/app/(app)/team/eval/page.tsx"
+    },
+    {
+      "url": "/team/groups",
+      "group": "app",
+      "file": "src/app/(app)/team/groups/page.tsx"
+    },
+    {
+      "url": "/team/groups/:",
+      "group": "app",
+      "file": "src/app/(app)/team/groups/[teamId]/page.tsx"
+    },
+    {
+      "url": "/team/people",
+      "group": "app",
+      "file": "src/app/(app)/team/people/page.tsx"
+    },
+    {
+      "url": "/team/performance",
+      "group": "app",
+      "file": "src/app/(app)/team/performance/page.tsx"
+    },
+    {
+      "url": "/team/profiles",
+      "group": "app",
+      "file": "src/app/(app)/team/profiles/page.tsx"
+    },
+    {
+      "url": "/team/profiles/:",
+      "group": "app",
+      "file": "src/app/(app)/team/profiles/[profileId]/page.tsx"
+    },
+    {
+      "url": "/team/tasks",
+      "group": "app",
+      "file": "src/app/(app)/team/tasks/page.tsx"
+    },
+    {
+      "url": "/terms",
+      "group": "public",
+      "file": "src/app/(public)/terms/page.tsx"
+    },
+    {
+      "url": "/trust",
+      "group": "public",
+      "file": "src/app/(public)/trust/page.tsx"
+    },
+    {
+      "url": "/upwork",
+      "group": "app",
+      "file": "src/app/(app)/upwork/page.tsx"
+    },
+    {
+      "url": "/upwork/:",
+      "group": "app",
+      "file": "src/app/(app)/upwork/[id]/page.tsx"
+    },
+    {
+      "url": "/upwork/new",
+      "group": "app",
+      "file": "src/app/(app)/upwork/new/page.tsx"
+    },
+    {
+      "url": "/verify-email",
+      "group": "public",
+      "file": "src/app/(public)/verify-email/page.tsx"
+    },
+    {
+      "url": "/workspace/:",
+      "group": "app",
+      "file": "src/app/(app)/workspace/[revenueIdentityId]/page.tsx"
+    }
+  ],
+  "apis": [
+    {
+      "url": "/api/accountability/day-close",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "file": "src/app/api/accountability/day-close/route.ts"
+    },
+    {
+      "url": "/api/accountability/day-close-strict",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "file": "src/app/api/accountability/day-close-strict/route.ts"
+    },
+    {
+      "url": "/api/accountability/ensure-day-close",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "src/app/api/accountability/ensure-day-close/route.ts"
+    },
+    {
+      "url": "/api/accountability/event",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/accountability/event/route.ts"
+    },
+    {
+      "url": "/api/accountability/monthly-review",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "file": "src/app/api/accountability/monthly-review/route.ts"
+    },
+    {
+      "url": "/api/accountability/progress",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/accountability/progress/route.ts"
+    },
+    {
+      "url": "/api/accountability/rewards",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "file": "src/app/api/accountability/rewards/route.ts"
+    },
+    {
+      "url": "/api/accountability/warnings",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/accountability/warnings/route.ts"
+    },
+    {
+      "url": "/api/admin/accountability",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/accountability/route.ts"
+    },
+    {
+      "url": "/api/admin/accountability-templates",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/accountability-templates/route.ts"
+    },
+    {
+      "url": "/api/admin/ai-usage",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/ai-usage/route.ts"
+    },
+    {
+      "url": "/api/admin/assignments",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/assignments/route.ts"
+    },
+    {
+      "url": "/api/admin/contracts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/contracts/route.ts"
+    },
+    {
+      "url": "/api/admin/contracts/:/allocations",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "src/app/api/admin/contracts/[id]/allocations/route.ts"
+    },
+    {
+      "url": "/api/admin/daily-activity",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/daily-activity/route.ts"
+    },
+    {
+      "url": "/api/admin/data-management",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/data-management/route.ts"
+    },
+    {
+      "url": "/api/admin/email-policy",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/admin/email-policy/route.ts"
+    },
+    {
+      "url": "/api/admin/events",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/events/route.ts"
+    },
+    {
+      "url": "/api/admin/health",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/health/route.ts"
+    },
+    {
+      "url": "/api/admin/identities/:/lifecycle",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/admin/identities/[id]/lifecycle/route.ts"
+    },
+    {
+      "url": "/api/admin/integrity/action-ledger",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/integrity/action-ledger/route.ts"
+    },
+    {
+      "url": "/api/admin/invitations",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/admin/invitations/route.ts"
+    },
+    {
+      "url": "/api/admin/live-feed",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/live-feed/route.ts"
+    },
+    {
+      "url": "/api/admin/observability",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/observability/route.ts"
+    },
+    {
+      "url": "/api/admin/operating-policy",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/admin/operating-policy/route.ts"
+    },
+    {
+      "url": "/api/admin/people/bypass-onboarding",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/admin/people/bypass-onboarding/route.ts"
+    },
+    {
+      "url": "/api/admin/performance",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/performance/route.ts"
+    },
+    {
+      "url": "/api/admin/performance/activity",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/performance/activity/route.ts"
+    },
+    {
+      "url": "/api/admin/performance/config",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/performance/config/route.ts"
+    },
+    {
+      "url": "/api/admin/provider-analytics",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/provider-analytics/route.ts"
+    },
+    {
+      "url": "/api/admin/provider-searches",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/provider-searches/route.ts"
+    },
+    {
+      "url": "/api/admin/provider-searches/:",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "src/app/api/admin/provider-searches/[id]/route.ts"
+    },
+    {
+      "url": "/api/admin/providers",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/admin/providers/route.ts"
+    },
+    {
+      "url": "/api/admin/qa-views",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/qa-views/route.ts"
+    },
+    {
+      "url": "/api/admin/qa/evaluations",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/admin/qa/evaluations/route.ts"
+    },
+    {
+      "url": "/api/admin/reconciliation",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/reconciliation/route.ts"
+    },
+    {
+      "url": "/api/admin/rep-performance",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/rep-performance/route.ts"
+    },
+    {
+      "url": "/api/admin/responsibilities",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "file": "src/app/api/admin/responsibilities/route.ts"
+    },
+    {
+      "url": "/api/admin/revenue-identities",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/revenue-identities/route.ts"
+    },
+    {
+      "url": "/api/admin/revenue-identities/:",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "src/app/api/admin/revenue-identities/[id]/route.ts"
+    },
+    {
+      "url": "/api/admin/revenue-identities/:/assign",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "file": "src/app/api/admin/revenue-identities/[id]/assign/route.ts"
+    },
+    {
+      "url": "/api/admin/revenue-identities/:/email",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/admin/revenue-identities/[id]/email/route.ts"
+    },
+    {
+      "url": "/api/admin/revenue-intelligence",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/revenue-intelligence/route.ts"
+    },
+    {
+      "url": "/api/admin/routing-opportunities",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/routing-opportunities/route.ts"
+    },
+    {
+      "url": "/api/admin/scoring-integrity",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/scoring-integrity/route.ts"
+    },
+    {
+      "url": "/api/admin/scoring-monitor",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/scoring-monitor/route.ts"
+    },
+    {
+      "url": "/api/admin/scoring-qa",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/scoring-qa/route.ts"
+    },
+    {
+      "url": "/api/admin/send-limits",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/admin/send-limits/route.ts"
+    },
+    {
+      "url": "/api/admin/targets",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/targets/route.ts"
+    },
+    {
+      "url": "/api/admin/targets/:",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "src/app/api/admin/targets/[id]/route.ts"
+    },
+    {
+      "url": "/api/admin/targets/:/allocations",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/targets/[id]/allocations/route.ts"
+    },
+    {
+      "url": "/api/admin/team-day",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/team-day/route.ts"
+    },
+    {
+      "url": "/api/admin/team-day/:",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/team-day/[repId]/route.ts"
+    },
+    {
+      "url": "/api/admin/team-live",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/team-live/route.ts"
+    },
+    {
+      "url": "/api/admin/training-data",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/admin/training-data/route.ts"
+    },
+    {
+      "url": "/api/admin/training-data/labels",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "src/app/api/admin/training-data/labels/route.ts"
+    },
+    {
+      "url": "/api/admin/training-data/pairwise",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "src/app/api/admin/training-data/pairwise/route.ts"
+    },
+    {
+      "url": "/api/admin/work-setup",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/admin/work-setup/route.ts"
+    },
+    {
+      "url": "/api/analytics/track",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/analytics/track/route.ts"
+    },
+    {
+      "url": "/api/auth/:",
+      "methods": [],
+      "file": "src/app/api/auth/[...path]/route.ts"
+    },
+    {
+      "url": "/api/content/cold-start",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/cold-start/route.ts"
+    },
+    {
+      "url": "/api/content/daily",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/content/daily/route.ts"
+    },
+    {
+      "url": "/api/content/drafts/:",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/content/drafts/[id]/route.ts"
+    },
+    {
+      "url": "/api/content/drafts/:/feedback",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/drafts/[id]/feedback/route.ts"
+    },
+    {
+      "url": "/api/content/drafts/:/post",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/drafts/[id]/post/route.ts"
+    },
+    {
+      "url": "/api/content/generate",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/generate/route.ts"
+    },
+    {
+      "url": "/api/content/generate-draft",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/generate-draft/route.ts"
+    },
+    {
+      "url": "/api/content/history/:",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "src/app/api/content/history/[id]/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/daily",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/daily/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/daily-brief",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/daily-brief/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/daily-brief/copied",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/daily-brief/copied/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/daily-brief/feedback",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/daily-brief/feedback/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/daily-brief/idea",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/daily-brief/idea/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/daily-brief/image",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/daily-brief/image/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/discover",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/discover/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/generate",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/generate/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/opinions",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/opinions/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/quick-capture",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/quick-capture/route.ts"
+    },
+    {
+      "url": "/api/content/intelligence/v2/taste",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/intelligence/v2/taste/route.ts"
+    },
+    {
+      "url": "/api/content/onboarding-questions",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/onboarding-questions/route.ts"
+    },
+    {
+      "url": "/api/content/onboarding/complete",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/onboarding/complete/route.ts"
+    },
+    {
+      "url": "/api/content/onboarding/extract",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/onboarding/extract/route.ts"
+    },
+    {
+      "url": "/api/content/personas",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/content/personas/route.ts"
+    },
+    {
+      "url": "/api/content/personas/:",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "src/app/api/content/personas/[id]/route.ts"
+    },
+    {
+      "url": "/api/content/personas/:/refine",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/personas/[id]/refine/route.ts"
+    },
+    {
+      "url": "/api/content/pillars",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/content/pillars/route.ts"
+    },
+    {
+      "url": "/api/content/post-structures",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/content/post-structures/route.ts"
+    },
+    {
+      "url": "/api/content/research-findings",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/content/research-findings/route.ts"
+    },
+    {
+      "url": "/api/content/suggestions",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/content/suggestions/route.ts"
+    },
+    {
+      "url": "/api/content/topic-clusters",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/content/topic-clusters/route.ts"
+    },
+    {
+      "url": "/api/content/trending-angles",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/content/trending-angles/route.ts"
+    },
+    {
+      "url": "/api/cron/archive-stale-leads",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/cron/archive-stale-leads/route.ts"
+    },
+    {
+      "url": "/api/cron/job-discovery",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/cron/job-discovery/route.ts"
+    },
+    {
+      "url": "/api/cron/job-inventory",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/cron/job-inventory/route.ts"
+    },
+    {
+      "url": "/api/cron/job-notifications",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/cron/job-notifications/route.ts"
+    },
+    {
+      "url": "/api/cron/job-preparation",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/cron/job-preparation/route.ts"
+    },
+    {
+      "url": "/api/cron/job-retention",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/cron/job-retention/route.ts"
+    },
+    {
+      "url": "/api/cron/job-verification",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/cron/job-verification/route.ts"
+    },
+    {
+      "url": "/api/cron/operational-scheduler",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/cron/operational-scheduler/route.ts"
+    },
+    {
+      "url": "/api/dataset/capture",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/dataset/capture/route.ts"
+    },
+    {
+      "url": "/api/dataset/export",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/dataset/export/route.ts"
+    },
+    {
+      "url": "/api/dataset/metrics",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/dataset/metrics/route.ts"
+    },
+    {
+      "url": "/api/dataset/samples",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/dataset/samples/route.ts"
+    },
+    {
+      "url": "/api/dataset/sync",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/dataset/sync/route.ts"
+    },
+    {
+      "url": "/api/email/discover",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/email/discover/route.ts"
+    },
+    {
+      "url": "/api/email/mailbox/callback",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/email/mailbox/callback/route.ts"
+    },
+    {
+      "url": "/api/email/mailbox/connect",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/email/mailbox/connect/route.ts"
+    },
+    {
+      "url": "/api/email/webhook",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/email/webhook/route.ts"
+    },
+    {
+      "url": "/api/eval/cron-run",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/eval/cron-run/route.ts"
+    },
+    {
+      "url": "/api/eval/golden",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/eval/golden/route.ts"
+    },
+    {
+      "url": "/api/eval/run",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/eval/run/route.ts"
+    },
+    {
+      "url": "/api/facts",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "file": "src/app/api/facts/route.ts"
+    },
+    {
+      "url": "/api/few-shot/refresh",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "src/app/api/few-shot/refresh/route.ts"
+    },
+    {
+      "url": "/api/growth-v2/daily",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/growth-v2/daily/route.ts"
+    },
+    {
+      "url": "/api/growth/events",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/growth/events/route.ts"
+    },
+    {
+      "url": "/api/growth/feedback",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/growth/feedback/route.ts"
+    },
+    {
+      "url": "/api/growth/opportunities",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/growth/opportunities/route.ts"
+    },
+    {
+      "url": "/api/growth/opportunities/generate",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/growth/opportunities/generate/route.ts"
+    },
+    {
+      "url": "/api/growth/opportunities/select",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/growth/opportunities/select/route.ts"
+    },
+    {
+      "url": "/api/growth/weekly-review",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/growth/weekly-review/route.ts"
+    },
+    {
+      "url": "/api/help/:",
+      "methods": [
+        "PATCH",
+        "GET"
+      ],
+      "file": "src/app/api/help/[requestId]/route.ts"
+    },
+    {
+      "url": "/api/help/outstanding",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/help/outstanding/route.ts"
+    },
+    {
+      "url": "/api/inbound/analyze",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/inbound/analyze/route.ts"
+    },
+    {
+      "url": "/api/inbound/lead",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/inbound/lead/route.ts"
+    },
+    {
+      "url": "/api/inbound/reply",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/inbound/reply/route.ts"
+    },
+    {
+      "url": "/api/jobs",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/jobs/route.ts"
+    },
+    {
+      "url": "/api/jobs/:",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/jobs/[id]/route.ts"
+    },
+    {
+      "url": "/api/jobs/:/application",
+      "methods": [
+        "POST",
+        "PATCH"
+      ],
+      "file": "src/app/api/jobs/[id]/application/route.ts"
+    },
+    {
+      "url": "/api/jobs/:/documents",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/jobs/[id]/documents/route.ts"
+    },
+    {
+      "url": "/api/jobs/:/documents/:",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/jobs/[id]/documents/[kind]/route.ts"
+    },
+    {
+      "url": "/api/jobs/:/matches",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "src/app/api/jobs/[id]/matches/route.ts"
+    },
+    {
+      "url": "/api/jobs/:/recommend",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/jobs/[id]/recommend/route.ts"
+    },
+    {
+      "url": "/api/jobs/:/save",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/jobs/[id]/save/route.ts"
+    },
+    {
+      "url": "/api/jobs/:/screening",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/jobs/[id]/screening/route.ts"
+    },
+    {
+      "url": "/api/jobs/applications",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/jobs/applications/route.ts"
+    },
+    {
+      "url": "/api/jobs/cv",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/jobs/cv/route.ts"
+    },
+    {
+      "url": "/api/jobs/documents",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/jobs/documents/route.ts"
+    },
+    {
+      "url": "/api/jobs/filters",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "file": "src/app/api/jobs/filters/route.ts"
+    },
+    {
+      "url": "/api/jobs/import",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/jobs/import/route.ts"
+    },
+    {
+      "url": "/api/jobs/search",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/jobs/search/route.ts"
+    },
+    {
+      "url": "/api/jobs/sources",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/jobs/sources/route.ts"
+    },
+    {
+      "url": "/api/jobs/sources/refresh",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/jobs/sources/refresh/route.ts"
+    },
+    {
+      "url": "/api/leads",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/route.ts"
+    },
+    {
+      "url": "/api/leads/:",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/leads/[id]/route.ts"
+    },
+    {
+      "url": "/api/leads/:/archive",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/archive/route.ts"
+    },
+    {
+      "url": "/api/leads/:/connection-accepted",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/connection-accepted/route.ts"
+    },
+    {
+      "url": "/api/leads/:/contact",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/contact/route.ts"
+    },
+    {
+      "url": "/api/leads/:/contacts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/contacts/route.ts"
+    },
+    {
+      "url": "/api/leads/:/contacts/discover",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/contacts/discover/route.ts"
+    },
+    {
+      "url": "/api/leads/:/conversation",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/leads/[id]/conversation/route.ts"
+    },
+    {
+      "url": "/api/leads/:/conversation/compose",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/conversation/compose/route.ts"
+    },
+    {
+      "url": "/api/leads/:/conversation/draft",
+      "methods": [
+        "PUT"
+      ],
+      "file": "src/app/api/leads/[id]/conversation/draft/route.ts"
+    },
+    {
+      "url": "/api/leads/:/conversation/inbound",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/conversation/inbound/route.ts"
+    },
+    {
+      "url": "/api/leads/:/conversation/send",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/conversation/send/route.ts"
+    },
+    {
+      "url": "/api/leads/:/decision-context",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/leads/[id]/decision-context/route.ts"
+    },
+    {
+      "url": "/api/leads/:/draft",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/draft/route.ts"
+    },
+    {
+      "url": "/api/leads/:/email",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/leads/[id]/email/route.ts"
+    },
+    {
+      "url": "/api/leads/:/email/prepare",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/email/prepare/route.ts"
+    },
+    {
+      "url": "/api/leads/:/email/send",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/email/send/route.ts"
+    },
+    {
+      "url": "/api/leads/:/help",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/help/route.ts"
+    },
+    {
+      "url": "/api/leads/:/messages",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/leads/[id]/messages/route.ts"
+    },
+    {
+      "url": "/api/leads/:/outcome",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/outcome/route.ts"
+    },
+    {
+      "url": "/api/leads/:/preview",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/leads/[id]/preview/route.ts"
+    },
+    {
+      "url": "/api/leads/:/refer",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "src/app/api/leads/[id]/refer/route.ts"
+    },
+    {
+      "url": "/api/leads/:/refresh-intelligence",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/refresh-intelligence/route.ts"
+    },
+    {
+      "url": "/api/leads/:/reply",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/reply/route.ts"
+    },
+    {
+      "url": "/api/leads/:/status",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/status/route.ts"
+    },
+    {
+      "url": "/api/leads/:/unlock",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/[id]/unlock/route.ts"
+    },
+    {
+      "url": "/api/leads/extract",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/extract/route.ts"
+    },
+    {
+      "url": "/api/leads/import",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/leads/import/route.ts"
+    },
+    {
+      "url": "/api/manager/team",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/manager/team/route.ts"
+    },
+    {
+      "url": "/api/me/authorized-identities",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/me/authorized-identities/route.ts"
+    },
+    {
+      "url": "/api/me/rulebook",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/me/rulebook/route.ts"
+    },
+    {
+      "url": "/api/me/status",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/me/status/route.ts"
+    },
+    {
+      "url": "/api/me/team",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/me/team/route.ts"
+    },
+    {
+      "url": "/api/me/workspace",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/me/workspace/route.ts"
+    },
+    {
+      "url": "/api/notes",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/notes/route.ts"
+    },
+    {
+      "url": "/api/notes/:",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "src/app/api/notes/[id]/route.ts"
+    },
+    {
+      "url": "/api/notifications",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/notifications/route.ts"
+    },
+    {
+      "url": "/api/notifications-app",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/notifications-app/route.ts"
+    },
+    {
+      "url": "/api/notifications/read-task",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/notifications/read-task/route.ts"
+    },
+    {
+      "url": "/api/notifications/reset",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/notifications/reset/route.ts"
+    },
+    {
+      "url": "/api/onboarding",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/onboarding/route.ts"
+    },
+    {
+      "url": "/api/onboarding/preview",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/onboarding/preview/route.ts"
+    },
+    {
+      "url": "/api/organization/delete",
+      "methods": [
+        "DELETE"
+      ],
+      "file": "src/app/api/organization/delete/route.ts"
+    },
+    {
+      "url": "/api/owner/command-center",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/owner/command-center/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/batch",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/profile-intelligence/batch/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/batch/:",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/profile-intelligence/batch/[id]/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/batch/:/process",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/profile-intelligence/batch/[id]/process/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles/:",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/[id]/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles/:/assign",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/[id]/assign/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles/:/enrich",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/[id]/enrich/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles/:/enrich/:",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/[id]/enrich/[runId]/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles/:/enrich/:/apply",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/[id]/enrich/[runId]/apply/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles/:/enrich/:/discard",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/[id]/enrich/[runId]/discard/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles/:/enrich/:/person",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/[id]/enrich/[runId]/person/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles/:/enrich/:/process",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/[id]/enrich/[runId]/process/route.ts"
+    },
+    {
+      "url": "/api/profile-intelligence/profiles/merge",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/profile-intelligence/profiles/merge/route.ts"
+    },
+    {
+      "url": "/api/profiles",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/profiles/route.ts"
+    },
+    {
+      "url": "/api/profiles/:",
+      "methods": [
+        "DELETE"
+      ],
+      "file": "src/app/api/profiles/[id]/route.ts"
+    },
+    {
+      "url": "/api/profiles/:/cv",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/profiles/[id]/cv/route.ts"
+    },
+    {
+      "url": "/api/proofs",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/proofs/route.ts"
+    },
+    {
+      "url": "/api/proofs/:",
+      "methods": [
+        "DELETE"
+      ],
+      "file": "src/app/api/proofs/[id]/route.ts"
+    },
+    {
+      "url": "/api/prospect/analyze",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/prospect/analyze/route.ts"
+    },
+    {
+      "url": "/api/prospect/fresh",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/prospect/fresh/route.ts"
+    },
+    {
+      "url": "/api/prospect/fresh/:/dismiss",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/prospect/fresh/[id]/dismiss/route.ts"
+    },
+    {
+      "url": "/api/prospect/fresh/:/promote",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/prospect/fresh/[id]/promote/route.ts"
+    },
+    {
+      "url": "/api/prospect/save",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/prospect/save/route.ts"
+    },
+    {
+      "url": "/api/push/subscribe",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "file": "src/app/api/push/subscribe/route.ts"
+    },
+    {
+      "url": "/api/relay/queue",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/relay/queue/route.ts"
+    },
+    {
+      "url": "/api/relay/reconcile",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/relay/reconcile/route.ts"
+    },
+    {
+      "url": "/api/rep/assigned-profiles",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/rep/assigned-profiles/route.ts"
+    },
+    {
+      "url": "/api/rep/availability",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/rep/availability/route.ts"
+    },
+    {
+      "url": "/api/rep/coverage",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/rep/coverage/route.ts"
+    },
+    {
+      "url": "/api/rep/day",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/rep/day/route.ts"
+    },
+    {
+      "url": "/api/rep/day/close",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/rep/day/close/route.ts"
+    },
+    {
+      "url": "/api/rep/day/exception",
+      "methods": [
+        "POST",
+        "PATCH"
+      ],
+      "file": "src/app/api/rep/day/exception/route.ts"
+    },
+    {
+      "url": "/api/rep/my-day",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/rep/my-day/route.ts"
+    },
+    {
+      "url": "/api/rep/today",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/rep/today/route.ts"
+    },
+    {
+      "url": "/api/reps",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/reps/route.ts"
+    },
+    {
+      "url": "/api/resume/generate",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/resume/generate/route.ts"
+    },
+    {
+      "url": "/api/revenue/email",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/revenue/email/route.ts"
+    },
+    {
+      "url": "/api/revenue/email/prepare",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/revenue/email/prepare/route.ts"
+    },
+    {
+      "url": "/api/saved-views",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/saved-views/route.ts"
+    },
+    {
+      "url": "/api/saved-views/:",
+      "methods": [
+        "DELETE"
+      ],
+      "file": "src/app/api/saved-views/[id]/route.ts"
+    },
+    {
+      "url": "/api/scoring-feedback",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "src/app/api/scoring-feedback/route.ts"
+    },
+    {
+      "url": "/api/search",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/search/route.ts"
+    },
+    {
+      "url": "/api/search/ops",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/search/ops/route.ts"
+    },
+    {
+      "url": "/api/signup",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/signup/route.ts"
+    },
+    {
+      "url": "/api/tasks",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/tasks/route.ts"
+    },
+    {
+      "url": "/api/tasks/:",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "src/app/api/tasks/[id]/route.ts"
+    },
+    {
+      "url": "/api/team/assignments",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/team/assignments/route.ts"
+    },
+    {
+      "url": "/api/team/availability",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/team/availability/route.ts"
+    },
+    {
+      "url": "/api/team/coverage",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/team/coverage/route.ts"
+    },
+    {
+      "url": "/api/team/coverage/:/tasks",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/team/coverage/[profileId]/tasks/route.ts"
+    },
+    {
+      "url": "/api/team/coverage/approve",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/team/coverage/approve/route.ts"
+    },
+    {
+      "url": "/api/team/coverage/restore",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/team/coverage/restore/route.ts"
+    },
+    {
+      "url": "/api/team/coverage/revoke",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/team/coverage/revoke/route.ts"
+    },
+    {
+      "url": "/api/team/profile-onboarding",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/team/profile-onboarding/route.ts"
+    },
+    {
+      "url": "/api/team/profiles/:/coverage",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/team/profiles/[profileId]/coverage/route.ts"
+    },
+    {
+      "url": "/api/team/profiles/:/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/team/profiles/[profileId]/history/route.ts"
+    },
+    {
+      "url": "/api/team/profiles/:/knowledge",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/team/profiles/[profileId]/knowledge/route.ts"
+    },
+    {
+      "url": "/api/team/profiles/:/schedules",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/team/profiles/[profileId]/schedules/route.ts"
+    },
+    {
+      "url": "/api/team/responsibility-attention",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "src/app/api/team/responsibility-attention/route.ts"
+    },
+    {
+      "url": "/api/team/setup/parse",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/team/setup/parse/route.ts"
+    },
+    {
+      "url": "/api/team/setup/state",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/team/setup/state/route.ts"
+    },
+    {
+      "url": "/api/test/clock",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "file": "src/app/api/test/clock/route.ts"
+    },
+    {
+      "url": "/api/trends/ingest",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "src/app/api/trends/ingest/route.ts"
+    },
+    {
+      "url": "/api/upwork/connects",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/upwork/connects/route.ts"
+    },
+    {
+      "url": "/api/upwork/extract",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/upwork/extract/route.ts"
+    },
+    {
+      "url": "/api/upwork/jobs",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "file": "src/app/api/upwork/jobs/route.ts"
+    },
+    {
+      "url": "/api/upwork/jobs/:",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "src/app/api/upwork/jobs/[id]/route.ts"
+    },
+    {
+      "url": "/api/upwork/jobs/:/apply",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/upwork/jobs/[id]/apply/route.ts"
+    },
+    {
+      "url": "/api/upwork/jobs/:/archive",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/upwork/jobs/[id]/archive/route.ts"
+    },
+    {
+      "url": "/api/upwork/jobs/:/draft",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/upwork/jobs/[id]/draft/route.ts"
+    },
+    {
+      "url": "/api/upwork/jobs/:/followup",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/upwork/jobs/[id]/followup/route.ts"
+    },
+    {
+      "url": "/api/upwork/jobs/:/generate",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/upwork/jobs/[id]/generate/route.ts"
+    },
+    {
+      "url": "/api/upwork/jobs/:/message",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/upwork/jobs/[id]/message/route.ts"
+    },
+    {
+      "url": "/api/upwork/jobs/:/reply",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/upwork/jobs/[id]/reply/route.ts"
+    },
+    {
+      "url": "/api/version",
+      "methods": [],
+      "file": "src/app/api/version/route.ts"
+    },
+    {
+      "url": "/auth/callback",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/auth/callback/route.ts"
+    },
+    {
+      "url": "/og",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/og/route.tsx"
+    }
+  ]
+}

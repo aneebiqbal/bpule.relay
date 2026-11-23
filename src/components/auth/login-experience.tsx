@@ -74,8 +74,9 @@ async function checkWorkspaceMapping(): Promise<{ ok: boolean; noWorkspace: bool
 
 function sanitizeNextPath(value: string | null): string {
   if (!value) return "/dashboard";
-  if (!value.startsWith("/")) return "/dashboard";
-  if (value.startsWith("//")) return "/dashboard";
+  // Browsers fold backslashes to slashes for special URLs, so `/\evil.test`
+  // would otherwise become a protocol-relative redirect off-site.
+  if (!value.startsWith("/") || value.startsWith("//") || /[\\\s]/.test(value)) return "/dashboard";
   return value;
 }
 

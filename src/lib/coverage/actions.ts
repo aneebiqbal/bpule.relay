@@ -7,7 +7,7 @@ import {
   ensureOperatorAcknowledgement,
   ensurePrimaryAcknowledgement,
 } from '@/lib/responsibility/load'
-import { syncChannelEligibility } from '@/lib/profiles/assignment'
+import { assertSeatsInOrg, syncChannelEligibility } from '@/lib/profiles/assignment'
 import { configureCoverageStatement } from '@/lib/coverage/configure'
 import { notifyOnce } from '@/lib/notifications/deliver'
 import { isMissingRelation } from '@/lib/operations/db-errors'
@@ -892,6 +892,13 @@ export async function configureCoverage(input: {
   ensureTargets?: boolean
 }): Promise<{ ok: boolean; error?: string; seeded?: number; unchanged?: boolean }> {
   const client = input.client ?? (await createServerSupabase())
+  const seats = [
+    ...(input.primaryRepId ? [input.primaryRepId] : []),
+    ...input.operators.map((seat) => seat.repId),
+    ...input.backups.map((seat) => seat.repId),
+  ]
+  const membership = await assertSeatsInOrg(client, input.organizationId, seats)
+  if (!membership.ok) return membership
   if (client.raw) return configureCoverageFast(input, client)
   return configureCoverageLegacy(input, client)
 }

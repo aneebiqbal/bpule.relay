@@ -73,6 +73,74 @@ function fail(error: string): WorkSetupSaveResult {
   return { ok: false, error, identityId: '', profileId: null, primaryRepId: '', operatorIds: [], backupIds: [], targetsWritten: 0, allocationsWritten: 0 }
 }
 
+/**
+ * Replace one lane's allocations without a data-loss window.
+ *
+ * `dpa_active_uniq` is a partial unique index on (plan_id, rep_id) WHERE active,
+ * so a new share cannot be inserted while the old one is active. Deactivating
+ * everything first would leave the lane with zero allocations if the following
+ * insert failed. Instead an existing share is updated in place, a new share is
+ * inserted, and only then are removed shares deactivated — a mid-write failure
+ * can leave stale values but never an empty lane.
+ *
+ * shortcut: still not one SQL transaction; upgrade when DbClient grows a
+ * transaction primitive and the Neon/Supabase adapters implement it.
+ */
+export async function replacePlanAllocations(
+  client: DbClient,
+  input: { orgId: string; planId: string; actorRepId: string; shares: Map<string, number> },
+): Promise<{ ok: true; written: number } | { ok: false; error: string }> {
+  const now = new Date().toISOString()
+  for (const [repId, targetCount] of input.shares) {
+    const { data: existingRows, error: readError } = await client
+      .from('daily_plan_allocations')
+      .select('id')
+      .eq('organization_id', input.orgId)
+      .eq('plan_id', input.planId)
+      .eq('rep_id', repId)
+      .eq('active', true)
+      .limit(1)
+    if (readError) return { ok: false, error: readError.message }
+    const existingId = (existingRows?.[0] as { id: string } | undefined)?.id
+    const { error: writeError } = existingId
+      ? await client
+          .from('daily_plan_allocations')
+          .update({ target_count: targetCount, updated_at: now })
+          .eq('id', existingId)
+      : await client.from('daily_plan_allocations').insert({
+          organization_id: input.orgId,
+          plan_id: input.planId,
+          rep_id: repId,
+          target_count: targetCount,
+          active: true,
+          created_by: input.actorRepId,
+        })
+    if (writeError) return { ok: false, error: writeError.message }
+  }
+
+  const { data: currentRows, error: listError } = await client
+    .from('daily_plan_allocations')
+    .select('rep_id')
+    .eq('organization_id', input.orgId)
+    .eq('plan_id', input.planId)
+    .eq('active', true)
+    .limit(100)
+  if (listError) return { ok: false, error: listError.message }
+  const removeIds = [
+    ...new Set(((currentRows ?? []) as Array<{ rep_id: string }>).map((row) => row.rep_id)),
+  ].filter((repId) => !input.shares.has(repId))
+  if (removeIds.length > 0) {
+    const { error: deactivateError } = await client
+      .from('daily_plan_allocations')
+      .update({ active: false, updated_at: now })
+      .eq('organization_id', input.orgId)
+      .eq('plan_id', input.planId)
+      .in('rep_id', removeIds)
+    if (deactivateError) return { ok: false, error: deactivateError.message }
+  }
+  return { ok: true, written: input.shares.size }
+}
+
 export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Promise<WorkSetupSaveResult> {
   const { data: identity, error: identityError } = await client
     .from('revenue_identities')
@@ -207,26 +275,14 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
         return fail(`${label(activityType)} allocations total ${total}, above the lane target of ${laneTarget}.`)
       }
 
-      const { error: deactivateError } = await client
-        .from('daily_plan_allocations')
-        .update({ active: false, updated_at: new Date().toISOString() })
-        .eq('organization_id', input.orgId)
-        .eq('plan_id', planId.id)
-        .eq('active', true)
-      if (deactivateError) return fail(deactivateError.message)
-
-      const { error: insertError } = await client.from('daily_plan_allocations').insert(
-        [...shares.entries()].map(([repId, targetCount]) => ({
-          organization_id: input.orgId,
-          plan_id: planId.id,
-          rep_id: repId,
-          target_count: targetCount,
-          active: true,
-          created_by: input.actorRepId,
-        })),
-      )
-      if (insertError) return fail(insertError.message)
-      allocationsWritten += shares.size
+      const replaced = await replacePlanAllocations(client, {
+        orgId: input.orgId,
+        planId: planId.id,
+        actorRepId: input.actorRepId,
+        shares,
+      })
+      if (!replaced.ok) return fail(replaced.error)
+      allocationsWritten += replaced.written
     }
   }
 
