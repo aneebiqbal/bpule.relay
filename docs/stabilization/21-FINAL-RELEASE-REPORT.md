@@ -7,7 +7,8 @@
 
 ## 1. Exact Git SHA
 
-**Release candidate:** `87ccbeaa` (full: `git rev-parse HEAD`)
+**Release candidate (code + closure):** `87ccbeaa`
+**Branch tip (docs artifacts):** `919b8944`
 **Base of this closure pass:** `60ab5204e7733cacdb52c36d6b25a9bd0e57ff7c`
 
 ## 2. Commits integrated
