@@ -2,6 +2,8 @@ import { createServerSupabase } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { assembleWhoSentWhat, displayRepName } from '@/lib/relay/live-feed'
+import { businessDateRange, currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 const STREAM_EVENT_LABEL: Record<string, string> = {
   LEAD_CREATED: 'extracted a prospect',
@@ -33,9 +35,12 @@ export async function GET() {
   if (!can(authCtx, 'VIEW_TEAM_ANALYTICS')) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
 
   const supabase = await createServerSupabase()
-  const now = new Date()
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
-  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString()
+  // The organization business date, never the server's UTC clock: a rep near
+  // midnight must be summed on the day they actually worked.
+  const policy = await loadOperatingPolicy(authCtx.orgId)
+  const now = currentInstant()
+  const businessDate = orgDate(now, policy.timezone)
+  const { start: startOfDay, end: endOfDay } = businessDateRange(businessDate, policy.timezone)
 
   const [
     { data: events },
@@ -62,7 +67,7 @@ export async function GET() {
       .from('daily_accountability')
       .select('rep_id, activity_type, completed_count')
       .eq('organization_id', authCtx.orgId)
-      .eq('target_date', now.toISOString().slice(0, 10)),
+      .eq('target_date', businessDate),
   ])
 
   const { data: reps } = await supabase
@@ -115,7 +120,7 @@ export async function GET() {
   const totalCompleted = (accountability ?? []).reduce((sum, a) => sum + (a.completed_count ?? 0), 0)
 
   return NextResponse.json({
-    date: now.toISOString().slice(0, 10),
+    date: businessDate,
     generatedAt: now.toISOString(),
     stream,
     hourly,

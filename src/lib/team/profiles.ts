@@ -388,11 +388,20 @@ export async function loadTeamProfileDirectory(
     identitiesByPerson.set(key, list)
   }
   const goalsByIdentity = new Map<string, { completed: number; target: number }>()
+  const laneSeen = new Set<string>()
   for (const person of live.people) {
     for (const goal of person.goals) {
       const entry = goalsByIdentity.get(goal.identityId) ?? { completed: 0, target: 0 }
+      // The lane belongs to the channel. `live` emits one row per seat, so the
+      // target is taken once per (identity, activity) while each operator's
+      // contribution still sums. Counting the target per seat doubled a shared
+      // account (78 became 156).
+      const laneKey = `${goal.identityId}:${goal.activityType}`
+      if (!laneSeen.has(laneKey)) {
+        laneSeen.add(laneKey)
+        entry.target += goal.target
+      }
       entry.completed += goal.completed
-      entry.target += goal.target
       goalsByIdentity.set(goal.identityId, entry)
     }
   }

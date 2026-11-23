@@ -165,25 +165,28 @@ export function assembleTeamLive(rows: TeamLiveRows): TeamLivePayload {
 
   const people = (rows.reps ?? []).map((rep) => {
     const seen = new Set<string>()
-    // Targets are already projected onto seats, so they are self-consistent.
-    // Eligibility rows are unioned in for display only — a target must never be
-    // dropped because a legacy eligibility row is missing.
-    const repTargets = (rows.targets ?? []).filter((t) => t.rep_id === rep.id)
-    const assignedIdentityIds = new Set(repTargets.map((t) => t.revenue_identity_id))
-    const repIdentities = [...new Set([
-      ...(rows.assignments ?? [])
-        .filter((a) => a.rep_id === rep.id)
-        .map((a) => assignmentIdentityId(a))
-        .filter((id): id is string => {
-          if (!id || seen.has(id)) return false
-          seen.add(id)
-          return true
-        }),
-      ...assignedIdentityIds,
-    ])]
+    // Targets count only for identities the rep is actually assigned to. A
+    // target left over on an unassigned identity inflated the rep total while
+    // the profile rows (which iterate assigned identities) showed a different
+    // number — the Admin summary and the rows disagreed.
+    //
+    // `assignments` is the union of eligibility rows and the active seats, so a
+    // seated lane is never dropped just because its eligibility row is missing.
+    const repIdentities = (rows.assignments ?? [])
+      .filter((a) => a.rep_id === rep.id)
+      .map((a) => assignmentIdentityId(a))
+      .filter((id): id is string => {
+        if (!id || seen.has(id)) return false
+        seen.add(id)
+        return true
+      })
       .map((id) => identities.find((i) => i.id === id))
       .filter((i): i is IdentityRow => Boolean(i))
 
+    const assignedIdentityIds = new Set(repIdentities.map((identity) => identity.id))
+    const repTargets = (rows.targets ?? []).filter(
+      (t) => t.rep_id === rep.id && assignedIdentityIds.has(t.revenue_identity_id),
+    )
     const repAccountability = (rows.accountability ?? []).filter(
       (a) => a.rep_id === rep.id && assignedIdentityIds.has(a.revenue_identity_id),
     )

@@ -22,6 +22,7 @@ import { loadRepCoverage } from '@/lib/coverage/load'
 import { setRepAvailability } from '@/lib/coverage/actions'
 import { currentInstant, orgDate } from '@/lib/org-clock'
 import { loadOperatingPolicy } from '@/lib/org-clock/load'
+import { runWithRequestScope } from '@/lib/request-scope'
 import { closeDbPool, serviceDbClient } from '@/lib/db/client'
 
 const ORG = '11111111-1111-1111-1111-111111111111'
@@ -203,9 +204,9 @@ describeLive('MULTI_OPERATOR_ACCEPTANCE', () => {
       expect(primary[0]?.rep_id).toBe(HASSAN)
 
       // Ahmad executes the same identity; Madiha (backup only) does not.
-      expect(ids(await listExecutableIdentitiesForRep(client, ORG, AHMAD, TODAY))).toContain(IDENTITY)
-      expect(ids(await listExecutableIdentitiesForRep(client, ORG, HASSAN, TODAY))).toContain(IDENTITY)
-      expect(ids(await listExecutableIdentitiesForRep(client, ORG, MADIHA, TODAY))).not.toContain(IDENTITY)
+      expect(ids(await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, AHMAD, TODAY)))).toContain(IDENTITY)
+      expect(ids(await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, HASSAN, TODAY)))).toContain(IDENTITY)
+      expect(ids(await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, MADIHA, TODAY)))).not.toContain(IDENTITY)
 
       // The plan is unchanged: one shared requirement per channel lane, never
       // one per operator. The exact number is the organization's own target,
@@ -305,7 +306,7 @@ describeLive('MULTI_OPERATOR_ACCEPTANCE', () => {
       )
       expect(availability?.[0]?.state).toBe('UNAVAILABLE')
 
-      expect(ids(await listExecutableIdentitiesForRep(client, ORG, AHMAD, TODAY))).toContain(IDENTITY)
+      expect(ids(await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, AHMAD, TODAY)))).toContain(IDENTITY)
       const { data: chainAfterLeave } = await client.raw<{ rep_id: string; role: string }>(
         `select rep_id, role from profile_coverage
          where organization_id = $1 and profile_id = $2 and active and role = 'PRIMARY'`,
@@ -332,7 +333,7 @@ describeLive('MULTI_OPERATOR_ACCEPTANCE', () => {
         orgId: ORG, identityId: IDENTITY, repId: AHMAD, actorRepId: ACTOR,
       })
 
-      expect(ids(await listExecutableIdentitiesForRep(client, ORG, AHMAD, TODAY))).not.toContain(IDENTITY)
+      expect(ids(await runWithRequestScope(async () => listExecutableIdentitiesForRep(client, ORG, AHMAD, TODAY)))).not.toContain(IDENTITY)
       const { data: chainAfterRemove } = await client.raw<{ rep_id: string; role: string }>(
         `select rep_id, role from profile_coverage
          where organization_id = $1 and profile_id = $2 and active and role = 'PRIMARY'`,

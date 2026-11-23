@@ -48,7 +48,13 @@ export function ControlCenter({
             One workspace for people, channels, operators, targets and data issues.
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href="/admin/targets"
+            className="rounded-full border border-line bg-bone px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-bone-raised"
+          >
+            Open Work Setup
+          </a>
           {([
             { key: 'profiles', label: 'Profiles' },
             { key: 'team', label: 'Team' },

@@ -8546,6 +8546,7 @@ export class SupabaseStore implements ScoutStore {
     const { data: plans } = await this.client
       .from('daily_target_plans')
       .select('revenue_identity_id, activity_type, target_count, active')
+      .eq('organization_id', this.orgId)
       .eq('active', true)
 
     if (!plans || plans.length === 0) return []
@@ -8561,6 +8562,7 @@ export class SupabaseStore implements ScoutStore {
     const { data: accountability } = await this.client
       .from('daily_accountability')
       .select('rep_id, revenue_identity_id, activity_type, completed_count, status')
+      .eq('organization_id', this.orgId)
       .in('rep_id', repIds)
       .eq('target_date', targetDate)
 
@@ -8676,6 +8678,7 @@ export class SupabaseStore implements ScoutStore {
     const { data: allPlans } = await this.client
       .from('daily_target_plans')
       .select('revenue_identity_id, activity_type, target_count, active')
+      .eq('organization_id', this.orgId)
       .eq('active', true)
     const repByIdentity = await this.primaryRepByIdentity((allPlans ?? []).map((row) => row.revenue_identity_id as string))
     const allTargets = (allPlans ?? []).map((row) => ({
@@ -8689,6 +8692,7 @@ export class SupabaseStore implements ScoutStore {
     const { data: allAcc } = await this.client
       .from('daily_accountability')
       .select('rep_id, revenue_identity_id, activity_type, completed_count, status')
+      .eq('organization_id', this.orgId)
       .eq('target_date', today)
 
     const { data: teamMembers } = await this.client

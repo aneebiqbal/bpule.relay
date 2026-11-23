@@ -453,7 +453,7 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
     .maybeSingle()
   if (!rep) throw new Error('Not found')
 
-  const [dayResult, assignmentsResult, targetsResult, accountabilityResult, repliesResult, pipelineResult, actionsResult, notificationsResult] =
+  const [dayResult, assignmentsResult, targetsResult, accountabilityResult, repliesResult, pipelineResult, actionsResult, notificationsResult, allocationsResult, coverageResult] =
     await Promise.all([
       supabase
         .from('rep_day')
@@ -465,7 +465,7 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
       listExecutableIdentitiesForRep(supabase, ctx.orgId, repId, businessDate),
       supabase
         .from('daily_target_plans')
-        .select('revenue_identity_id, activity_type, target_count, targetable')
+        .select('id, revenue_identity_id, activity_type, target_count, targetable')
         .eq('organization_id', ctx.orgId)
         .eq('active', true),
       supabase
@@ -505,6 +505,19 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
         .gte('created_at', range.start)
         .order('created_at', { ascending: false })
         .limit(20),
+      supabase
+        .from('daily_plan_allocations')
+        .select('plan_id, rep_id, target_count')
+        .eq('organization_id', ctx.orgId)
+        .eq('active', true)
+        .limit(2000),
+      supabase
+        .from('profile_coverage')
+        .select('profile_id, rep_id, role')
+        .eq('organization_id', ctx.orgId)
+        .eq('active', true)
+        .in('role', ['PRIMARY', 'OPERATOR'])
+        .limit(2000),
     ])
 
   const day = (dayResult.data ?? null) as Record<string, unknown> | null
@@ -519,7 +532,7 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
   if (identityIds.length > 0) {
     const { data: identityRows } = await supabase
       .from('revenue_identities')
-      .select('id, identity_name, channel')
+      .select('id, identity_name, channel, profile_id')
       .in('id', identityIds)
     for (const row of identityRows ?? []) identityById.set(row.id as string, row)
   }
@@ -539,18 +552,40 @@ export async function loadRepDayDetail(repId: string, options: { date?: string }
       (row.completed_count as number) ?? 0,
     ]),
   )
-  const targets = (targetsResult.data ?? []).map((row) => {
-    const target = (row.target_count as number) ?? 0
-    const completed = completedByType.get(`${row.revenue_identity_id as string}:${row.activity_type as string}`) ?? 0
-    return {
-      identityId: row.revenue_identity_id as string,
-      identityName: identityById.get(row.revenue_identity_id as string)?.identity_name as string ?? null,
-      activityType: row.activity_type as string,
-      target,
-      completed,
-      remaining: Math.max(0, target - completed),
-    }
-  })
+
+  // The personal-expectation rule is the canonical one: an explicit allocation
+  // wins; a lane with more than one seat is shared and carries no personal
+  // requirement until it is allocated. Reading every org plan here previously
+  // showed the organization total against one rep's completion.
+  const seatsByProfile = new Map<string, number>()
+  for (const row of (coverageResult.data ?? []) as Array<{ profile_id: string }>) {
+    seatsByProfile.set(row.profile_id, (seatsByProfile.get(row.profile_id) ?? 0) + 1)
+  }
+  const allocationByPlan = new Map<string, number>()
+  for (const row of (allocationsResult.data ?? []) as Array<{ plan_id: string; rep_id: string; target_count: number }>) {
+    if (row.rep_id !== repId) continue
+    allocationByPlan.set(row.plan_id, (allocationByPlan.get(row.plan_id) ?? 0) + (row.target_count ?? 0))
+  }
+  const executable = new Set(identityIds)
+
+  const targets = (targetsResult.data ?? [])
+    .filter((row) => executable.has(row.revenue_identity_id as string))
+    .map((row) => {
+      const target = (row.target_count as number) ?? 0
+      const profileId = identityById.get(row.revenue_identity_id as string)?.profile_id as string | null
+      const seats = profileId ? (seatsByProfile.get(profileId) ?? 0) : 0
+      const allocation = allocationByPlan.get(row.id as string) ?? null
+      const personal = allocation ?? (seats > 1 ? 0 : target)
+      const completed = completedByType.get(`${row.revenue_identity_id as string}:${row.activity_type as string}`) ?? 0
+      return {
+        identityId: row.revenue_identity_id as string,
+        identityName: identityById.get(row.revenue_identity_id as string)?.identity_name as string ?? null,
+        activityType: row.activity_type as string,
+        target: personal,
+        completed,
+        remaining: Math.max(0, personal - completed),
+      }
+    })
 
   let actionsToday = 0
   let lastActivityAt: string | null = null
