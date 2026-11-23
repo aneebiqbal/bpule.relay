@@ -8,6 +8,9 @@
  */
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
+import { assertSafeScriptTarget } from './assert-safe-target.mjs'
+
+assertSafeScriptTarget()
 
 const BASE = process.env.BASE_URL || 'http://localhost:3102'
 const EMAIL = process.env.SAVE_EMAIL || 'madiha@scout.dev'

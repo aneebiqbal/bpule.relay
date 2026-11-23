@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   // SECURITY: Validate identity assignment
-  const isAuthorized = await isRevenueIdentityAssignedToRep(ctx.repId, revenueIdentityId)
+  const isAuthorized = await isRevenueIdentityAssignedToRep(revenueIdentityId)
   if (!isAuthorized) {
     return NextResponse.json({ error: 'Identity not assigned to you.' }, { status: 403 })
   }

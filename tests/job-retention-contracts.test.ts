@@ -8,6 +8,10 @@ import { describe, expect, it } from 'vitest'
 import { bucketFor, buildRetentionReport, type InventoryJob } from '@/lib/job-discovery/inventory'
 import { serviceDbClient } from '@/lib/db/client'
 
+// The report assertions read a populated database; without one (CI unit job)
+// skip rather than fail. The live suite supplies a disposable database.
+const liveDb = Boolean(process.env.DATABASE_URL || process.env.SERVICE_DATABASE_URL)
+
 function job(partial: Partial<InventoryJob> & Pick<InventoryJob, 'id' | 'title'>): InventoryJob {
   return {
     source_id: 'source',
@@ -63,7 +67,7 @@ describe('JOB_RETENTION_BUCKETS', () => {
   })
 })
 
-describe('JOB_RETENTION_REPORT', () => {
+describe.skipIf(!liveDb)('JOB_RETENTION_REPORT', () => {
   it('reports non-negative counts that reconcile to the total', async () => {
     const report = await buildRetentionReport(serviceDbClient(), 5)
     const counts = report.counts

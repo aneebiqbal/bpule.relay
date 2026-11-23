@@ -79,6 +79,33 @@ export async function readResponsibilityChain(
 }
 
 /**
+ * Every named seat must belong to the actor's organization.
+ *
+ * RLS checks the row's `organization_id`, not that `rep_id` is a member of it,
+ * so without this check a caller could write a foreign rep into
+ * `profile_coverage` / `identity_assignments` (cross-tenant seat pollution).
+ */
+export async function assertSeatsInOrg(
+  client: DbClient,
+  orgId: string,
+  repIds: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const unique = [...new Set(repIds.filter(Boolean))]
+  if (unique.length === 0) return { ok: true }
+  const { data, error } = await client
+    .from('reps')
+    .select('id')
+    .eq('organization_id', orgId)
+    .in('id', unique)
+    .limit(500)
+  if (error) return { ok: false, error: error.message }
+  const known = new Set(((data ?? []) as Array<{ id: string }>).map((row) => row.id))
+  const foreign = unique.find((repId) => !known.has(repId))
+  if (foreign) return { ok: false, error: 'A named rep is not in this organization.' }
+  return { ok: true }
+}
+
+/**
  * The ONE write path for a responsibility chain.
  *
  * `configureCoverage` is the canonical reconcile: it deactivates the previous
@@ -359,6 +386,8 @@ export async function assignBackupResponsibility(
   input: { orgId: string; identityId: string; repId: string; actorRepId: string },
 ): Promise<{ profileId: string }> {
   const identity = await readIdentity(client, input.orgId, input.identityId)
+  const membership = await assertSeatsInOrg(client, input.orgId, [input.repId])
+  if (!membership.ok) throw new Error(membership.error)
   const chain = await readResponsibilityChain(client, input.orgId, identity.profile_id)
 
   // An existing PRIMARY or OPERATOR seat already outranks a backup: keep it, but

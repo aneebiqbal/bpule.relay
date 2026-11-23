@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
+import type { DbClient } from '@/lib/db/types'
+import { replacePlanAllocations } from '@/lib/operations/work-setup-write'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,7 +68,7 @@ export async function POST(
 
   const { data: plan } = await auth.supabase
     .from('daily_target_plans')
-    .select('id, organization_id, target_count, active')
+    .select('id, organization_id, target_count, active, revenue_identity_id')
     .eq('id', id)
     .eq('organization_id', auth.ctx.orgId)
     .maybeSingle()
@@ -100,16 +102,6 @@ export async function POST(
     )
   }
 
-  // Deactivate the previous set, then insert the new one. Idempotent: a
-  // resubmit replaces rather than appends.
-  const { error: deactivateError } = await auth.supabase
-    .from('daily_plan_allocations')
-    .update({ active: false, updated_at: new Date().toISOString() })
-    .eq('organization_id', auth.ctx.orgId)
-    .eq('plan_id', id)
-    .eq('active', true)
-  if (deactivateError) return NextResponse.json({ error: deactivateError.message }, { status: 500 })
-
   if (mode === 'allocated' && deduped.size > 0) {
     const repIds = [...deduped.keys()]
     const { data: repRows } = await auth.supabase
@@ -123,18 +115,54 @@ export async function POST(
       return NextResponse.json({ error: 'One or more reps are not in this organization' }, { status: 400 })
     }
 
-    const { error: insertError } = await auth.supabase.from('daily_plan_allocations').insert(
-      repIds.map((repId) => ({
-        organization_id: auth.ctx.orgId,
-        plan_id: id,
-        rep_id: repId,
-        target_count: deduped.get(repId),
-        active: true,
-        created_by: auth.ctx.repId,
-      })),
-    )
-    if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
+    // An allocation is an executable expectation: the rep must hold an active
+    // PRIMARY or OPERATOR seat on the account's profile.
+    const { data: identityRows } = await auth.supabase
+      .from('revenue_identities')
+      .select('profile_id')
+      .eq('organization_id', auth.ctx.orgId)
+      .eq('id', plan.revenue_identity_id)
+      .limit(1)
+    const profileId = (identityRows?.[0]?.profile_id as string | null) ?? null
+    if (profileId) {
+      const { data: seatRows } = await auth.supabase
+        .from('profile_coverage')
+        .select('rep_id')
+        .eq('organization_id', auth.ctx.orgId)
+        .eq('profile_id', profileId)
+        .eq('active', true)
+        .in('role', ['PRIMARY', 'OPERATOR'])
+        .limit(200)
+      const seated = new Set(((seatRows ?? []) as Array<{ rep_id: string }>).map((row) => row.rep_id))
+      const unseated = repIds.filter((repId) => !seated.has(repId))
+      if (unseated.length > 0) {
+        return NextResponse.json(
+          { error: 'One or more reps have no executable seat on this account.' },
+          { status: 400 },
+        )
+      }
+    }
   }
+
+  // Replace atomically (one physical transaction when the provider supports
+  // it): update-in-place, insert new, deactivate removed — so a failure never
+  // leaves the lane empty.
+  const write = (c: DbClient) =>
+    replacePlanAllocations(c, {
+      orgId: auth.ctx.orgId,
+      planId: id,
+      actorRepId: auth.ctx.repId,
+      shares: mode === 'shared' ? new Map<string, number>() : deduped,
+    })
+  // Fail closed: allocation replacement is only safe inside one transaction.
+  if (!auth.supabase.transaction) {
+    return NextResponse.json(
+      { error: 'This database provider does not support transactions; refusing a non-atomic allocation update.' },
+      { status: 503 },
+    )
+  }
+  const replaced = await auth.supabase.transaction(write)
+  if (!replaced.ok) return NextResponse.json({ error: replaced.error }, { status: 500 })
 
   return NextResponse.json({ ok: true, mode, count: deduped.size })
 }

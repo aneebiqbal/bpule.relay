@@ -101,7 +101,21 @@ export async function POST(request: Request) {
       actorRepId: auth.ctx.repId,
       targets: parseTargets(body.targets),
       allocations: parseAllocations(body.allocations),
+      expectedRevision: typeof body.expectedRevision === 'string' ? body.expectedRevision : undefined,
     })
+    if (result.code === 'TRANSACTION_UNSUPPORTED') {
+      return NextResponse.json({ error: result.error, code: 'TRANSACTION_UNSUPPORTED' }, { status: 503 })
+    }
+    if (result.code === 'CONFLICT') {
+      // Surface the committed state so the admin can review and retry instead
+      // of silently overwriting a concurrent edit.
+      const current = await loadWorkSetup(auth.supabase, { orgId: auth.ctx.orgId }).catch(() => null)
+      const row = current?.rows.find((entry) => entry.identityId === identityId) ?? null
+      return NextResponse.json(
+        { error: result.error, code: 'CONFLICT', revision: result.revision, current: row },
+        { status: 409 },
+      )
+    }
     if (!result.ok) {
       return NextResponse.json({ error: result.error ?? 'Could not save work setup.' }, { status: 400 })
     }

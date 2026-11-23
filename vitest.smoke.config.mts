@@ -13,7 +13,12 @@ import { config } from 'dotenv'
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The smoke checks need the provider credentials.
+config({ path: path.resolve(dirname, '.env.test') })
 config({ path: path.resolve(dirname, '.env.local') })
+
+import { assertLiveTestIsolation } from './src/lib/db/test-isolation'
+
+assertLiveTestIsolation()
 
 export default defineConfig({
   test: {

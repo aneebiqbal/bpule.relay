@@ -50,6 +50,8 @@ export interface WorkSetupRow {
   remaining: number
   lanes: WorkSetupLane[]
   issues: string[]
+  /** Compare-and-set token: POST this back as `expectedRevision`. */
+  revision?: string
 }
 
 export interface WorkSetupTotals {
@@ -110,6 +112,7 @@ export function assembleWorkSetup(input: {
   }>
   populations: ReturnType<typeof reconcilePopulations>
   overdueTasks: number
+  revisions: Map<string, string>
 }): WorkSetupPayload {
   const lanesByIdentity = new Map<string, WorkSetupLane[]>()
   for (const lane of input.lanes) {
@@ -178,6 +181,7 @@ export function assembleWorkSetup(input: {
       remaining: Math.max(0, requirement - completed),
       lanes,
       issues,
+      revision: input.revisions.get(identity.id),
     }
   })
 
@@ -228,7 +232,7 @@ export async function loadWorkSetup(
 ): Promise<WorkSetupPayload> {
   const team = await loadTeamDay()
   const businessDate = input.businessDate ?? team.businessDate
-  const [ledger, canonical, repRows, identityRows, overdueByRep] = await Promise.all([
+  const [ledger, canonical, repRows, identityRows, overdueByRep, revisionRows] = await Promise.all([
     getAccountabilityLedger(client, { orgId: input.orgId, businessDate }),
     loadCanonicalProfileAssignments(input.orgId, { client }),
     client.from('reps').select('id, name').eq('organization_id', input.orgId).order('name').limit(2000),
@@ -238,9 +242,28 @@ export async function loadWorkSetup(
       .eq('organization_id', input.orgId)
       .limit(5000),
     countOverdueAssignedByRep(client, input.orgId, null).catch(() => new Map<string, number>()),
+    client.raw
+      ? client.raw(
+          `SELECT ri.id AS identity_id, GREATEST(
+             COALESCE((SELECT MAX(pc.updated_at) FROM profile_coverage pc WHERE pc.organization_id = ri.organization_id AND pc.profile_id = ri.profile_id), to_timestamp(0)),
+             COALESCE((SELECT MAX(p.updated_at) FROM daily_target_plans p WHERE p.organization_id = ri.organization_id AND p.revenue_identity_id = ri.id), to_timestamp(0)),
+             COALESCE((SELECT MAX(a.updated_at) FROM daily_plan_allocations a JOIN daily_target_plans p ON p.id = a.plan_id WHERE p.organization_id = ri.organization_id AND p.revenue_identity_id = ri.id), to_timestamp(0)),
+             COALESCE((SELECT MAX(ia.updated_at) FROM identity_assignments ia WHERE ia.organization_id = ri.organization_id AND ia.revenue_identity_id = ri.id), to_timestamp(0))
+           )::text AS revision
+           FROM revenue_identities ri WHERE ri.organization_id = $1`,
+          [input.orgId],
+        )
+      : Promise.resolve({ data: [], error: null }),
   ])
   if (repRows.error) throw repRows.error
   if (identityRows.error) throw identityRows.error
+  if (revisionRows.error) throw revisionRows.error
+  const revisions = new Map<string, string>(
+    (((revisionRows.data ?? []) as Array<{ identity_id: string; revision: string }>) ?? []).map((row) => [
+      row.identity_id,
+      row.revision,
+    ]),
+  )
 
   const identities: IdentityFact[] = ((identityRows.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
     id: row.id as string,
@@ -280,5 +303,6 @@ export async function loadWorkSetup(
     })),
     populations: ledger.populations,
     overdueTasks,
+    revisions,
   })
 }

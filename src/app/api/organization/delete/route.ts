@@ -36,6 +36,9 @@ export async function DELETE() {
   if (members) {
     for (const member of members) {
       if (member.auth_user_id) {
+        // Revoke first: deleting the user may leave a session row alive until
+        // its natural expiry on some providers.
+        await auth.signOutUser(member.auth_user_id).catch(() => undefined)
         await auth.deleteUser(member.auth_user_id)
       }
     }

@@ -304,9 +304,14 @@ export async function getOrganizationDailySummary(
       })
     }
     // A lane with no seat at all is unowned; it still counts toward `tracked`.
-    assigned += lane.seats.length === 1
-      ? lane.targetCount
-      : lane.allocations.reduce((sum, row) => sum + row.targetCount, 0)
+    // `assigned` = personal expectations over seats (solo target or an explicit
+    // allocation) + any allocation whose rep holds no seat. That makes
+    // `personal = assigned - unseatedAllocationUnits` exact for every lane shape,
+    // including a solo lane carrying an explicit allocation.
+    const unseatedOnLane = lane.allocations
+      .filter((row) => !lane.seats.includes(row.repId))
+      .reduce((sum, row) => sum + row.targetCount, 0)
+    assigned += lane.seats.reduce((sum, repId) => sum + lanePersonalTarget(lane, repId), 0) + unseatedOnLane
     unseatedAllocationUnits += lane.allocations
       .filter((row) => !lane.seats.includes(row.repId))
       .reduce((sum, row) => sum + row.targetCount, 0)

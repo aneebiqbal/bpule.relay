@@ -6,6 +6,8 @@ import { defaultTargetsForChannel } from '@/lib/accountability/default-targets'
 import { personNameFromProfile } from '@/lib/profiles/person-name'
 import { isCoverageActiveOn } from '@/lib/coverage/access'
 import { addOperatorResponsibility } from '@/lib/profiles/assignment'
+import { currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 import type { ActivityType } from '@/lib/domain/types'
 
 const ACTIVITY_TYPES: ActivityType[] = [
@@ -36,7 +38,9 @@ export async function GET() {
 
   try {
     const client = auth.store.getSupabaseClient()
-    const today = new Date().toISOString().slice(0, 10)
+    // The business date is the organization's, never the server's UTC clock.
+    const policy = await loadOperatingPolicy(auth.authCtx.orgId, client).catch(() => null)
+    const today = orgDate(currentInstant(), policy?.timezone ?? 'UTC')
     const [targets, identities, assignments, reps, coverage, coverageAssignments] = await Promise.all([
       auth.store.listDailyTargetsAdmin(),
       auth.store.listRevenueIdentitiesAdmin(),

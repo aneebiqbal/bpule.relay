@@ -1,7 +1,7 @@
 # Relay — Production Release Certification
 
 **Branch:** `feat/relay-job-intelligence-v2`
-**Release candidate:** `4436fc5b` (last code commit; subsequent commits are docs only)
+**Release candidate:** `293afd75` (branch tip at certification)
 **Authorization:** not deployed. No merge, no production worker activation.
 
 ---
@@ -143,3 +143,45 @@ External blockers, stated plainly:
 Exact Git SHA and deployment commands are recorded at release time in the
 pull-request description; the deploy workflow stamps `RELAY_GIT_SHA` and
 `GET /api/version` reports it.
+
+## 9. Production test data — `V6 live fixture` removal plan
+
+Profile `10d83285-318c-485c-99be-9487ab899730` (`V6 fixture` / `V6 live
+fixture`, created 2026-11-22 23:14) is test data left in production by a live
+acceptance run. References found:
+
+| Table | Rows |
+|---|---:|
+| `profile_coverage` | 2 |
+| `identity_assignments` | 2 |
+| `accountability_audit_log` | 1 |
+| `revenue_identities` | 1 |
+| `daily_target_plans` / `daily_accountability` | 0 |
+| proof cards, experience, projects, reviews, documents, applications | 0 |
+
+It does not affect any target total (no plans), but it pollutes the directory.
+**Not deleted** — production data removal requires explicit authorization.
+
+Safe order (backup first, then verify zero references after each step):
+
+```sql
+begin;
+delete from profile_coverage        where profile_id = '10d83285-318c-485c-99be-9487ab899730';
+delete from identity_assignments    where revenue_identity_id = 'a6056650-9aa5-4b0f-8b17-0f02ac19d18c';
+delete from accountability_audit_log where revenue_identity_id = 'a6056650-9aa5-4b0f-8b17-0f02ac19d18c';
+delete from revenue_identities      where id = 'a6056650-9aa5-4b0f-8b17-0f02ac19d18c';
+delete from profiles                where id = '10d83285-318c-485c-99be-9487ab899730';
+commit;
+```
+
+## 10. Additional security finding
+
+The local git remote URL embeds a GitHub personal access token (in `.git/config`,
+not committed). It should be moved to a credential helper or SSH so it does not
+sit in plaintext. Not printed here.
+
+## 11. Work Setup journey
+
+See `RELAY_FINAL_BROWSER_ACCEPTANCE.md` §3 — verified with a real Admin and a
+real Rep account: assign → target → rep sees 30 → acknowledge → activity →
+admin progress → transfer → unchanged save preserves the acknowledgement.

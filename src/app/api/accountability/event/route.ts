@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   const supabase = await createServerSupabase()
 
   const { isRevenueIdentityAssignedToRep } = await import('@/lib/auth/workspace')
-  const isAuthorized = await isRevenueIdentityAssignedToRep(user.rep.id, rawIdentityId)
+  const isAuthorized = await isRevenueIdentityAssignedToRep(rawIdentityId)
   if (!isAuthorized) {
     return NextResponse.json({ error: 'Identity not assigned to you.' }, { status: 403 })
   }

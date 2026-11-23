@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { AnalyticsEvents } from "@/lib/analytics/events";
 import { track } from "@/lib/analytics/track";
 import { getBrowserAuth } from "@/lib/auth/browser";
+import { sanitizeNextPath } from "./next-path";
 import {
   humanizeMagicLinkError,
   humanizeOauthError,
@@ -70,13 +71,6 @@ async function checkWorkspaceMapping(): Promise<{ ok: boolean; noWorkspace: bool
   }
 
   return { ok: false, noWorkspace: false };
-}
-
-function sanitizeNextPath(value: string | null): string {
-  if (!value) return "/dashboard";
-  if (!value.startsWith("/")) return "/dashboard";
-  if (value.startsWith("//")) return "/dashboard";
-  return value;
 }
 
 export function LoginExperience({ demoMode, googleEnabled }: LoginExperienceProps) {

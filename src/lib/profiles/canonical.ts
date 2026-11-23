@@ -3,6 +3,8 @@ import type { DbClient } from '@/lib/db/types'
 import type { RevenueIdentityChannel } from '@/lib/domain/types'
 import { normalizeChannel } from '@/lib/profiles/assigned-profiles'
 import { normalizeExternalUrl, profileNeedsReview } from '@/lib/profiles/display'
+import { currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 export { normalizeExternalUrl, profileNeedsReview } from '@/lib/profiles/display'
 
@@ -222,6 +224,9 @@ export async function loadCanonicalProfileAssignments(
 ): Promise<CanonicalAssignmentSet> {
   const client = options.client ?? (await createServerSupabase())
   const facts = await loadFacts(client, orgId)
+  // Business date is organization-local; never the server's UTC clock.
+  const policy = await loadOperatingPolicy(orgId, client).catch(() => null)
+  const businessDate = orgDate(currentInstant(), policy?.timezone ?? 'UTC')
 
   const identitiesByProfile = new Map<string, typeof facts.identities>()
   for (const identity of facts.identities) {
@@ -352,7 +357,7 @@ export async function loadCanonicalProfileAssignments(
   profiles.sort((a, b) => a.profileName.localeCompare(b.profileName))
 
   return {
-    businessDate: new Date().toISOString().slice(0, 10),
+    businessDate,
     ambiguous: profiles.filter((profile) => profile.coverageState === 'AMBIGUOUS'),
     unassigned: profiles.filter((profile) => profile.coverageState === 'UNASSIGNED'),
     profiles,
@@ -419,115 +424,4 @@ export function getProfilesForRepByChannel(
   channel: RevenueIdentityChannel,
 ): CanonicalProfileAssignment[] {
   return getProfilesForRep(set, repId).filter((profile) => profile.channels.includes(channel))
-}
-
-export interface BackfillProposal {
-  profileId: string
-  profileName: string
-  primaryRepId: string
-  primaryRepName: string
-  primaryReason: string
-  backups: CanonicalBackup[]
-  assignedRepIds: string[]
-}
-
-export interface BackfillReport {
-  businessDate: string
-  proposals: BackfillProposal[]
-  ambiguous: Array<{ profileId: string; profileName: string; assignedRepIds: string[]; reason: string }>
-  unassigned: Array<{ profileId: string; profileName: string }>
-  applied: number
-}
-
-/**
- * Deterministic backfill of `profile_coverage` from existing assignment truth.
- *
- * Only profiles with an unambiguous primary are proposed. Ambiguous profiles
- * are returned for Admin review and never written.
- */
-export async function backfillProfileCoverage(
-  orgId: string,
-  options: { dryRun?: boolean; client?: DbClient } = {},
-): Promise<BackfillReport> {
-  const client = options.client ?? (await createServerSupabase())
-  const set = await loadCanonicalProfileAssignments(orgId, { client })
-
-  const proposals: BackfillProposal[] = []
-  const ambiguous: BackfillReport['ambiguous'] = []
-  const unassigned: BackfillReport['unassigned'] = []
-
-  for (const profile of set.profiles) {
-    if (profile.coverageState === 'UNASSIGNED') {
-      unassigned.push({ profileId: profile.profileId, profileName: profile.profileName })
-      continue
-    }
-    if (profile.primarySource === 'ambiguous') {
-      ambiguous.push({
-        profileId: profile.profileId,
-        profileName: profile.profileName,
-        assignedRepIds: profile.assignedReps.map((rep) => rep.repId),
-        reason: profile.reviewReasons.find((reason) => reason.includes('reps are assigned')) ?? 'Ambiguous ownership',
-      })
-      continue
-    }
-    if (profile.primarySource === 'coverage') continue
-
-    proposals.push({
-      profileId: profile.profileId,
-      profileName: profile.profileName,
-      primaryRepId: profile.primaryRepId!,
-      primaryRepName: profile.primaryRepName ?? 'Unknown',
-      primaryReason: profile.primaryReason,
-      backups: profile.backups,
-      assignedRepIds: profile.assignedReps.map((rep) => rep.repId),
-    })
-  }
-
-  if (options.dryRun || proposals.length === 0) {
-    return { businessDate: set.businessDate, proposals, ambiguous, unassigned, applied: 0 }
-  }
-
-  let applied = 0
-  for (const proposal of proposals) {
-    const now = new Date().toISOString()
-    const { error: deactivateError } = await client
-      .from('profile_coverage')
-      .update({ active: false, updated_at: now })
-      .eq('organization_id', orgId)
-      .eq('profile_id', proposal.profileId)
-    if (deactivateError) continue
-
-    const rows = [
-      { role: 'PRIMARY' as const, repId: proposal.primaryRepId, priority: 1 },
-      ...proposal.backups.map((backup, index) => ({
-        role: 'BACKUP' as const,
-        repId: backup.repId,
-        priority: index + 2,
-      })),
-    ]
-
-    const { error: insertError } = await client.from('profile_coverage').insert(
-      rows.map((row) => ({
-        organization_id: orgId,
-        profile_id: proposal.profileId,
-        rep_id: row.repId,
-        role: row.role,
-        priority: row.priority,
-        active: true,
-      })),
-    )
-    if (insertError) continue
-
-    await client.from('coverage_events').insert({
-      organization_id: orgId,
-      profile_id: proposal.profileId,
-      event_type: 'BACKUP_CONFIGURED',
-      primary_rep_id: proposal.primaryRepId,
-      reason: `Backfilled from existing assignments: ${proposal.primaryReason}`,
-      actor_rep_id: proposal.primaryRepId,
-    })
-    applied += 1
-  }
-
-  return { businessDate: set.businessDate, proposals, ambiguous, unassigned, applied }
 }

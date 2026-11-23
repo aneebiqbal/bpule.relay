@@ -654,6 +654,11 @@ describe('COVERAGE_PARTIAL_FAILURE_IS_REPORTED', () => {
 describe('COVERAGE_CONFIGURATION_REPLACES_CHAIN', () => {
   it('deactivates the previous chain and records the change without deleting history', async () => {
     const { client, tables } = createFakeSupabase({
+      reps: [
+        { id: DAWOOD, organization_id: ORG },
+        { id: AHMAD, organization_id: ORG },
+        { id: MADIHA, organization_id: ORG },
+      ],
       profile_coverage: [
         { id: 'pc-1', organization_id: ORG, profile_id: P_LINKEDIN, rep_id: DAWOOD, role: 'PRIMARY', priority: 0, active: true },
         { id: 'pc-2', organization_id: ORG, profile_id: P_LINKEDIN, rep_id: MADIHA, role: 'BACKUP', priority: 1, active: true },

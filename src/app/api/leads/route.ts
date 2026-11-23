@@ -361,7 +361,7 @@ async function validateRevenueIdentityId(
     }
 
     // Reps can only use identities assigned to them
-    const isAssigned = await isRevenueIdentityAssignedToRep(user.rep.id, rawId)
+    const isAssigned = await isRevenueIdentityAssignedToRep(rawId)
     return isAssigned ? { id: rawId, denied: false } : { id: null, denied: true }
   } catch {
     return { id: null, denied: true }

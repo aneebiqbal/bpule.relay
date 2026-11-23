@@ -108,7 +108,6 @@ export const getAuthorizedIdentities = cache(resolveAuthorizedIdentities)
  * Use this before any identity-dependent operation.
  */
 export async function assertRevenueIdentityAssignedToRep(
-  _userId: string,
   revenueIdentityId: string,
 ): Promise<AuthorizedIdentity> {
   const identities = await getAuthorizedIdentities()
@@ -124,7 +123,6 @@ export async function assertRevenueIdentityAssignedToRep(
  * Non-throwing variant for conditional UI logic.
  */
 export async function isRevenueIdentityAssignedToRep(
-  _userId: string,
   revenueIdentityId: string,
 ): Promise<boolean> {
   const identities = await getAuthorizedIdentities()

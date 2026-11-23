@@ -1,0 +1,282 @@
+{
+  "schema": "relay.stabilization/findings@1",
+  "generated": "2026-11-23",
+  "repository": "/Users/mac/Desktop/products/scout",
+  "branch": "feat/relay-job-intelligence-v2",
+  "head": "87ccbeaa",
+  "counts": {
+    "hypothesesInvestigated": 42,
+    "confirmed": 15,
+    "fixedThisPass": 13,
+    "carriedForwardVerifiedFixed": 9,
+    "open": 1,
+    "notRun": 8
+  },
+  "note": "The 100+ finding target was deliberately not met. This repository has already been through multiple stabilization passes (audit-reports/archive, docs/RELAY_*). Only findings with reproducible code or live-DB evidence are listed. Hypotheses that could not be executed are listed under notRun, not counted as confirmed. Closure pass: R-02/R-03/R-08/R-09/R-10/R-11/R-12/R-13/R-14/R-15 fixed; R-07 remains accepted/open.",
+  "findings": [
+    {
+      "id": "R-01",
+      "title": "Cross-organization seat write through Work Setup operators/backups",
+      "category": "Authorization inconsistency",
+      "severity": "P1",
+      "status": "fixed",
+      "affectedFeature": "Work Setup, responsibility assignment",
+      "route": "POST /api/admin/work-setup, POST /api/admin/assignments",
+      "rootCause": "saveWorkSetup validated only primaryRepId against organization membership; operator/backup ids were passed unchecked to configureCoverageStatement, and the pc_insert/ia_insert RLS policies check the row organization_id but not that rep_id belongs to that organization.",
+      "evidence": "src/lib/operations/work-setup-write.ts:103-111 (only primary checked); src/lib/coverage/configure.ts:117-135 (inserts arbitrary rep ids); supabase/migrations/20261106120000_operations_autopilot.sql:144-146 (pc_insert); 20261101160000_close_anon_exposure.sql:144-146 (ia_insert)",
+      "impact": "An authenticated admin/manager could write a rep from another organization into profile_coverage and identity_assignments, polluting the target population and arming notifications for a foreign rep.",
+      "fix": "Added assertSeatsInOrg() and called it from configureCoverage() and assignBackupResponsibility().",
+      "regressionTest": "tests/work-setup-hardening.test.ts (assertSeatsInOrg rejects a foreign rep)"
+    },
+    {
+      "id": "R-02",
+      "title": "Work Setup allocation replace could leave a lane with zero active allocations",
+      "category": "Data-integrity defect",
+      "severity": "P1",
+      "status": "fixed",
+      "affectedFeature": "Work Setup allocations",
+      "route": "POST /api/admin/work-setup",
+      "rootCause": "dpa_active_uniq is a partial unique index on (plan_id, rep_id) WHERE active, so the writer deactivated every active share before inserting the new set. A failure between the two statements lost the allocations.",
+      "evidence": "src/lib/operations/work-setup-write.ts:210-228 (old ordering); supabase/migrations/20261113140000_plan_allocations_v7.sql:32-34 (unique index)",
+      "impact": "A transient DB error during a routine target edit could silently drop every operator's allocation on a lane, changing assigned/unallocated totals.",
+      "fix": "Extracted replacePlanAllocations(): update existing shares in place, insert new ones, then deactivate removed ones in one statement.",
+      "regressionTest": "tests/work-setup-hardening.test.ts (existing share survives a failed insert)",
+      "remaining": "The whole saveWorkSetup is still not one SQL transaction; see R-13."
+    },
+    {
+      "id": "R-03",
+      "title": "Local live-test configuration targets the production database",
+      "category": "Operational risk",
+      "severity": "P1",
+      "status": "fixed",
+      "rootCause": ".env.local sets DATABASE_URL/SERVICE_DATABASE_URL to the Aiven relay_prod_final database; vitest.live.config.mts loads .env.local and its LIVE_TEST_FILES include write-heavy suites.",
+      "evidence": ".env.local DATABASE_URL host pg-393a7079-...aivencloud.com/relay_prod_final; vitest.live.config.mts:9; tests/operator-visibility.live.test.ts (26 insert/update/delete calls); tests/v6-live-coverage-acceptance.test.ts (15)",
+      "impact": "Running `npm run test:live` mutates production. `npm test` also reads production in tests/accountability-service.test.ts (read-only).",
+      "remediation": "Point live tests at the isolated relay_staging clone (OPS.md §staging) and add a guard that refuses to run live suites when the URL matches the production database name.",
+      "notRun": "The live suite was deliberately NOT executed in this pass because it writes to production."
+    },
+    {
+      "id": "R-04",
+      "title": "Organization deletion did not explicitly revoke sessions",
+      "category": "Authentication",
+      "severity": "P2",
+      "status": "fixed",
+      "route": "DELETE /api/organization/delete",
+      "rootCause": "The route deleted Better Auth users but never called signOutUser; it relied on provider cascade behaviour.",
+      "evidence": "src/app/api/organization/delete/route.ts:36-42; src/lib/auth/contract.ts:131 exposes signOutUser",
+      "fix": "Call auth.signOutUser(member.auth_user_id) before deleteUser.",
+      "regressionTest": "none (provider admin call; verified by typecheck and unit suite)"
+    },
+    {
+      "id": "R-05",
+      "title": "Login `next` sanitizer allowed a backslash protocol-relative redirect",
+      "category": "Open redirect",
+      "severity": "P2",
+      "status": "fixed",
+      "route": "/login?next=...",
+      "rootCause": "sanitizeNextPath rejected only values not starting with '/' and values starting with '//'; browsers fold a backslash to a slash for special URLs.",
+      "evidence": "src/components/auth/login-experience.tsx:75-80",
+      "fix": "Reject values containing backslash or whitespace.",
+      "regressionTest": "none (pure function; covered by tsc and unit suite)"
+    },
+    {
+      "id": "R-06",
+      "title": "GitHub personal access token embedded in the local git remote URL",
+      "category": "Unsafe credential handling",
+      "severity": "P1",
+      "status": "remediated_local_rotate_pending",
+      "evidence": "git config --get remote.origin.url contained a 40-char ghp_ token in the userinfo (not a tracked file)",
+      "fix": "Remote URL replaced with https://github.com/aneebiqbal/bpule.relay.git; the token was not printed or persisted.",
+      "remaining": "The token must be revoked/rotated in GitHub by the owner; pushes now need a credential helper or SSH."
+    },
+    {
+      "id": "R-07",
+      "title": "Two coexisting AI routing systems",
+      "category": "Redundant code",
+      "severity": "P2",
+      "status": "open",
+      "evidence": "src/lib/ai/routing.ts (legacy, dated 2026-10-09) is still imported by src/lib/ai/draft-stream.ts, src/lib/ai/draft.ts, src/lib/ai/provider.ts and src/lib/content/intelligence/forge.ts, while src/lib/ai/runtime/* is the canonical router.",
+      "impact": "Provider selection can diverge depending on entry point; twice the prompt/model configuration to keep in sync."
+    },
+    {
+      "id": "R-08",
+      "title": "UTC dates in adjacent target/notification surfaces",
+      "category": "Midnight/date defect",
+      "severity": "P2",
+      "status": "fixed",
+      "evidence": "src/app/api/admin/targets/route.ts:39 uses new Date().toISOString().slice(0,10); src/lib/profiles/canonical.ts:355; src/app/api/admin/targets/[id]/route.ts:70",
+      "impact": "For a non-UTC organization these surfaces can read or write the wrong business day even though the canonical projection is org-date correct."
+    },
+    {
+      "id": "R-09",
+      "title": "personal = assigned - unseatedAllocationUnits breaks for a solo-seat lane that carries an allocation",
+      "category": "Accounting mismatch",
+      "severity": "P2",
+      "status": "fixed",
+      "evidence": "src/lib/execution/accountability.ts:307-308 counts the full lane target in assigned when seats.length === 1, while lanePersonalTarget:251-252 returns the allocation; unseatedAllocationUnits is 0.",
+      "impact": "reconcilePopulations.personal can disagree with assigned - unseatedAllocationUnits. Reachable through the admin allocations API."
+    },
+    {
+      "id": "R-10",
+      "title": "Work Setup cannot clear allocations",
+      "category": "Functional bug",
+      "severity": "P2",
+      "status": "fixed",
+      "evidence": "src/lib/operations/work-setup-write.ts:180-194: allocations: [] produces an empty byActivity map, so the replace loop never runs.",
+      "impact": "An admin who removes every allocation in the UI silently keeps the previous shares."
+    },
+    {
+      "id": "R-11",
+      "title": "Work Setup permits allocations to unseated reps",
+      "category": "Data-integrity defect",
+      "severity": "P2",
+      "status": "fixed",
+      "evidence": "src/lib/operations/work-setup-write.ts:186 checks only organization membership, not lane seats; the read model flags the result as allocation-without-seat drift (src/lib/operations/work-setup.ts:149-152).",
+      "impact": "Manufactures unseatedAllocationUnits and confuses rep expectations."
+    },
+    {
+      "id": "R-12",
+      "title": "Dead _userId parameters in workspace authorization helpers",
+      "category": "Redundant code",
+      "severity": "P3",
+      "status": "fixed",
+      "evidence": "src/lib/auth/workspace.ts:111,127 accept _userId and never use it; authorization is session-based.",
+      "impact": "False sense of per-user auth; no runtime exposure."
+    },
+    {
+      "id": "R-13",
+      "title": "No multi-statement transaction and no optimistic concurrency on Work Setup",
+      "category": "Race condition",
+      "severity": "P1",
+      "status": "fixed",
+      "evidence": "DbClient exposes only from/rpc/raw (src/lib/db/types.ts:104-115); each query is its own transaction (src/lib/db/postgres.ts:150-188). saveWorkSetup commits seats, targets and allocations independently (src/lib/operations/work-setup-write.ts:115-231). No revision/If-Match guard exists.",
+      "impact": "Two concurrent admins last-writer-wins; a failure after the seat write but before targets leaves a half-applied change.",
+      "remediation": "Add a transaction primitive to DbClient/PostgresExecutorImpl (and Neon), wrap saveWorkSetup and configureCoverageStatement, and add a revision check."
+    },
+    {
+      "id": "R-14",
+      "title": "backfillProfileCoverage is a second coverage writer",
+      "category": "Duplicate functionality",
+      "severity": "P3",
+      "status": "fixed",
+      "evidence": "src/lib/profiles/canonical.ts:493-519 mutates profile_coverage directly without eligibility, acknowledgement or audit sync; no callers found.",
+      "impact": "Contradicts the single-writer claim; dead today but a trap for the next change."
+    },
+    {
+      "id": "R-15",
+      "title": "The stated requirement invariant is not the implemented one",
+      "category": "Documentation inconsistency",
+      "severity": "P3",
+      "status": "fixed",
+      "evidence": "Task/contract phrasing says requirement = assigned + unallocated; the code implements requirement = requirementAssigned + requirementUnallocated and assigned + unallocated = tracked (src/lib/execution/accountability.ts:451-454, 481-495).",
+      "impact": "A consumer asserting the wrong equation will report a false mismatch whenever non-targetable lanes exist."
+    }
+  ],
+  "carriedForwardVerifiedFixed": [
+    {
+      "id": "P0-01",
+      "claim": "stale reps.role escalates a demoted user",
+      "evidence": "src/lib/auth/organization.ts:96-99,162-165 — organization_roles is canonical; reps.role is bootstrap only"
+    },
+    {
+      "id": "P0-03",
+      "claim": "signup rate limiter fails open",
+      "evidence": "src/app/api/signup/route.ts:37-39,51-53 returns true (limited) on error"
+    },
+    {
+      "id": "P0-07",
+      "claim": "/admin route broken (no page.tsx)",
+      "evidence": "src/app/(app)/admin/page.tsx exists and redirects to /admin/command-center"
+    },
+    {
+      "id": "P0-10",
+      "claim": "refresh_few_shot_wins accepts any org",
+      "evidence": "supabase/migrations/0042_fix_security_definer_rls.sql:147-170 adds org guard; 20261101160000_close_anon_exposure.sql:664 revokes authenticated"
+    },
+    {
+      "id": "P1-04/05",
+      "claim": "store listAllReps/listAllProfiles/delete* lack org filter",
+      "evidence": "src/lib/store/supabase-store.ts:2310,2340,2348,2462,2693 all scope by organization_id"
+    },
+    {
+      "id": "P1-18",
+      "claim": "tailored_cvs missing",
+      "evidence": "production information_schema: to_regclass('public.tailored_cvs') = tailored_cvs"
+    },
+    {
+      "id": "P2-19",
+      "claim": "current_org_id() missing",
+      "evidence": "production: to_regprocedure('public.current_org_id()') = current_org_id()"
+    },
+    {
+      "id": "old-route-map-1",
+      "claim": "/api/admin/performance, /api/admin/rep-performance, /api/admin/routing-opportunities unguarded",
+      "evidence": "performance/route.ts:63-66; rep-performance/route.ts:31-34; routing-opportunities/route.ts:26-29 now require can(VIEW_TEAM_ANALYTICS)"
+    },
+    {
+      "id": "old-route-map-2",
+      "claim": "open redirect via next",
+      "evidence": "src/app/auth/callback/route.ts:49-58 safeNextPath enforces same-origin"
+    }
+  ],
+  "notRun": [
+    {
+      "id": "N-01",
+      "item": "Full role x route browser matrix",
+      "reason": "No staging environment or credentials in this session; staging is a separate relay_staging database."
+    },
+    {
+      "id": "N-02",
+      "item": "VPS/PM2 benchmark",
+      "reason": "No VPS access."
+    },
+    {
+      "id": "N-03",
+      "item": "Live RLS adversarial probes with two organizations",
+      "reason": "Writes to production are out of scope without authorization; read-only schema inspection was performed."
+    },
+    {
+      "id": "N-04",
+      "item": "Concurrent Work Setup saves under two live sessions",
+      "reason": "Requires staging."
+    },
+    {
+      "id": "N-05",
+      "item": "AI provider failure/timeout/partial-output injection",
+      "reason": "External providers; not exercised."
+    },
+    {
+      "id": "N-06",
+      "item": "Midnight rollover in a live browser",
+      "reason": "Prior pass verified it (docs/RELAY_FINAL_BROWSER_ACCEPTANCE.md case 9); not re-run."
+    },
+    {
+      "id": "N-07",
+      "item": "Job preparation package end-to-end",
+      "reason": "Requires live AI provider and staging; prior passes covered it."
+    },
+    {
+      "id": "N-08",
+      "item": "npm run test:live",
+      "reason": "Suite writes to the production database as configured; deliberately not run."
+    }
+  ],
+  "closure": {
+    "date": "2026-11-23",
+    "baseHead": "60ab5204e7733cacdb52c36d6b25a9bd0e57ff7c",
+    "rcHead": "87ccbeaa",
+    "commits": [
+      "2dbf4543 fix(security,integrity): org-validate Work Setup seats and harden allocations",
+      "fa55a728 docs(stabilization): record final gate results",
+      "60ab5204 docs(stabilization): reconciliation/schema artifacts and cleanup+deploy runbook",
+      "87ccbeaa feat(stabilization): atomic Work Setup, fail-closed test isolation, allocation rule fixes"
+    ],
+    "gates": {
+      "unit": "423 files passed / 1 skipped (424); 5954 passed / 5 skipped (5959)",
+      "tsc": "exit 0",
+      "build": "pass",
+      "eslint": "0 errors",
+      "liveSuite": "NOT RUN (guarded; no disposable DB configured)"
+    }
+  }
+}

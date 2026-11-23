@@ -8,6 +8,10 @@ import { config } from 'dotenv'
 import { Pool } from '@neondatabase/serverless'
 
 config({ path: '.env.local', override: true })
+config({ path: '.env.test' })
+
+const { assertNoProductionDatabase } = await import('../../src/lib/db/test-isolation.ts')
+assertNoProductionDatabase()
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const AUTH_USER = process.env.RLS_USER ?? '02b2d1bc-346c-469c-86cd-a200e6b74a43' // Dawood

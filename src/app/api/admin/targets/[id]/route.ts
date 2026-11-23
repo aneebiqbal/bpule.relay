@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext, can } from '@/lib/auth/organization'
 import { safeErrorResponse } from '@/lib/errors'
+import { currentInstant, orgDate } from '@/lib/org-clock'
+import { loadOperatingPolicy } from '@/lib/org-clock/load'
 
 async function requireAdminStore() {
   const authCtx = await getAuthContext()
@@ -60,14 +62,17 @@ export async function PATCH(
       before.targetCount !== target.targetCount &&
       before.repId !== auth.authCtx.repId
     ) {
-      await auth.store.getSupabaseClient().from('notifications').insert({
+      const client = auth.store.getSupabaseClient()
+      const policy = await loadOperatingPolicy(auth.authCtx.orgId, client).catch(() => null)
+      const businessDate = orgDate(currentInstant(), policy?.timezone ?? 'UTC')
+      await client.from('notifications').insert({
         organization_id: auth.authCtx.orgId,
         recipient_id: before.repId,
         notification_type: 'target_updated',
         title: 'Daily plan updated',
         body: `${target.activityType.replaceAll('_', ' ')} ${before.targetCount} → ${target.targetCount}`,
         link: '/dashboard',
-        dedupe_key: `target_updated:${before.repId}:${id}:${new Date().toISOString().slice(0, 10)}`,
+        dedupe_key: `target_updated:${before.repId}:${id}:${businessDate}`,
       })
     }
 

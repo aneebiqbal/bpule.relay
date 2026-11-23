@@ -17,6 +17,7 @@
  * are quoted and validated against `[A-Za-z_][A-Za-z0-9_]*`.
  */
 import { Pool, types as neonTypes } from '@neondatabase/serverless'
+import type { PoolClient } from '@neondatabase/serverless'
 import type {
   CountStrategy,
   DbSingleResult,
@@ -215,6 +216,44 @@ export interface NeonExecutorApi {
   query<T = Record<string, unknown>>(text: string, values?: unknown[]): Promise<T[]>
   /** Transaction for writes; identity is set with SET LOCAL. */
   queryInWrite<T = Record<string, unknown>>(text: string, values?: unknown[]): Promise<T[]>
+  /**
+   * Run `fn` in ONE physical transaction on ONE connection, with the caller's
+   * RLS identity set once (`SET LOCAL`). Optional because the Supabase adapter
+   * has no equivalent; callers must fall back safely when it is absent.
+   */
+  transaction?<T>(fn: (executor: NeonExecutorApi) => Promise<T>): Promise<T>
+}
+
+type BoundConnection = PoolClient
+
+/**
+ * Executor bound to an already-checked-out connection inside a transaction.
+ * It never issues BEGIN/COMMIT itself — the owner does.
+ */
+class BoundNeonExecutor implements NeonExecutorApi {
+  constructor(
+    private readonly client: BoundConnection,
+    private readonly userId: string | null,
+  ) {}
+
+  async query<T>(text: string, values: unknown[] = []): Promise<T[]> {
+    return this.run<T>(text, values)
+  }
+
+  async queryInWrite<T>(text: string, values: unknown[] = []): Promise<T[]> {
+    return this.run<T>(text, values)
+  }
+
+  private async run<T>(text: string, values: unknown[]): Promise<T[]> {
+    let n = 0
+    const rewritten = text.replace(/\?/g, () => `$${++n}`)
+    try {
+      const res = await this.client.query(rewritten, values)
+      return res.rows as T[]
+    } catch (error) {
+      throw new Error(`Neon query failed: ${(error as Error).message}\n${rewritten}`)
+    }
+  }
 }
 
 let pool: Pool | null = null
@@ -324,6 +363,25 @@ export class NeonExecutorImpl implements NeonExecutorApi {
       }
       await client.query('COMMIT')
       return res.rows as T[]
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      throw err
+    } finally {
+      client.release()
+    }
+  }
+
+  async transaction<T>(fn: (executor: NeonExecutorApi) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      if (this.userId) {
+        await client.query('SELECT set_config($1, $2, true)', ['app.current_user_id', this.userId])
+      }
+      const bound = new BoundNeonExecutor(client, this.userId)
+      const result = await fn(bound)
+      await client.query('COMMIT')
+      return result
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {})
       throw err
@@ -831,6 +889,13 @@ export class NeonDbClient implements DbClient {
       (rows) => ({ data: rows as T, error: null }),
       (err: unknown) => ({ data: null as unknown as T, error: { message: err instanceof Error ? err.message : String(err) } }),
     )
+  }
+
+  async transaction<T>(fn: (tx: DbClient) => Promise<T>): Promise<T> {
+    if (!this.executor.transaction) {
+      throw new Error('Transactions are not supported by this Neon executor')
+    }
+    return this.executor.transaction((bound) => fn(new NeonDbClient(bound, this.userId)))
   }
 }
 
