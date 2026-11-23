@@ -154,9 +154,14 @@ export async function POST(
       actorRepId: auth.ctx.repId,
       shares: mode === 'shared' ? new Map<string, number>() : deduped,
     })
-  const replaced = auth.supabase.transaction
-    ? await auth.supabase.transaction(write)
-    : await write(auth.supabase)
+  // Fail closed: allocation replacement is only safe inside one transaction.
+  if (!auth.supabase.transaction) {
+    return NextResponse.json(
+      { error: 'This database provider does not support transactions; refusing a non-atomic allocation update.' },
+      { status: 503 },
+    )
+  }
+  const replaced = await auth.supabase.transaction(write)
   if (!replaced.ok) return NextResponse.json({ error: replaced.error }, { status: 500 })
 
   return NextResponse.json({ ok: true, mode, count: deduped.size })

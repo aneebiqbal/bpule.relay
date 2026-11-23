@@ -112,6 +112,22 @@ describe('saveWorkSetup atomicity', () => {
   })
 })
 
+describe('saveWorkSetup unsupported-adapter guard', () => {
+  it('fails closed without writing when the provider has no transaction support', async () => {
+    const fake = seed()
+    const before = JSON.stringify(fake.tables)
+    const noTransactionClient = {
+      provider: 'supabase',
+      from: fake.client.from.bind(fake.client),
+      rpc: (fake.client as unknown as { rpc: unknown }).rpc,
+    }
+    const result = await saveWorkSetup(noTransactionClient as unknown as DbClient, input())
+    expect(result.ok).toBe(false)
+    expect(result.code).toBe('TRANSACTION_UNSUPPORTED')
+    expect(JSON.stringify(fake.tables)).toBe(before)
+  })
+})
+
 describe('saveWorkSetup optimistic concurrency', () => {
   it('returns a typed CONFLICT and preserves committed state on a stale revision', async () => {
     const fake = seed()

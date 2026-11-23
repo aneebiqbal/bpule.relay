@@ -88,7 +88,7 @@ export interface WorkSetupSaveResult {
   targetsWritten: number
   allocationsWritten: number
   /** Present on a conflict: the committed values the admin should review. */
-  code?: 'CONFLICT'
+  code?: 'CONFLICT' | 'TRANSACTION_UNSUPPORTED'
   revision?: string
 }
 
@@ -462,11 +462,26 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
     }
   }
 
+  // Fail closed: a provider without a real multi-statement transaction must not
+  // perform a non-atomic Work Setup write (partial seats/targets/allocations).
+  if (!client.transaction) {
+    return {
+      ok: false,
+      code: 'TRANSACTION_UNSUPPORTED',
+      error:
+        'This database provider does not support multi-statement transactions; refusing a non-atomic Work Setup write.',
+      identityId: input.identityId,
+      profileId,
+      primaryRepId: input.primaryRepId,
+      operatorIds,
+      backupIds,
+      targetsWritten: 0,
+      allocationsWritten: 0,
+    }
+  }
+
   try {
-    if (client.transaction) return await client.transaction(apply)
-    // shortcut: PostgREST has no multi-statement transaction; sequential only.
-    // Upgrade when that provider needs atomic Work Setup writes.
-    return await apply(client)
+    return await client.transaction(apply)
   } catch (error) {
     return fail(error instanceof Error ? error.message : String(error))
   }

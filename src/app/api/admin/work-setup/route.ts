@@ -103,6 +103,9 @@ export async function POST(request: Request) {
       allocations: parseAllocations(body.allocations),
       expectedRevision: typeof body.expectedRevision === 'string' ? body.expectedRevision : undefined,
     })
+    if (result.code === 'TRANSACTION_UNSUPPORTED') {
+      return NextResponse.json({ error: result.error, code: 'TRANSACTION_UNSUPPORTED' }, { status: 503 })
+    }
     if (result.code === 'CONFLICT') {
       // Surface the committed state so the admin can review and retry instead
       // of silently overwriting a concurrent edit.

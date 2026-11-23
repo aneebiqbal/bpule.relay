@@ -43,6 +43,28 @@ thrown error proves rollback. From `tests/work-setup-transaction.test.ts`:
 | stale `expectedRevision` | `code: 'CONFLICT'`, zero writes, committed state preserved |
 | matching revision | success |
 
+## 3b. Real PostgreSQL verification
+
+Beyond the fake harness, `scripts/qa/postgres-txn-integration.mjs` runs the
+**actual application code** (`postgresDbClient`, `saveWorkSetup`,
+`configureCoverageStatement`, `computeAccountRevision`,
+`getOrganizationDailySummary`) against a throwaway local PostgreSQL database,
+with a `BEFORE INSERT` trigger providing genuine failure injection. Results:
+
+| Check | Result |
+|---|---|
+| Work Setup commits coverage + eligibility + plan + allocation | PASS |
+| `requirement = 30`; Rep Today operator expectation = allocation 8 | PASS |
+| Shared unallocated seat contributes 0 | PASS |
+| Solo lane with allocation expects 10, not the 30 lane target (R-09) | PASS |
+| Trigger raises **mid-transaction** on allocation insert | PASS |
+| Full dependent-table state restored byte-for-byte after rollback | PASS |
+| Stale `expectedRevision` → `CONFLICT`, zero writes | PASS |
+| Empty allocation list clears atomically | PASS |
+| Organization B sees none of organization A's canonical data | PASS |
+
+Run: `npx tsx scripts/qa/postgres-txn-integration.mjs`.
+
 ## 4. Optimistic concurrency
 
 `GET /api/admin/work-setup` returns a per-account `revision`
@@ -53,10 +75,17 @@ last-writer-wins overwrite.
 
 Providers without raw SQL derive the same revision with the query builder.
 
-## 5. Limits
+## 5. Unsupported adapters fail closed
 
-- The PostgREST provider has no transaction; the fallback is sequential and
-  documented in code. Production runs on `postgres`, so the atomic path is live.
-- `configureCoverage` called directly (team routes) already validates seats and
-  is itself one statement; it does not yet open its own transaction wrapper
-  beyond that statement. Work Setup is the multi-statement path and is covered.
+The PostgREST/Supabase adapter has no multi-statement transaction surface. It
+does **not** fall back to sequential writes:
+
+- `saveWorkSetup` returns `code: "TRANSACTION_UNSUPPORTED"` and writes nothing;
+  the API maps it to **HTTP 503**.
+- the admin allocation route likewise refuses with **HTTP 503**.
+
+Production runs on `postgres`, where the atomic path is active.
+
+`configureCoverage` called directly (team routes) is a single SQL statement on
+raw providers, so it is atomic by construction; it still validates every seat
+against the organization.
