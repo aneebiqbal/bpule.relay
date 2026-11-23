@@ -7,7 +7,8 @@
 
 | Item | Value |
 |---|---|
-| Branch tip after this pass | recorded at commit time |
+| Branch tip after this pass | `ef9eca01` |
+| CI fix (live-DB test classification) | `ef9eca01` |
 | Fail-closed adapter + real-PG harness | `de94026e` |
 | Prior closure RC | `87ccbeaa` |
 | Production currently reports | `e68110a` (**not this branch**) |
@@ -22,8 +23,19 @@
    (`npm run qa:txn`) drives the actual `postgresDbClient` / `saveWorkSetup` /
    `configureCoverageStatement` / `computeAccountRevision` code against a
    throwaway local database with genuine trigger-based failure injection.
-3. **Packaging / workers / secrets / rollback / migration checks (#8).**
-4. Re-verification of all deterministic gates (#9).
+3. **CI repair.** `tests/accountability-service.test.ts` and
+   `tests/job-retention-contracts.test.ts` read a populated database but ran in
+   the unit job, which configures no env — the cause of the red
+   `CI / test` and `CI / release-gate`. Both now use the codebase's
+   `describe.skipIf(!liveDb)` convention and are listed in the guarded live
+   suite. Reproduced with `.env.local` removed: unit **exit 0**, every
+   release-gate step green.
+4. **Packaging / workers / secrets / rollback / migration checks (#8).**
+5. Re-verification of all deterministic gates (#9).
+
+**External, not fixable from here:** Vercel reports "Account is blocked" for
+`bpule-relay` and `scout-inbox`, so preview deployments cannot run. This is an
+account/billing state, not a code defect; owner action required.
 
 ## 3. Real-PostgreSQL results (actual PG, not the fake)
 
@@ -110,14 +122,18 @@ remains unverified.
 
 | Gate | Result |
 |---|---|
-| `tsc --noEmit` | TSC_OK |
-| `npm test` | recorded below |
-| `npm run build` | recorded below |
-| eslint (changed) | 0 errors |
+| `tsc --noEmit` | TSC_OK (with env and with no env) |
+| `npm test` (local, DB configured) | **423 files passed / 1 skipped; 5955 tests passed / 5 skipped** |
+| `pnpm test` CI simulation (no env) | **exit 0; 423 files; 5941 passed / 19 skipped** |
+| `pnpm qa:coverage` (no env) | 15 contracts, 0 failed, 0 skipped |
+| corpus / semantic / message / owners (no env) | 32 / 107 / 16 / 18 passed |
+| `pnpm lint` (no env) | exit 0 (777 pre-existing warnings, 0 errors) |
+| `npm run build` | pass, route table emitted |
 | `npm run qa:txn` | ALL REAL-POSTGRES CHECKS PASSED |
 | `npm run test:live` | refuses to start (no marker / production URL) |
 | browser role matrix | BLOCKED (§4) |
 | VPS worker benchmark | BLOCKED (§4) |
+| Vercel preview deploys | BLOCKED — account blocked (external) |
 
 ## 10. GO / NO-GO
 
