@@ -1,0 +1,699 @@
+{
+ "base": "http://localhost:3000",
+ "total": 112,
+ "ok": 31,
+ "authGated": 81,
+ "nonAuthHardFailures": [],
+ "crashing": [],
+ "withConsole": [
+  {
+   "route": "/admin",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/accountability",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/activity",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/ai-usage",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/command",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/command-center",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/control-center",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/dataset",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/growth",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/health",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/people",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/providers",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/qa",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/revenue-identities",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/revenue-intelligence",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/scoring-qa",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/system",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/targets",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/admin/training-data",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/ai-policy",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/archive",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/chats",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/content-v2/*/today",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/content-v2/growth",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/content/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/content/growth",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/dashboard",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/account",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/analytics",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/bd-workflow",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/faq",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/founder-setup",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/getting-started",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/identities",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/jobs",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/leads",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/docs/studio",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/jobs",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/jobs/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/leads",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/leads/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/login",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/onboarding",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/privacy",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/profile-intelligence",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/profile-intelligence/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/reports",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/studio/drafts/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/team",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/team/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/team/groups/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/team/profiles",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/team/profiles/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/upwork/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/upwork/new",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/verify-email",
+   "status": 200,
+   "authGated": false,
+   "redirectedTo": null,
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  },
+  {
+   "route": "/workspace/*",
+   "status": 200,
+   "authGated": true,
+   "redirectedTo": "/login",
+   "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+   ],
+   "pageErrors": [],
+   "failedRequests": []
+  }
+ ]
+}

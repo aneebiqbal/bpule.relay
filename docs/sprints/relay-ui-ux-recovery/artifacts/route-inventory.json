@@ -1,0 +1,1030 @@
+{
+ "generatedAt": "2026-11-23T21:27:00.247Z",
+ "count": 112,
+ "routes": [
+  {
+   "route": "/account",
+   "file": "src/app/(app)/account/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/settings",
+    "/accounts/${encodeURIComponent(companyKey)}"
+   ],
+   "api": []
+  },
+  {
+   "route": "/accountability",
+   "file": "src/app/(app)/accountability/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/dashboard"
+   ],
+   "api": []
+  },
+  {
+   "route": "/accounts/*",
+   "file": "src/app/(app)/accounts/[company]/page.tsx",
+   "guards": "Ops",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/accounts",
+   "file": "src/app/(app)/accounts/page.tsx",
+   "guards": "AdminOps",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/activate",
+   "file": "src/app/(app)/activate/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login"
+   ],
+   "api": []
+  },
+  {
+   "route": "/admin/accountability",
+   "file": "src/app/(app)/admin/accountability/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/admin/command"
+   ],
+   "api": []
+  },
+  {
+   "route": "/admin/activity",
+   "file": "src/app/(app)/admin/activity/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/reports/activity"
+   ],
+   "api": []
+  },
+  {
+   "route": "/admin/ai-usage",
+   "file": "src/app/(app)/admin/ai-usage/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin/command-center",
+   "file": "src/app/(app)/admin/command-center/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/admin/command"
+   ],
+   "api": []
+  },
+  {
+   "route": "/admin/command/*",
+   "file": "src/app/(app)/admin/command/[repId]/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/dashboard"
+   ],
+   "api": []
+  },
+  {
+   "route": "/admin/command",
+   "file": "src/app/(app)/admin/command/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/team"
+   ],
+   "api": []
+  },
+  {
+   "route": "/admin/control-center",
+   "file": "src/app/(app)/admin/control-center/page.tsx",
+   "guards": "AdminOps",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin/dataset",
+   "file": "src/app/(app)/admin/dataset/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin/growth",
+   "file": "src/app/(app)/admin/growth/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/content/growth"
+   ],
+   "api": []
+  },
+  {
+   "route": "/admin/health",
+   "file": "src/app/(app)/admin/health/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin",
+   "file": "src/app/(app)/admin/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/admin/control-center"
+   ],
+   "api": []
+  },
+  {
+   "route": "/admin/people",
+   "file": "src/app/(app)/admin/people/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin/providers",
+   "file": "src/app/(app)/admin/providers/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin/qa",
+   "file": "src/app/(app)/admin/qa/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": [
+    "/api/admin/qa-views",
+    "/api/admin/qa/evaluations"
+   ]
+  },
+  {
+   "route": "/admin/revenue-identities",
+   "file": "src/app/(app)/admin/revenue-identities/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/profile-intelligence?tab=identities"
+   ],
+   "api": []
+  },
+  {
+   "route": "/admin/revenue-intelligence",
+   "file": "src/app/(app)/admin/revenue-intelligence/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin/scoring-qa",
+   "file": "src/app/(app)/admin/scoring-qa/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin/system",
+   "file": "src/app/(app)/admin/system/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin/targets",
+   "file": "src/app/(app)/admin/targets/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/admin/training-data",
+   "file": "src/app/(app)/admin/training-data/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/archive",
+   "file": "src/app/(app)/archive/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/chats",
+   "file": "src/app/(app)/chats/page.tsx",
+   "guards": "Ops",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/content-v2/*/today",
+   "file": "src/app/(app)/content-v2/[id]/today/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [
+    "/content?persona=${id}"
+   ],
+   "api": []
+  },
+  {
+   "route": "/content-v2/growth",
+   "file": "src/app/(app)/content-v2/growth/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [
+    "/content/growth"
+   ],
+   "api": []
+  },
+  {
+   "route": "/content/*",
+   "file": "src/app/(app)/content/[id]/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/content",
+    "/content",
+    "/content?persona=${id}"
+   ],
+   "api": []
+  },
+  {
+   "route": "/content/growth",
+   "file": "src/app/(app)/content/growth/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/content/ideas",
+   "file": "src/app/(app)/content/ideas/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login"
+   ],
+   "api": []
+  },
+  {
+   "route": "/content/new",
+   "file": "src/app/(app)/content/new/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login"
+   ],
+   "api": []
+  },
+  {
+   "route": "/content",
+   "file": "src/app/(app)/content/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/content"
+   ],
+   "api": []
+  },
+  {
+   "route": "/dashboard",
+   "file": "src/app/(app)/dashboard/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/login"
+   ],
+   "api": []
+  },
+  {
+   "route": "/facts",
+   "file": "src/app/(app)/facts/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/home",
+   "file": "src/app/(app)/home/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [
+    "/dashboard"
+   ],
+   "api": []
+  },
+  {
+   "route": "/jobs/*",
+   "file": "src/app/(app)/jobs/[id]/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/jobs?view=latest"
+   ],
+   "api": []
+  },
+  {
+   "route": "/jobs",
+   "file": "src/app/(app)/jobs/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/jobs?view=latest"
+   ],
+   "api": []
+  },
+  {
+   "route": "/leads/*",
+   "file": "src/app/(app)/leads/[id]/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/leads/import",
+   "file": "src/app/(app)/leads/import/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": [
+    "/api/leads/import"
+   ]
+  },
+  {
+   "route": "/leads/new",
+   "file": "src/app/(app)/leads/new/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": [
+    "/api/me/rulebook",
+    "/api/leads/extract",
+    "/api/leads"
+   ]
+  },
+  {
+   "route": "/leads",
+   "file": "src/app/(app)/leads/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/manage-profiles",
+   "file": "src/app/(app)/manage-profiles/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [
+    "/team/profiles"
+   ],
+   "api": []
+  },
+  {
+   "route": "/notifications",
+   "file": "src/app/(app)/notifications/page.tsx",
+   "guards": "Ops",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/performance",
+   "file": "src/app/(app)/performance/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/login"
+   ],
+   "api": []
+  },
+  {
+   "route": "/profile-intelligence/*",
+   "file": "src/app/(app)/profile-intelligence/[id]/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/team/profiles/${id}"
+   ],
+   "api": []
+  },
+  {
+   "route": "/profile-intelligence",
+   "file": "src/app/(app)/profile-intelligence/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/login"
+   ],
+   "api": []
+  },
+  {
+   "route": "/profiles",
+   "file": "src/app/(app)/profiles/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [
+    "/team/profiles"
+   ],
+   "api": []
+  },
+  {
+   "route": "/prospect",
+   "file": "src/app/(app)/prospect/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/qa-v4",
+   "file": "src/app/(app)/qa-v4/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/relay",
+   "file": "src/app/(app)/relay/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/chats"
+   ],
+   "api": []
+  },
+  {
+   "route": "/relay/persona-daily",
+   "file": "src/app/(app)/relay/persona-daily/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/content"
+   ],
+   "api": []
+  },
+  {
+   "route": "/rep/assigned-profiles",
+   "file": "src/app/(app)/rep/assigned-profiles/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/dashboard"
+   ],
+   "api": []
+  },
+  {
+   "route": "/reports/activity",
+   "file": "src/app/(app)/reports/activity/page.tsx",
+   "guards": "Ops",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/reports",
+   "file": "src/app/(app)/reports/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [
+    "/reports/sales"
+   ],
+   "api": []
+  },
+  {
+   "route": "/reports/pipeline",
+   "file": "src/app/(app)/reports/pipeline/page.tsx",
+   "guards": "Ops",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/reports/revenue",
+   "file": "src/app/(app)/reports/revenue/page.tsx",
+   "guards": "Ops",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/reports/sales",
+   "file": "src/app/(app)/reports/sales/page.tsx",
+   "guards": "Ops",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/reports/team",
+   "file": "src/app/(app)/reports/team/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [
+    "/team/performance"
+   ],
+   "api": []
+  },
+  {
+   "route": "/revenue/email",
+   "file": "src/app/(app)/revenue/email/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/settings",
+   "file": "src/app/(app)/settings/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login"
+   ],
+   "api": []
+  },
+  {
+   "route": "/studio/post-detail",
+   "file": "src/app/(app)/studio/post-detail/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/content"
+   ],
+   "api": []
+  },
+  {
+   "route": "/tasks",
+   "file": "src/app/(app)/tasks/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/login"
+   ],
+   "api": []
+  },
+  {
+   "route": "/team/*",
+   "file": "src/app/(app)/team/[repId]/page.tsx",
+   "guards": "Team",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/team/eval",
+   "file": "src/app/(app)/team/eval/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/performance"
+   ],
+   "api": []
+  },
+  {
+   "route": "/team/groups/*",
+   "file": "src/app/(app)/team/groups/[teamId]/page.tsx",
+   "guards": "Team",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/team/groups",
+   "file": "src/app/(app)/team/groups/page.tsx",
+   "guards": "Team",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/team",
+   "file": "src/app/(app)/team/page.tsx",
+   "guards": "Team",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/team/people",
+   "file": "src/app/(app)/team/people/page.tsx",
+   "guards": "Team",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/team/performance",
+   "file": "src/app/(app)/team/performance/page.tsx",
+   "guards": "Team",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/team/profiles/*",
+   "file": "src/app/(app)/team/profiles/[profileId]/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/dashboard"
+   ],
+   "api": []
+  },
+  {
+   "route": "/team/profiles",
+   "file": "src/app/(app)/team/profiles/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/dashboard"
+   ],
+   "api": []
+  },
+  {
+   "route": "/team/tasks",
+   "file": "src/app/(app)/team/tasks/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [
+    "/tasks?scope=team"
+   ],
+   "api": []
+  },
+  {
+   "route": "/upwork/*",
+   "file": "src/app/(app)/upwork/[id]/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/upwork/new",
+   "file": "src/app/(app)/upwork/new/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": [
+    "/api/upwork/extract",
+    "/api/upwork/jobs"
+   ]
+  },
+  {
+   "route": "/upwork",
+   "file": "src/app/(app)/upwork/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/workspace/*",
+   "file": "src/app/(app)/workspace/[revenueIdentityId]/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login"
+   ],
+   "api": []
+  },
+  {
+   "route": "/",
+   "file": "src/app/(landing)/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/acceptable-use",
+   "file": "src/app/(public)/acceptable-use/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/ai-policy",
+   "file": "src/app/(public)/ai-policy/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/account",
+   "file": "src/app/(public)/docs/account/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/analytics",
+   "file": "src/app/(public)/docs/analytics/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/bd-workflow",
+   "file": "src/app/(public)/docs/bd-workflow/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/faq",
+   "file": "src/app/(public)/docs/faq/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/follow-ups",
+   "file": "src/app/(public)/docs/follow-ups/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/founder-setup",
+   "file": "src/app/(public)/docs/founder-setup/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/getting-started",
+   "file": "src/app/(public)/docs/getting-started/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/identities",
+   "file": "src/app/(public)/docs/identities/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/jobs",
+   "file": "src/app/(public)/docs/jobs/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/leads",
+   "file": "src/app/(public)/docs/leads/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/outreach",
+   "file": "src/app/(public)/docs/outreach/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/oversight",
+   "file": "src/app/(public)/docs/oversight/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs",
+   "file": "src/app/(public)/docs/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/prospect-check",
+   "file": "src/app/(public)/docs/prospect-check/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/studio",
+   "file": "src/app/(public)/docs/studio/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/team",
+   "file": "src/app/(public)/docs/team/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/docs/usage",
+   "file": "src/app/(public)/docs/usage/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/forgot-password",
+   "file": "src/app/(public)/forgot-password/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/dashboard",
+    "/onboarding"
+   ],
+   "api": []
+  },
+  {
+   "route": "/login",
+   "file": "src/app/(public)/login/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/dashboard",
+    "/onboarding"
+   ],
+   "api": []
+  },
+  {
+   "route": "/pricing",
+   "file": "src/app/(public)/pricing/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/privacy",
+   "file": "src/app/(public)/privacy/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/reset-password",
+   "file": "src/app/(public)/reset-password/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/security",
+   "file": "src/app/(public)/security/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/signup",
+   "file": "src/app/(public)/signup/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/dashboard",
+    "/onboarding"
+   ],
+   "api": []
+  },
+  {
+   "route": "/terms",
+   "file": "src/app/(public)/terms/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/trust",
+   "file": "src/app/(public)/trust/page.tsx",
+   "guards": "public/none",
+   "dynamic": "",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/verify-email",
+   "file": "src/app/(public)/verify-email/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/dashboard",
+    "/onboarding"
+   ],
+   "api": []
+  },
+  {
+   "route": "/inbox-fixture",
+   "file": "src/app/inbox-fixture/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [],
+   "api": []
+  },
+  {
+   "route": "/onboarding",
+   "file": "src/app/onboarding/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/dashboard"
+   ],
+   "api": []
+  },
+  {
+   "route": "/studio/drafts/*",
+   "file": "src/app/studio/drafts/[id]/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/content",
+    "/content"
+   ],
+   "api": []
+  },
+  {
+   "route": "/studio/drafts/new",
+   "file": "src/app/studio/drafts/new/page.tsx",
+   "guards": "public/none",
+   "dynamic": "force-dynamic",
+   "redirects": [
+    "/login",
+    "/content",
+    "/content"
+   ],
+   "api": []
+  }
+ ]
+}

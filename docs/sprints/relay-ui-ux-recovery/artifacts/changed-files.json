@@ -1,0 +1,245 @@
+{
+ "generatedAt": "2026-11-23T21:37:34.371Z",
+ "baseSha": "5bcb0f9d6d5d80c73d1b608fdf10095b95224cc2",
+ "fileCount": 34,
+ "files": [
+  {
+   "path": "rc/app/(app)/admin/people/page.tsx",
+   "status": "M",
+   "additions": 0,
+   "deletions": 0,
+   "tracked": true
+  },
+  {
+   "path": "src/app/(app)/chats/page.tsx",
+   "status": "M",
+   "additions": 26,
+   "deletions": 8,
+   "tracked": true
+  },
+  {
+   "path": "src/app/(app)/tasks/page.tsx",
+   "status": "M",
+   "additions": 8,
+   "deletions": 2,
+   "tracked": true
+  },
+  {
+   "path": "src/app/api/leads/[id]/conversation/compose/route.ts",
+   "status": "M",
+   "additions": 4,
+   "deletions": 1,
+   "tracked": true
+  },
+  {
+   "path": "src/app/api/leads/[id]/conversation/draft/route.ts",
+   "status": "M",
+   "additions": 4,
+   "deletions": 1,
+   "tracked": true
+  },
+  {
+   "path": "src/app/api/leads/[id]/conversation/inbound/route.ts",
+   "status": "M",
+   "additions": 7,
+   "deletions": 4,
+   "tracked": true
+  },
+  {
+   "path": "src/app/api/leads/[id]/conversation/route.ts",
+   "status": "M",
+   "additions": 4,
+   "deletions": 1,
+   "tracked": true
+  },
+  {
+   "path": "src/app/api/leads/[id]/conversation/send/route.ts",
+   "status": "M",
+   "additions": 5,
+   "deletions": 2,
+   "tracked": true
+  },
+  {
+   "path": "src/app/api/leads/[id]/reply/route.ts",
+   "status": "M",
+   "additions": 5,
+   "deletions": 2,
+   "tracked": true
+  },
+  {
+   "path": "src/app/api/tasks/route.ts",
+   "status": "M",
+   "additions": 3,
+   "deletions": 0,
+   "tracked": true
+  },
+  {
+   "path": "src/components/coverage/rep-coverage-panel.tsx",
+   "status": "M",
+   "additions": 15,
+   "deletions": 1,
+   "tracked": true
+  },
+  {
+   "path": "src/components/coverage/rep-day-control.tsx",
+   "status": "M",
+   "additions": 15,
+   "deletions": 1,
+   "tracked": true
+  },
+  {
+   "path": "src/components/operations/work-setup.tsx",
+   "status": "M",
+   "additions": 116,
+   "deletions": 21,
+   "tracked": true
+  },
+  {
+   "path": "src/components/prospect/prospects-workspace.tsx",
+   "status": "M",
+   "additions": 1,
+   "deletions": 0,
+   "tracked": true
+  },
+  {
+   "path": "src/components/tasks/task-workspace-view.tsx",
+   "status": "M",
+   "additions": 22,
+   "deletions": 11,
+   "tracked": true
+  },
+  {
+   "path": "src/components/team/rep-operating-plan.tsx",
+   "status": "M",
+   "additions": 3,
+   "deletions": 1,
+   "tracked": true
+  },
+  {
+   "path": "src/components/ui/data-table.tsx",
+   "status": "M",
+   "additions": 8,
+   "deletions": 4,
+   "tracked": true
+  },
+  {
+   "path": "src/components/ui/dialog.tsx",
+   "status": "M",
+   "additions": 34,
+   "deletions": 3,
+   "tracked": true
+  },
+  {
+   "path": "src/components/v4/primitives.tsx",
+   "status": "M",
+   "additions": 54,
+   "deletions": 1,
+   "tracked": true
+  },
+  {
+   "path": "src/lib/conversation/service.ts",
+   "status": "M",
+   "additions": 8,
+   "deletions": 6,
+   "tracked": true
+  },
+  {
+   "path": "src/lib/operations/chat-intelligence.ts",
+   "status": "M",
+   "additions": 32,
+   "deletions": 6,
+   "tracked": true
+  },
+  {
+   "path": "src/lib/operations/chat-queue.ts",
+   "status": "M",
+   "additions": 11,
+   "deletions": 7,
+   "tracked": true
+  },
+  {
+   "path": "src/lib/operations/work-setup-write.ts",
+   "status": "M",
+   "additions": 15,
+   "deletions": 16,
+   "tracked": true
+  },
+  {
+   "path": "src/lib/store/mock-store.ts",
+   "status": "M",
+   "additions": 20,
+   "deletions": 6,
+   "tracked": true
+  },
+  {
+   "path": "src/lib/store/supabase-store.ts",
+   "status": "M",
+   "additions": 28,
+   "deletions": 5,
+   "tracked": true
+  },
+  {
+   "path": "src/lib/store/types.ts",
+   "status": "M",
+   "additions": 8,
+   "deletions": 2,
+   "tracked": true
+  },
+  {
+   "path": "tests/inbox-v4-rebuild-contracts.test.ts",
+   "status": "M",
+   "additions": 1,
+   "deletions": 1,
+   "tracked": true
+  },
+  {
+   "path": "docs/sprints/",
+   "status": "??",
+   "additions": 0,
+   "deletions": 0,
+   "tracked": false
+  },
+  {
+   "path": "scripts/qa/sprint-link-audit.mjs",
+   "status": "??",
+   "additions": 0,
+   "deletions": 0,
+   "tracked": false
+  },
+  {
+   "path": "scripts/qa/sprint-render-inventory.mjs",
+   "status": "??",
+   "additions": 0,
+   "deletions": 0,
+   "tracked": false
+  },
+  {
+   "path": "scripts/qa/sprint-route-crawl.mjs",
+   "status": "??",
+   "additions": 0,
+   "deletions": 0,
+   "tracked": false
+  },
+  {
+   "path": "scripts/qa/sprint-route-inventory.mjs",
+   "status": "??",
+   "additions": 0,
+   "deletions": 0,
+   "tracked": false
+  },
+  {
+   "path": "src/lib/operations/conversation-authz.ts",
+   "status": "??",
+   "additions": 0,
+   "deletions": 0,
+   "tracked": false
+  },
+  {
+   "path": "tests/relay-ui-recovery.test.ts",
+   "status": "??",
+   "additions": 0,
+   "deletions": 0,
+   "tracked": false
+  }
+ ]
+}
