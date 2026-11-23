@@ -96,6 +96,10 @@ create policy "rr_select" on relay_runs for select to authenticated using (
 -- relay_events: payloads can carry lead and message context. Admins see the
 -- organization; others see their own actions and events of runs or leads they
 -- can see. Inserts go through emit_relay_event or the service role only.
+-- Added by this migration's policies; older databases created relay_events
+-- without it, so add it before referencing it.
+alter table relay_events add column if not exists actor_rep_id uuid references reps(id) on delete set null;
+
 alter table relay_events enable row level security;
 revoke all on relay_events from anon;
 drop policy if exists "re_select" on relay_events;
@@ -152,6 +156,8 @@ create policy "ia_delete" on identity_assignments for delete to authenticated
 -- accountability_audit_log: append-only and attributable. Admins read the
 -- organization's trail, a rep reads their own entries; a row can only be
 -- written as the caller. No update or delete policy.
+alter table accountability_audit_log add column if not exists actor_id uuid references reps(id) on delete set null;
+
 alter table accountability_audit_log enable row level security;
 revoke all on accountability_audit_log from anon;
 drop policy if exists "aal_select" on accountability_audit_log;

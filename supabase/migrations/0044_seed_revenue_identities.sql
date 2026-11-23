@@ -42,12 +42,12 @@ insert into profiles (id, rep_id, platform, label) values
 ('60000000-0000-0000-0000-000000000010', 'bbbbbbbb-0000-0000-0000-000000000010', 'upwork', 'Fizza Upwork'),
 ('60000000-0000-0000-0000-000000000011', 'bbbbbbbb-0000-0000-0000-000000000011', 'upwork', 'Zaira Upwork'),
 ('60000000-0000-0000-0000-000000000012', 'bbbbbbbb-0000-0000-0000-000000000012', 'upwork', 'Mehak Upwork')
-on conflict (profiles.id) do nothing;
+on conflict (id) do nothing;
 
 insert into profiles (id, rep_id, platform, label)
 select '60000000-0000-0000-0000-000000000013', r2.id, 'upwork', 'Aneeb Upwork'
 from reps r2 where r2.name = 'Aneeb' and not exists (select 1 from profiles p2 where p2.rep_id = r2.id and p2.platform = 'upwork')
-on conflict (profiles.id) do nothing;
+on conflict (id) do nothing;
 
 do $$
 declare
@@ -79,7 +79,7 @@ begin
   (org_id, 'a1000000-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-000000000012', admin_rep),
   (org_id, 'a1000000-0000-0000-0000-000000000004', aneeb_rep_id, admin_rep),
   (org_id, 'a1000000-0000-0000-0000-000000000005', (select r9.id from reps r9 where r9.name='Hassan' limit 1), admin_rep)
-  on conflict (identity_assignments.revenue_identity_id, identity_assignments.rep_id) do nothing;
+  on conflict (revenue_identity_id, rep_id) do nothing;
 
   insert into activity_log (organization_id, event_type, actor_id, revenue_identity_id, metadata) values
   (org_id, 'identity_created', admin_rep, 'a1000000-0000-0000-0000-000000000001', '{"source":"import"}'),

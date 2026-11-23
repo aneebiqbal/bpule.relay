@@ -8,6 +8,13 @@
 --   relay_events.revenue_identity_id <- leads via entity_id, then via relay_run_id
 --   upwork_jobs.sender_profile_id  <- upwork_messages.sender_profile_id via job_id
 
+-- Older databases predate these attribution columns; add them idempotently so
+-- the backfill can write what it derives.
+alter table relay_runs add column if not exists sender_profile_id uuid references profiles(id) on delete set null;
+alter table relay_runs add column if not exists revenue_identity_id uuid references revenue_identities(id) on delete set null;
+alter table relay_events add column if not exists revenue_identity_id uuid references revenue_identities(id) on delete set null;
+alter table upwork_jobs add column if not exists sender_profile_id uuid references profiles(id) on delete set null;
+
 create table if not exists public.relay_reconciliation_attribution_backup (
   id bigint generated always as identity primary key,
   table_name text not null,

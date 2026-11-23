@@ -93,6 +93,7 @@ import type {
   LeadReadScope,
 } from '@/lib/store/types'
 import { companyFuzzyKey, companyKey, contactKey, normalizeLeadUrl } from '@/lib/leads/normalize'
+import { LeadAccessDeniedError } from '@/lib/errors'
 import { dailyConnectionSendLimit, dailySendLimit, messageTypeLimit } from '@/lib/ai/config'
 import { resolveSendPolicy, type EffectiveSendPolicy } from '@/lib/email/effective-policy'
 import { currentInstant, normalizePolicy } from '@/lib/org-clock'
@@ -917,9 +918,9 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
       if (scope) {
         const ownerOk = leadOwner === null || scope.repIds === null || scope.repIds.includes(leadOwner)
         const identityOk = scope.identityIds?.includes((lead as { revenueIdentityId?: string | null }).revenueIdentityId ?? '') ?? false
-        if (!ownerOk && !identityOk) throw new Error('You are not the owner of this lead.')
+        if (!ownerOk && !identityOk) throw new LeadAccessDeniedError()
       } else if (rep.role !== 'admin' && leadOwner !== null && leadOwner !== rep.id) {
-        throw new Error('You are not the owner of this lead.')
+        throw new LeadAccessDeniedError()
       }
       return {
         ...lead,
@@ -1122,7 +1123,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
             Boolean(scope.identityIds?.includes((lead as { revenueIdentityId?: string | null }).revenueIdentityId ?? ''))
         : lead.ownerRepId === rep.id
       if (!ownerOk) {
-        throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
+        throw new LeadAccessDeniedError('You are not the owner of this lead, so it could not be marked contacted.')
       }
       if (lead.status === 'no' || lead.status === 'dead') {
         throw new Error('This lead is locked and cannot be contacted.')
@@ -1278,7 +1279,7 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
             options.scope.repIds.includes(lead.ownerRepId) ||
             Boolean(options.scope.identityIds?.includes((lead as { revenueIdentityId?: string | null }).revenueIdentityId ?? ''))
         : lead.ownerRepId === rep.id
-      if (!ownerOk) throw new Error('You are not the owner of this lead.')
+      if (!ownerOk) throw new LeadAccessDeniedError()
       if (lead.status === 'no' || lead.status === 'dead') throw new Error('This lead is locked.')
       const received = options?.receivedAt ? new Date(options.receivedAt).getTime() : NaN
       const now = new Date(Number.isFinite(received) && received <= Date.now() ? received : Date.now()).toISOString()

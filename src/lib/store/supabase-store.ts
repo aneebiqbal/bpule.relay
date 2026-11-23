@@ -9,6 +9,7 @@ import { opportunityKey } from '@/lib/scoring-v4/opportunity-key'
 import { determineFollowup } from '@/lib/relay/followup-engine'
 import { isTerminalStoredStage, isTerminalLeadStatus, checkOutreachAllowed } from '@/lib/conversation/terminal'
 import { evaluateFollowUpPolicy } from '@/lib/conversation/follow-up-policy'
+import { LeadAccessDeniedError } from '@/lib/errors'
 import { classifyInboundReply, storedStageForOutcome } from '@/lib/sales/outcomes'
 import { extractConversationFacts } from '@/lib/conversation/conversation-intelligence-v2'
 import type {
@@ -1263,10 +1264,10 @@ export class SupabaseStore implements ScoutStore {
       const ownerOk = leadOwner === null || scope.repIds === null || scope.repIds.includes(leadOwner)
       const identityOk = scope.identityIds?.includes(row.revenue_identity_id as string) ?? false
       if (!ownerOk && !identityOk) {
-        throw new Error('You are not the owner of this lead.')
+        throw new LeadAccessDeniedError()
       }
     } else if (this.rep.role !== 'admin' && leadOwner !== null && leadOwner !== this.rep.id) {
-      throw new Error('You are not the owner of this lead.')
+      throw new LeadAccessDeniedError()
     }
 
     const [messages, outcomes, convState] = await Promise.all([
@@ -1680,7 +1681,7 @@ export class SupabaseStore implements ScoutStore {
       .maybeSingle()
     if (leadError) throw leadError
     if (!leadRow) {
-      throw new Error('You are not the owner of this lead, so it could not be marked contacted.')
+      throw new LeadAccessDeniedError('You are not the owner of this lead, so it could not be marked contacted.')
     }
     // Enforce ownership: a rep can act on their own leads and on leads
     // with no owner (NULL). An unowned lead is claimed by the acting rep
@@ -1695,7 +1696,7 @@ export class SupabaseStore implements ScoutStore {
         })()
       : false
     if (this.rep.role !== 'admin' && leadOwnerId !== null && leadOwnerId !== this.rep.id && !authorizedByScope) {
-      throw new Error('NOT_OWNER: This lead is assigned to another rep.')
+      throw new LeadAccessDeniedError('NOT_OWNER: This lead is assigned to another rep.')
     }
     if (leadOwnerId === null) {
       // Claim the unowned lead for this rep.
@@ -2073,7 +2074,7 @@ export class SupabaseStore implements ScoutStore {
       .eq('id', leadId)
       .maybeSingle()
     if (leadError) throw leadError
-    if (!leadRow) throw new Error('You are not the owner of this lead.')
+    if (!leadRow) throw new LeadAccessDeniedError()
     const leadOwnerId = (leadRow as unknown as { owner_rep_id?: string | null }).owner_rep_id ?? null
     const authorizedByScope = options?.scope
       ? (() => {
@@ -2085,7 +2086,7 @@ export class SupabaseStore implements ScoutStore {
         })()
       : false
     if (this.rep.role !== 'admin' && leadOwnerId !== null && leadOwnerId !== this.rep.id && !authorizedByScope) {
-      throw new Error('You are not the owner of this lead.')
+      throw new LeadAccessDeniedError()
     }
     if (leadRow.status === 'no' || leadRow.status === 'dead') {
       throw new Error('This lead is locked.')
