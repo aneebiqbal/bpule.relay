@@ -1,7 +1,7 @@
 # Relay — Production Release Certification
 
 **Branch:** `feat/relay-job-intelligence-v2`
-**Release candidate:** `7043ae25` (tip; see §8)
+**Release candidate:** `4436fc5b` (last code commit; subsequent commits are docs only)
 **Authorization:** not deployed. No merge, no production worker activation.
 
 ---
@@ -115,7 +115,7 @@ Ready Today.
 |---|---|
 | `tsc --noEmit` | clean |
 | `eslint` (changed files) | 0 errors (pre-existing warnings only) |
-| `vitest run` (unit) | **5,908 passed**, 5 skipped |
+| `vitest run` (unit) | **5,915 passed**, 5 skipped |
 | `vitest.live.config.mts` (live DB/RLS) | **144 passed**, 17 skipped, 0 failed |
 | `next build` | clean |
 | Browser (staging) | see `RELAY_FINAL_BROWSER_ACCEPTANCE.md` |
