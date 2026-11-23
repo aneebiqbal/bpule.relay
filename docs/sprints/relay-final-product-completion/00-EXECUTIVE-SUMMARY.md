@@ -29,7 +29,7 @@ database.
 | SR-U6 | Setup assistant / Rep360 wrote targets through the wrong capability and ignored results | **FIXED** — skips honestly; reports failures |
 | SR-U8 | Performance → Targets dumped an unallocated shared lane on the primary | **FIXED** — delegates to `lanePersonalTarget` |
 
-**Open P0/P1: none.** Remaining register entries are 7 P2 and 2 P3 groups, each with a recorded
+**Open P0/P1: none.** Remaining register entries are 2 P2 and 2 P3 groups, each with a recorded
 reason (`artifacts/issue-register.json`).
 
 ## Verification actually executed

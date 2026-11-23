@@ -1,5 +1,9 @@
 # P0 / P1 findings and fixes
 
+> **Superseded for status:** the five P1 items listed as OPEN below were implemented and verified in
+> the follow-up program — see `../relay-final-product-completion/08-OPEN-P1-CLOSURE.md`. The
+> canonical live ledger is `artifacts/issue-register.json`, which now records 0 open P0/P1.
+
 Severity definitions from the sprint brief.
 
 ## P0

@@ -2,7 +2,7 @@
   "sprint": "relay-ui-ux-recovery",
   "branch": "feat/relay-job-intelligence-v2",
   "baseSha": "5bcb0f9d6d5d80c73d1b608fdf10095b95224cc2",
-  "generatedAt": "2026-11-23T22:25:52.956Z",
+  "generatedAt": "2026-11-23T22:36:38.602Z",
   "severityOrder": [
     "P0",
     "P1",
@@ -294,6 +294,56 @@
       "fix": "Project only seats through lanePersonalTarget; unallocated multi-seat lanes produce no personal row.",
       "regressionTest": "tests/relay-p1-closure.test.ts (REP360_USES_CANONICAL_PERSONAL_TARGET)",
       "status": "FIXED"
+    },
+    {
+      "id": "SR-U4",
+      "severity": "P2",
+      "title": "Setting a daily target to 0 was silently ignored",
+      "reason": "Editors drop zeros and the writer rejects non-positive lanes; needs an agreed '0 = remove lane' semantic in the atomic writer.",
+      "rootCause": "Editors dropped zero lanes and the writer rejected non-positive targets, so the UI reported success while the old value survived.",
+      "fix": "Explicit zero deactivates an existing lane in the atomic writer; Work Setup sends zero lanes instead of filtering them out. Negative/NaN still rejected.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (ZERO_TARGET_IS_A_REAL_VALUE)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U7",
+      "severity": "P2",
+      "title": "Profiles Table density ignored workspace filters",
+      "reason": "Filter state must be lifted into the workspace or passed to the table.",
+      "rootCause": "The workspace passed the unfiltered profiles array; the table restarted from its own default filters.",
+      "fix": "Pass the already-filtered set to TeamProfilesTable.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (PROFILES_TABLE_HONOURS_WORKSPACE_FILTERS)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U9",
+      "severity": "P2",
+      "title": "Dead Edit control in /admin/people",
+      "reason": "No role editor exists; either build one or remove the control.",
+      "rootCause": "Owner-only button with no action and no role editor anywhere.",
+      "fix": "Control removed; no broken affordance remains.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (DEAD_AFFORDANCES_REMOVED)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U10",
+      "severity": "P2",
+      "title": "/team/[repId] heatmap day cells looked drillable with no drilldown",
+      "reason": "No drilldown exists on that surface; decide between adding one and removing the affordance.",
+      "rootCause": "dayHref pointed at the same page with no date token.",
+      "fix": "Affordance removed; cells are informational.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (DEAD_AFFORDANCES_REMOVED)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U11",
+      "severity": "P2",
+      "title": "Thread-review totals counted a different population than the rows",
+      "reason": "Review count is capped at the scanned page; comment references UI copy that does not exist.",
+      "rootCause": "total used every open conversation while rows and counts used review matches on the scanned page.",
+      "fix": "total now reports the review-match population; stale UI comment corrected.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (THREAD_REVIEW_TOTALS_MATCH)",
+      "status": "FIXED"
     }
   ],
   "unresolved": [
@@ -302,36 +352,6 @@
       "severity": "P2",
       "title": "/leads/new attributes manual leads to the active workspace",
       "reason": "API supports senderProfileId/revenueIdentityId and Prospect Analyzer sends them; whether manual intake should follow the active workspace is a product decision."
-    },
-    {
-      "id": "SR-U4",
-      "severity": "P2",
-      "title": "Setting a daily target to 0 is silently ignored",
-      "reason": "Editors drop zeros and the writer rejects non-positive lanes; needs an agreed '0 = remove lane' semantic in the atomic writer."
-    },
-    {
-      "id": "SR-U7",
-      "severity": "P2",
-      "title": "Profiles Table density ignores workspace filters",
-      "reason": "Filter state must be lifted into the workspace or passed to the table."
-    },
-    {
-      "id": "SR-U9",
-      "severity": "P2",
-      "title": "Dead 'Edit' control in /admin/people",
-      "reason": "No role editor exists; either build one or remove the control."
-    },
-    {
-      "id": "SR-U10",
-      "severity": "P2",
-      "title": "/team/[repId] heatmap day cells have no drilldown",
-      "reason": "No drilldown exists on that surface; decide between adding one and removing the affordance."
-    },
-    {
-      "id": "SR-U11",
-      "severity": "P2",
-      "title": "Thread-review view totals/counts are misleading",
-      "reason": "Review count is capped at the scanned page; comment references UI copy that does not exist."
     },
     {
       "id": "SR-U12",
