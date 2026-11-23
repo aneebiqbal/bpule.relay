@@ -1,0 +1,15 @@
+{
+ "routes": 112,
+ "unresolved": [
+  {
+   "file": "src/app/layout.tsx",
+   "line": 101,
+   "href": "/icon.svg"
+  },
+  {
+   "file": "src/app/layout.tsx",
+   "line": 102,
+   "href": "/icon.svg"
+  }
+ ]
+}

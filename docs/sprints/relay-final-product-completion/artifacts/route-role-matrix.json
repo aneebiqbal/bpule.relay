@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-11-24T02:45:00+05:00",
+  "baseSha": "5bcb0f9d6d5d80c73d1b608fdf10095b95224cc2",
+  "authority": "src/lib/navigation/relay-shell-nav.ts",
+  "roles": ["OWNER", "ADMIN", "MANAGER", "MEMBER"],
+  "matrix": [
+    { "area": "Home / Today", "owner": true, "admin": true, "manager": true, "member": true, "unauthenticated": "redirect" },
+    { "area": "Sales / Prospects / Leads", "owner": true, "admin": true, "manager": true, "member": "own queue", "unauthenticated": "redirect" },
+    { "area": "Companies (/accounts)", "owner": true, "admin": true, "manager": false, "member": false, "unauthenticated": "redirect" },
+    { "area": "Jobs", "owner": true, "admin": true, "manager": true, "member": true, "unauthenticated": "redirect" },
+    { "area": "Inbox (/chats)", "owner": "org", "admin": "org", "manager": "team (+scope=me)", "member": "executable profiles", "unauthenticated": "redirect" },
+    { "area": "Work / Tasks", "owner": true, "admin": true, "manager": true, "member": "own tasks", "unauthenticated": "redirect" },
+    { "area": "Team", "owner": true, "admin": true, "manager": true, "member": false, "unauthenticated": "redirect" },
+    { "area": "Content", "owner": true, "admin": true, "manager": true, "member": true, "unauthenticated": "redirect" },
+    { "area": "Insights / Reports", "owner": true, "admin": true, "manager": true, "member": true, "unauthenticated": "redirect" },
+    { "area": "Settings / Notifications", "owner": true, "admin": true, "manager": true, "member": true, "unauthenticated": "redirect" },
+    { "area": "Admin", "owner": true, "admin": true, "manager": false, "member": false, "unauthenticated": "redirect" },
+    { "area": "Public / auth", "owner": true, "admin": true, "manager": true, "member": true, "unauthenticated": true }
+  ],
+  "verification": {
+    "unauthenticatedRouteCrawl": "112 routes: 81 redirect to /login, 31 render, 0 hard failures, 0 crashes",
+    "crossOrganization": "not exercised (needs two populated orgs)",
+    "liveRoleJourneys": "BLOCKED",
+    "artifact": "artifacts/route-crawl.json"
+  }
+}

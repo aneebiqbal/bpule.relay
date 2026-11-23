@@ -1,0 +1,40 @@
+{
+ "branch": "feat/relay-job-intelligence-v2",
+ "generatedAt": "2026-11-23T22:32:47.847Z",
+ "baseSha": "9651b0adf6532df530ec2267a93c38e1b696e337",
+ "headSha": "d90aa420605954ebde962f6323869257d1315586",
+ "commits": [
+  {
+   "sha": "d90aa420",
+   "subject": "docs(sprint): track machine-readable sprint artifacts"
+  },
+  {
+   "sha": "16404238",
+   "subject": "fix(relay): close remaining high-impact P2 findings"
+  },
+  {
+   "sha": "395425c8",
+   "subject": "fix(relay): close the five open P1 findings"
+  },
+  {
+   "sha": "9651b0ad",
+   "subject": "docs(sprint): point certification at the code candidate SHA"
+  },
+  {
+   "sha": "466a1760",
+   "subject": "docs(sprint): release certification, commit list and remaining blockers"
+  },
+  {
+   "sha": "16379f78",
+   "subject": "docs(sprint): relay UI/UX recovery deliverables and evidence"
+  },
+  {
+   "sha": "65aab262",
+   "subject": "test(relay): UI-recovery regression contracts and sprint QA harnesses"
+  },
+  {
+   "sha": "23231c65",
+   "subject": "fix(relay): align Inbox authority, Work Setup CAS, and rep/admin workflows"
+  }
+ ]
+}
