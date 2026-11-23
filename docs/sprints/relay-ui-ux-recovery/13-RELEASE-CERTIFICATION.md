@@ -6,8 +6,8 @@
 |---|---|
 | Branch | `feat/relay-job-intelligence-v2` |
 | Base SHA | `5bcb0f9d6d5d80c73d1b608fdf10095b95224cc2` |
-| Commits | `23231c65` (fixes) → `65aab262` (tests/harnesses) → `16379f78` + `3b38864c` (docs) |
-| Working tree | clean after `3b38864c` |
+| Commits | `23231c65` (fixes) → `65aab262` (tests/harnesses) → docs commits (see `git log`) |
+| Working tree | clean; final tip recorded by `git rev-parse HEAD` at hand-off |
 | Pushed / merged / deployed | **no / no / no** |
 | Production SHA | `e68110a` — **not this branch** |
 
