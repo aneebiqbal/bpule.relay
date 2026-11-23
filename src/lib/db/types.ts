@@ -110,6 +110,12 @@ export interface DbClient {
    * to the in-memory computation. `?` placeholders are rewritten to `$n`.
    */
   raw?<T = any>(sql: string, params?: unknown[]): PromiseLike<DbResult<T>>
+  /**
+   * Run `fn` in ONE physical transaction on ONE connection with the caller's
+   * RLS identity set once. Optional: the Supabase adapter has no equivalent,
+   * so a caller must fall back to sequential writes when it is absent.
+   */
+  transaction?<T>(fn: (tx: DbClient) => Promise<T>): Promise<T>
   /** The provider that produced this client, for diagnostics only. */
   readonly provider: 'supabase' | 'neon' | 'postgres'
 }

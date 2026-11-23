@@ -24,7 +24,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const admin = isProductAdmin(user, authCtx)
 
   if (!admin) {
-    const isAuthorized = await isRevenueIdentityAssignedToRep(user.rep.id, revenueIdentityId)
+    const isAuthorized = await isRevenueIdentityAssignedToRep(revenueIdentityId)
     if (!isAuthorized) notFound()
   }
 

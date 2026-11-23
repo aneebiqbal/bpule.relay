@@ -14,10 +14,14 @@ interface OrFilter {
   value: any
 }
 
+type FailOp = 'insert' | 'update' | 'delete' | 'upsert'
+
 interface FakeState {
   tables: Record<string, Row[]>
   idCounter: number
   rpcCalls: Array<{ fn: string; args: Record<string, unknown> | null }>
+  /** Test-only failure injection: throw when this table/op is attempted. */
+  failOn?: { table: string; op: FailOp }
 }
 
 function clone<T>(value: T): T {
@@ -279,6 +283,10 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
     const action = this.action ?? 'select'
     const table = this.getTable()
 
+    if (this.state.failOn && this.state.failOn.table === this.table && this.state.failOn.op === action) {
+      throw new Error(`injected ${action} failure on ${this.table}`)
+    }
+
     if (action === 'select') {
       const filtered = this.applyFilters(table)
       const count = filtered.length
@@ -378,7 +386,10 @@ class FakeQueryBuilder implements PromiseLike<{ data: any; error: Error | null; 
   }
 }
 
-export function createFakeSupabase(seed: Partial<Record<string, Row[]>> = {}) {
+export function createFakeSupabase(
+  seed: Partial<Record<string, Row[]>> = {},
+  options: { failOn?: { table: string; op: FailOp } } = {},
+) {
   const tables: Record<string, Row[]> = {
     identity_assignments: [],
     revenue_identities: [],
@@ -406,11 +417,38 @@ export function createFakeSupabase(seed: Partial<Record<string, Row[]>> = {}) {
     tables,
     idCounter: 0,
     rpcCalls: [],
+    failOn: options.failOn,
   }
 
   const client = {
     from(table: string) {
       return new FakeQueryBuilder(state, table)
+    },
+    /**
+     * Snapshot/restore transaction, so tests can prove that a failure inside a
+     * write path rolls every dependent row back instead of committing partial
+     * state. Mirrors the physical-transaction contract without a database.
+     */
+    async transaction<T>(fn: (tx: unknown) => Promise<T>): Promise<T> {
+      const snapshot = JSON.stringify(state.tables)
+      try {
+        const txClient = {
+          from(table: string) {
+            return new FakeQueryBuilder(state, table)
+          },
+          rpc: client.rpc,
+          provider: 'postgres' as const,
+          transaction: client.transaction,
+        }
+        return await fn(txClient)
+      } catch (error) {
+        // Restore in place so callers holding the `tables` reference see the
+        // rollback too.
+        const restored = JSON.parse(snapshot) as Record<string, Row[]>
+        for (const key of Object.keys(state.tables)) delete state.tables[key]
+        Object.assign(state.tables, restored)
+        throw error
+      }
     },
     async rpc(fn: string, args: Record<string, unknown> | null) {
       state.rpcCalls.push({ fn, args })
@@ -461,5 +499,8 @@ export function createFakeSupabase(seed: Partial<Record<string, Row[]>> = {}) {
     client,
     tables,
     rpcCalls: state.rpcCalls,
+    setFailOn(failOn?: { table: string; op: FailOp }) {
+      state.failOn = failOn
+    },
   }
 }

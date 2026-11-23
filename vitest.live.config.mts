@@ -2,13 +2,21 @@ import { defineConfig } from 'vitest/config'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from 'dotenv'
+import { assertLiveTestIsolation } from './src/lib/db/test-isolation'
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Live-DB suite: these tests read and write the shared database, so they run
-// serially (never in parallel with each other or the unit suite) and with
-// generous timeouts for a ~1s/query host.
+// Live-DB suite: these tests read and write a database, so they run serially
+// (never in parallel with each other or the unit suite) and with generous
+// timeouts for a ~1s/query host.
+//
+// `.env.test` is the opt-in disposable-database configuration and is loaded
+// first; `.env.local` is the developer fallback. The fail-closed guard runs at
+// config load, before any test module can open a connection.
+config({ path: path.resolve(dirname, '.env.test') })
 config({ path: path.resolve(dirname, '.env.local') })
+
+assertLiveTestIsolation()
 
 export const LIVE_TEST_FILES = [
   'tests/lead-sender-profile-visibility.test.ts',
@@ -44,6 +52,7 @@ export default defineConfig({
     testTimeout: 180_000,
     hookTimeout: 120_000,
     teardownTimeout: 120_000,
+    globalSetup: 'tests/live-global-setup.ts',
   },
   resolve: {
     alias: {

@@ -186,6 +186,50 @@ export class PostgresExecutorImpl implements NeonExecutorApi {
       client.release()
     }
   }
+
+  async transaction<T>(fn: (executor: NeonExecutorApi) => Promise<T>): Promise<T> {
+    const client = await checkout(this.pgPool)
+    const started = performance.now()
+    try {
+      await this.begin(client)
+      const bound = new BoundPostgresExecutor(client, this.userId)
+      const result = await fn(bound)
+      await client.query('COMMIT')
+      perfLog('db.transaction', performance.now() - started)
+      return result
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {})
+      throw err
+    } finally {
+      client.release()
+    }
+  }
+}
+
+/** Executor bound to one checked-out connection inside a transaction. */
+class BoundPostgresExecutor implements NeonExecutorApi {
+  constructor(
+    private readonly client: PoolClient,
+    private readonly userId: string | null,
+  ) {}
+
+  async query<T>(text: string, values: unknown[] = []): Promise<T[]> {
+    return this.run<T>(text, values)
+  }
+
+  async queryInWrite<T>(text: string, values: unknown[] = []): Promise<T[]> {
+    return this.run<T>(text, values)
+  }
+
+  private async run<T>(text: string, values: unknown[]): Promise<T[]> {
+    const { sql, params } = rewrite(text, values)
+    try {
+      const res = await this.client.query(sql, params)
+      return res.rows as T[]
+    } catch (err) {
+      throw new Error(`Postgres query failed: ${err instanceof Error ? err.message : String(err)}\n${sql}`)
+    }
+  }
 }
 
 export class PostgresDbClient implements DbClient {
@@ -222,6 +266,13 @@ export class PostgresDbClient implements DbClient {
       (rows) => ({ data: rows as T, error: null }),
       (err: unknown) => ({ data: null as unknown as T, error: { message: err instanceof Error ? err.message : String(err) } }),
     )
+  }
+
+  async transaction<T>(fn: (tx: DbClient) => Promise<T>): Promise<T> {
+    if (!this.executor.transaction) {
+      throw new Error('Transactions are not supported by this Postgres executor')
+    }
+    return this.executor.transaction((bound) => fn(new PostgresDbClient(bound, this.userId)))
   }
 }
 

@@ -7,12 +7,12 @@
   "counts": {
     "hypothesesInvestigated": 42,
     "confirmed": 15,
-    "fixedThisPass": 5,
+    "fixedThisPass": 13,
     "carriedForwardVerifiedFixed": 9,
-    "open": 10,
+    "open": 1,
     "notRun": 8
   },
-  "note": "The 100+ finding target was deliberately not met. This repository has already been through multiple stabilization passes (audit-reports/archive, docs/RELAY_*). Only findings with reproducible code or live-DB evidence are listed. Hypotheses that could not be executed are listed under notRun, not counted as confirmed.",
+  "note": "The 100+ finding target was deliberately not met. This repository has already been through multiple stabilization passes (audit-reports/archive, docs/RELAY_*). Only findings with reproducible code or live-DB evidence are listed. Hypotheses that could not be executed are listed under notRun, not counted as confirmed. Closure pass: R-02/R-03/R-08/R-09/R-10/R-11/R-12/R-13/R-14/R-15 fixed; R-07 remains accepted/open.",
   "findings": [
     {
       "id": "R-01",
@@ -33,7 +33,7 @@
       "title": "Work Setup allocation replace could leave a lane with zero active allocations",
       "category": "Data-integrity defect",
       "severity": "P1",
-      "status": "partially_fixed",
+      "status": "fixed",
       "affectedFeature": "Work Setup allocations",
       "route": "POST /api/admin/work-setup",
       "rootCause": "dpa_active_uniq is a partial unique index on (plan_id, rep_id) WHERE active, so the writer deactivated every active share before inserting the new set. A failure between the two statements lost the allocations.",
@@ -48,7 +48,7 @@
       "title": "Local live-test configuration targets the production database",
       "category": "Operational risk",
       "severity": "P1",
-      "status": "open",
+      "status": "fixed",
       "rootCause": ".env.local sets DATABASE_URL/SERVICE_DATABASE_URL to the Aiven relay_prod_final database; vitest.live.config.mts loads .env.local and its LIVE_TEST_FILES include write-heavy suites.",
       "evidence": ".env.local DATABASE_URL host pg-393a7079-...aivencloud.com/relay_prod_final; vitest.live.config.mts:9; tests/operator-visibility.live.test.ts (26 insert/update/delete calls); tests/v6-live-coverage-acceptance.test.ts (15)",
       "impact": "Running `npm run test:live` mutates production. `npm test` also reads production in tests/accountability-service.test.ts (read-only).",
@@ -103,7 +103,7 @@
       "title": "UTC dates in adjacent target/notification surfaces",
       "category": "Midnight/date defect",
       "severity": "P2",
-      "status": "open",
+      "status": "fixed",
       "evidence": "src/app/api/admin/targets/route.ts:39 uses new Date().toISOString().slice(0,10); src/lib/profiles/canonical.ts:355; src/app/api/admin/targets/[id]/route.ts:70",
       "impact": "For a non-UTC organization these surfaces can read or write the wrong business day even though the canonical projection is org-date correct."
     },
@@ -112,7 +112,7 @@
       "title": "personal = assigned - unseatedAllocationUnits breaks for a solo-seat lane that carries an allocation",
       "category": "Accounting mismatch",
       "severity": "P2",
-      "status": "open",
+      "status": "fixed",
       "evidence": "src/lib/execution/accountability.ts:307-308 counts the full lane target in assigned when seats.length === 1, while lanePersonalTarget:251-252 returns the allocation; unseatedAllocationUnits is 0.",
       "impact": "reconcilePopulations.personal can disagree with assigned - unseatedAllocationUnits. Reachable through the admin allocations API."
     },
@@ -121,7 +121,7 @@
       "title": "Work Setup cannot clear allocations",
       "category": "Functional bug",
       "severity": "P2",
-      "status": "open",
+      "status": "fixed",
       "evidence": "src/lib/operations/work-setup-write.ts:180-194: allocations: [] produces an empty byActivity map, so the replace loop never runs.",
       "impact": "An admin who removes every allocation in the UI silently keeps the previous shares."
     },
@@ -130,7 +130,7 @@
       "title": "Work Setup permits allocations to unseated reps",
       "category": "Data-integrity defect",
       "severity": "P2",
-      "status": "open",
+      "status": "fixed",
       "evidence": "src/lib/operations/work-setup-write.ts:186 checks only organization membership, not lane seats; the read model flags the result as allocation-without-seat drift (src/lib/operations/work-setup.ts:149-152).",
       "impact": "Manufactures unseatedAllocationUnits and confuses rep expectations."
     },
@@ -139,7 +139,7 @@
       "title": "Dead _userId parameters in workspace authorization helpers",
       "category": "Redundant code",
       "severity": "P3",
-      "status": "open",
+      "status": "fixed",
       "evidence": "src/lib/auth/workspace.ts:111,127 accept _userId and never use it; authorization is session-based.",
       "impact": "False sense of per-user auth; no runtime exposure."
     },
@@ -148,7 +148,7 @@
       "title": "No multi-statement transaction and no optimistic concurrency on Work Setup",
       "category": "Race condition",
       "severity": "P1",
-      "status": "open",
+      "status": "fixed",
       "evidence": "DbClient exposes only from/rpc/raw (src/lib/db/types.ts:104-115); each query is its own transaction (src/lib/db/postgres.ts:150-188). saveWorkSetup commits seats, targets and allocations independently (src/lib/operations/work-setup-write.ts:115-231). No revision/If-Match guard exists.",
       "impact": "Two concurrent admins last-writer-wins; a failure after the seat write but before targets leaves a half-applied change.",
       "remediation": "Add a transaction primitive to DbClient/PostgresExecutorImpl (and Neon), wrap saveWorkSetup and configureCoverageStatement, and add a revision check."
@@ -158,7 +158,7 @@
       "title": "backfillProfileCoverage is a second coverage writer",
       "category": "Duplicate functionality",
       "severity": "P3",
-      "status": "open",
+      "status": "fixed",
       "evidence": "src/lib/profiles/canonical.ts:493-519 mutates profile_coverage directly without eligibility, acknowledgement or audit sync; no callers found.",
       "impact": "Contradicts the single-writer claim; dead today but a trap for the next change."
     },
@@ -167,30 +167,104 @@
       "title": "The stated requirement invariant is not the implemented one",
       "category": "Documentation inconsistency",
       "severity": "P3",
-      "status": "open",
+      "status": "fixed",
       "evidence": "Task/contract phrasing says requirement = assigned + unallocated; the code implements requirement = requirementAssigned + requirementUnallocated and assigned + unallocated = tracked (src/lib/execution/accountability.ts:451-454, 481-495).",
       "impact": "A consumer asserting the wrong equation will report a false mismatch whenever non-targetable lanes exist."
     }
   ],
   "carriedForwardVerifiedFixed": [
-    {"id": "P0-01", "claim": "stale reps.role escalates a demoted user", "evidence": "src/lib/auth/organization.ts:96-99,162-165 — organization_roles is canonical; reps.role is bootstrap only"},
-    {"id": "P0-03", "claim": "signup rate limiter fails open", "evidence": "src/app/api/signup/route.ts:37-39,51-53 returns true (limited) on error"},
-    {"id": "P0-07", "claim": "/admin route broken (no page.tsx)", "evidence": "src/app/(app)/admin/page.tsx exists and redirects to /admin/command-center"},
-    {"id": "P0-10", "claim": "refresh_few_shot_wins accepts any org", "evidence": "supabase/migrations/0042_fix_security_definer_rls.sql:147-170 adds org guard; 20261101160000_close_anon_exposure.sql:664 revokes authenticated"},
-    {"id": "P1-04/05", "claim": "store listAllReps/listAllProfiles/delete* lack org filter", "evidence": "src/lib/store/supabase-store.ts:2310,2340,2348,2462,2693 all scope by organization_id"},
-    {"id": "P1-18", "claim": "tailored_cvs missing", "evidence": "production information_schema: to_regclass('public.tailored_cvs') = tailored_cvs"},
-    {"id": "P2-19", "claim": "current_org_id() missing", "evidence": "production: to_regprocedure('public.current_org_id()') = current_org_id()"},
-    {"id": "old-route-map-1", "claim": "/api/admin/performance, /api/admin/rep-performance, /api/admin/routing-opportunities unguarded", "evidence": "performance/route.ts:63-66; rep-performance/route.ts:31-34; routing-opportunities/route.ts:26-29 now require can(VIEW_TEAM_ANALYTICS)"},
-    {"id": "old-route-map-2", "claim": "open redirect via next", "evidence": "src/app/auth/callback/route.ts:49-58 safeNextPath enforces same-origin"}
+    {
+      "id": "P0-01",
+      "claim": "stale reps.role escalates a demoted user",
+      "evidence": "src/lib/auth/organization.ts:96-99,162-165 — organization_roles is canonical; reps.role is bootstrap only"
+    },
+    {
+      "id": "P0-03",
+      "claim": "signup rate limiter fails open",
+      "evidence": "src/app/api/signup/route.ts:37-39,51-53 returns true (limited) on error"
+    },
+    {
+      "id": "P0-07",
+      "claim": "/admin route broken (no page.tsx)",
+      "evidence": "src/app/(app)/admin/page.tsx exists and redirects to /admin/command-center"
+    },
+    {
+      "id": "P0-10",
+      "claim": "refresh_few_shot_wins accepts any org",
+      "evidence": "supabase/migrations/0042_fix_security_definer_rls.sql:147-170 adds org guard; 20261101160000_close_anon_exposure.sql:664 revokes authenticated"
+    },
+    {
+      "id": "P1-04/05",
+      "claim": "store listAllReps/listAllProfiles/delete* lack org filter",
+      "evidence": "src/lib/store/supabase-store.ts:2310,2340,2348,2462,2693 all scope by organization_id"
+    },
+    {
+      "id": "P1-18",
+      "claim": "tailored_cvs missing",
+      "evidence": "production information_schema: to_regclass('public.tailored_cvs') = tailored_cvs"
+    },
+    {
+      "id": "P2-19",
+      "claim": "current_org_id() missing",
+      "evidence": "production: to_regprocedure('public.current_org_id()') = current_org_id()"
+    },
+    {
+      "id": "old-route-map-1",
+      "claim": "/api/admin/performance, /api/admin/rep-performance, /api/admin/routing-opportunities unguarded",
+      "evidence": "performance/route.ts:63-66; rep-performance/route.ts:31-34; routing-opportunities/route.ts:26-29 now require can(VIEW_TEAM_ANALYTICS)"
+    },
+    {
+      "id": "old-route-map-2",
+      "claim": "open redirect via next",
+      "evidence": "src/app/auth/callback/route.ts:49-58 safeNextPath enforces same-origin"
+    }
   ],
   "notRun": [
-    {"id": "N-01", "item": "Full role x route browser matrix", "reason": "No staging environment or credentials in this session; staging is a separate relay_staging database."},
-    {"id": "N-02", "item": "VPS/PM2 benchmark", "reason": "No VPS access."},
-    {"id": "N-03", "item": "Live RLS adversarial probes with two organizations", "reason": "Writes to production are out of scope without authorization; read-only schema inspection was performed."},
-    {"id": "N-04", "item": "Concurrent Work Setup saves under two live sessions", "reason": "Requires staging."},
-    {"id": "N-05", "item": "AI provider failure/timeout/partial-output injection", "reason": "External providers; not exercised."},
-    {"id": "N-06", "item": "Midnight rollover in a live browser", "reason": "Prior pass verified it (docs/RELAY_FINAL_BROWSER_ACCEPTANCE.md case 9); not re-run."},
-    {"id": "N-07", "item": "Job preparation package end-to-end", "reason": "Requires live AI provider and staging; prior passes covered it."},
-    {"id": "N-08", "item": "npm run test:live", "reason": "Suite writes to the production database as configured; deliberately not run."}
-  ]
+    {
+      "id": "N-01",
+      "item": "Full role x route browser matrix",
+      "reason": "No staging environment or credentials in this session; staging is a separate relay_staging database."
+    },
+    {
+      "id": "N-02",
+      "item": "VPS/PM2 benchmark",
+      "reason": "No VPS access."
+    },
+    {
+      "id": "N-03",
+      "item": "Live RLS adversarial probes with two organizations",
+      "reason": "Writes to production are out of scope without authorization; read-only schema inspection was performed."
+    },
+    {
+      "id": "N-04",
+      "item": "Concurrent Work Setup saves under two live sessions",
+      "reason": "Requires staging."
+    },
+    {
+      "id": "N-05",
+      "item": "AI provider failure/timeout/partial-output injection",
+      "reason": "External providers; not exercised."
+    },
+    {
+      "id": "N-06",
+      "item": "Midnight rollover in a live browser",
+      "reason": "Prior pass verified it (docs/RELAY_FINAL_BROWSER_ACCEPTANCE.md case 9); not re-run."
+    },
+    {
+      "id": "N-07",
+      "item": "Job preparation package end-to-end",
+      "reason": "Requires live AI provider and staging; prior passes covered it."
+    },
+    {
+      "id": "N-08",
+      "item": "npm run test:live",
+      "reason": "Suite writes to the production database as configured; deliberately not run."
+    }
+  ],
+  "closure": {
+    "date": "2026-11-23",
+    "baseHead": "60ab5204e7733cacdb52c36d6b25a9bd0e57ff7c",
+    "commits": [],
+    "gates": {}
+  }
 }

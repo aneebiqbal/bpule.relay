@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { AnalyticsEvents } from "@/lib/analytics/events";
 import { track } from "@/lib/analytics/track";
 import { getBrowserAuth } from "@/lib/auth/browser";
+import { sanitizeNextPath } from "./next-path";
 import {
   humanizeMagicLinkError,
   humanizeOauthError,
@@ -70,14 +71,6 @@ async function checkWorkspaceMapping(): Promise<{ ok: boolean; noWorkspace: bool
   }
 
   return { ok: false, noWorkspace: false };
-}
-
-function sanitizeNextPath(value: string | null): string {
-  if (!value) return "/dashboard";
-  // Browsers fold backslashes to slashes for special URLs, so `/\evil.test`
-  // would otherwise become a protocol-relative redirect off-site.
-  if (!value.startsWith("/") || value.startsWith("//") || /[\\\s]/.test(value)) return "/dashboard";
-  return value;
 }
 
 export function LoginExperience({ demoMode, googleEnabled }: LoginExperienceProps) {

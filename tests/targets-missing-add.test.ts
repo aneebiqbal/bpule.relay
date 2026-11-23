@@ -43,6 +43,7 @@ function base(input: Parameters<typeof assembleWorkSetup>[0]) {
       completed: 0,
     },
     overdueTasks: 0,
+    revisions: new Map<string, string>(),
     ...input,
   })
 }
