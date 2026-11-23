@@ -1,0 +1,792 @@
+◇ injected env (42) from .env.local // tip: ◈ secrets for agents [www.dotenvx.com]
+{
+  "organization": {
+    "id": "11111111-1111-1111-1111-111111111111",
+    "name": "bpulse"
+  },
+  "timezone": "Asia/Karachi",
+  "businessDate": "2026-11-23",
+  "laneCount": 32,
+  "identityCount": 11,
+  "populations": {
+    "tracked": 431,
+    "requirement": 419,
+    "trackedNonTargetable": 12,
+    "assigned": 127,
+    "requirementAssigned": 117,
+    "unallocated": 304,
+    "requirementUnallocated": 302,
+    "unseatedAllocationUnits": 4,
+    "completed": 336,
+    "remaining": 95
+  },
+  "candidates": {
+    "admin targets: every active plan target_count (no effectiveness, no targetable)": 431,
+    "canonical tracked (effective lanes)": 431,
+    "canonical requirement (effective targetable lanes)": 419,
+    "canonical remaining (tracked - completed)": 95,
+    "canonical requirement remaining": 83,
+    "canonical assigned (personal expectation)": 127,
+    "canonical requirementAssigned": 117,
+    "canonical unallocated (tracked - assigned)": 304,
+    "canonical requirementUnallocated": 302,
+    "unseated allocation units": 4,
+    "sum of rep assigned (personal)": 123,
+    "sum of rep remaining (personal)": 10
+  },
+  "reps": [
+    {
+      "repId": "aaaaaaaa-0000-0000-0000-000000000004",
+      "repName": "Ahmad",
+      "assigned": 81,
+      "completed": 104,
+      "remaining": 0
+    },
+    {
+      "repId": "aaaaaaaa-0000-0000-0000-000000000001",
+      "repName": "Aneeb",
+      "assigned": 0,
+      "completed": 0,
+      "remaining": 0
+    },
+    {
+      "repId": "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+      "repName": "Dawood",
+      "assigned": 5,
+      "completed": 204,
+      "remaining": 0
+    },
+    {
+      "repId": "aaaaaaaa-0000-0000-0000-000000000002",
+      "repName": "Hassan",
+      "assigned": 0,
+      "completed": 1,
+      "remaining": 0
+    },
+    {
+      "repId": "aaaaaaaa-0000-0000-0000-000000000003",
+      "repName": "Madiha",
+      "assigned": 37,
+      "completed": 27,
+      "remaining": 10
+    }
+  ],
+  "accounts": [
+    {
+      "identityId": "0a263b0f-533c-445c-af8c-d69cb5772199",
+      "identityName": "Aleena Saman",
+      "channel": "linkedin",
+      "profileId": "3f7e0417-98e2-44a2-8676-185fefdc1b45",
+      "requirement": 78,
+      "tracked": 78,
+      "allocated": 30,
+      "completed": 59,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000003"
+      ]
+    },
+    {
+      "identityId": "e57519a5-bc62-4bfe-b29d-2be809e8d9af",
+      "identityName": "Aneeb",
+      "channel": "linkedin",
+      "profileId": "87c10cd5-58e3-4742-910d-4de549d522c7",
+      "requirement": 51,
+      "tracked": 51,
+      "allocated": 0,
+      "completed": 113,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ]
+    },
+    {
+      "identityId": "a2986f64-aec6-4827-905f-e61903106089",
+      "identityName": "Aneeb",
+      "channel": "upwork",
+      "profileId": "ebefd356-0db6-4273-b8dc-a26be14fcd06",
+      "requirement": 10,
+      "tracked": 12,
+      "allocated": 4,
+      "completed": 0,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ]
+    },
+    {
+      "identityId": "034fec42-6deb-4458-a2e4-539f29dd0d09",
+      "identityName": "Fizza",
+      "channel": "upwork",
+      "profileId": "6e92e611-dd09-464e-8b07-b82ef009e813",
+      "requirement": 10,
+      "tracked": 12,
+      "allocated": 0,
+      "completed": 0,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002"
+      ]
+    },
+    {
+      "identityId": "d3e2b6bf-d2f8-4ef3-a8c5-1a3bafe1be1c",
+      "identityName": "Fizza",
+      "channel": "linkedin",
+      "profileId": "d1dc8330-8689-42ad-b90b-bb3947f97f68",
+      "requirement": 75,
+      "tracked": 75,
+      "allocated": 0,
+      "completed": 1,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002"
+      ]
+    },
+    {
+      "identityId": "44af6e41-a501-42cc-8904-65494623dcce",
+      "identityName": "Hassan",
+      "channel": "upwork",
+      "profileId": "cdbc68b6-61e3-484e-8611-980682e2cc5b",
+      "requirement": 10,
+      "tracked": 12,
+      "allocated": 0,
+      "completed": 0,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003",
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace"
+      ]
+    },
+    {
+      "identityId": "c26a685b-a18b-4672-b7ad-a55e211539b2",
+      "identityName": "Hassan",
+      "channel": "linkedin",
+      "profileId": "f67c1ba3-69bd-43a4-8410-7b35e0b79d44",
+      "requirement": 90,
+      "tracked": 90,
+      "allocated": 0,
+      "completed": 129,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003",
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace"
+      ]
+    },
+    {
+      "identityId": "41431c1f-bc48-4dde-99af-9973c87d81a9",
+      "identityName": "Madiha Irfan",
+      "channel": "upwork",
+      "profileId": "ddc00fee-4bfb-4fc9-8da9-348eb034858c",
+      "requirement": 10,
+      "tracked": 12,
+      "allocated": 0,
+      "completed": 0,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003"
+      ]
+    },
+    {
+      "identityId": "4e2bf898-b182-459d-b6b0-17aa0556750c",
+      "identityName": "Mehak",
+      "channel": "upwork",
+      "profileId": "06e0a372-8e1c-456f-8a9c-4d052906cc36",
+      "requirement": 10,
+      "tracked": 12,
+      "allocated": 0,
+      "completed": 0,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ]
+    },
+    {
+      "identityId": "2d46d5da-e2ea-4c3f-a4e7-e495598bcd3c",
+      "identityName": "Mehak",
+      "channel": "linkedin",
+      "profileId": "fb589293-16e9-42f8-806c-9ad4f4222ac9",
+      "requirement": 65,
+      "tracked": 65,
+      "allocated": 0,
+      "completed": 34,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ]
+    },
+    {
+      "identityId": "ab50b6a7-0b85-44c2-b8c9-52816f8adf93",
+      "identityName": "Zaira",
+      "channel": "upwork",
+      "profileId": "37ee6e21-17ec-4041-a5cc-1cfafe60ffd3",
+      "requirement": 10,
+      "tracked": 12,
+      "allocated": 0,
+      "completed": 0,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000002",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ]
+    }
+  ],
+  "lanes": [
+    {
+      "planId": "fcfdf33d-d464-400f-9a74-25b40affb4e4",
+      "identityId": "0a263b0f-533c-445c-af8c-d69cb5772199",
+      "identityName": "Aleena Saman",
+      "channel": "linkedin",
+      "profileId": "3f7e0417-98e2-44a2-8676-185fefdc1b45",
+      "activityType": "connection_request",
+      "targetCount": 30,
+      "targetable": true,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000003"
+      ],
+      "allocations": [
+        {
+          "repId": "aaaaaaaa-0000-0000-0000-000000000003",
+          "targetCount": 25
+        },
+        {
+          "repId": "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+          "targetCount": 5
+        }
+      ],
+      "completed": 24,
+      "personal": 30
+    },
+    {
+      "planId": "fb385dca-a8da-4aeb-b9b5-1b54b45b3727",
+      "identityId": "0a263b0f-533c-445c-af8c-d69cb5772199",
+      "identityName": "Aleena Saman",
+      "channel": "linkedin",
+      "profileId": "3f7e0417-98e2-44a2-8676-185fefdc1b45",
+      "activityType": "dm",
+      "targetCount": 30,
+      "targetable": true,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000003"
+      ],
+      "allocations": [],
+      "completed": 19,
+      "personal": 0
+    },
+    {
+      "planId": "0470dea3-084c-4b80-80c4-be4f0ad08a04",
+      "identityId": "0a263b0f-533c-445c-af8c-d69cb5772199",
+      "identityName": "Aleena Saman",
+      "channel": "linkedin",
+      "profileId": "3f7e0417-98e2-44a2-8676-185fefdc1b45",
+      "activityType": "followup",
+      "targetCount": 3,
+      "targetable": true,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000003"
+      ],
+      "allocations": [],
+      "completed": 10,
+      "personal": 0
+    },
+    {
+      "planId": "1f91ebe0-0109-4b82-b7a6-dc3b1321242a",
+      "identityId": "0a263b0f-533c-445c-af8c-d69cb5772199",
+      "identityName": "Aleena Saman",
+      "channel": "linkedin",
+      "profileId": "3f7e0417-98e2-44a2-8676-185fefdc1b45",
+      "activityType": "prospect_extracted",
+      "targetCount": 15,
+      "targetable": true,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000003"
+      ],
+      "allocations": [],
+      "completed": 6,
+      "personal": 0
+    },
+    {
+      "planId": "b23ccda0-9392-461f-9221-7186b4986868",
+      "identityId": "a2986f64-aec6-4827-905f-e61903106089",
+      "identityName": "Aneeb",
+      "channel": "upwork",
+      "profileId": "ebefd356-0db6-4273-b8dc-a26be14fcd06",
+      "activityType": "application",
+      "targetCount": 10,
+      "targetable": true,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [
+        {
+          "repId": "aaaaaaaa-0000-0000-0000-000000000004",
+          "targetCount": 2
+        },
+        {
+          "repId": "aaaaaaaa-0000-0000-0000-000000000003",
+          "targetCount": 2
+        }
+      ],
+      "completed": 0,
+      "personal": 2
+    },
+    {
+      "planId": "2db3f8a7-36da-476b-b919-543a994cf49a",
+      "identityId": "e57519a5-bc62-4bfe-b29d-2be809e8d9af",
+      "identityName": "Aneeb",
+      "channel": "linkedin",
+      "profileId": "87c10cd5-58e3-4742-910d-4de549d522c7",
+      "activityType": "connection_request",
+      "targetCount": 25,
+      "targetable": true,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 55,
+      "personal": 0
+    },
+    {
+      "planId": "09fc4311-ad14-4231-a9bd-1df5e81a451e",
+      "identityId": "e57519a5-bc62-4bfe-b29d-2be809e8d9af",
+      "identityName": "Aneeb",
+      "channel": "linkedin",
+      "profileId": "87c10cd5-58e3-4742-910d-4de549d522c7",
+      "activityType": "dm",
+      "targetCount": 15,
+      "targetable": true,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 10,
+      "personal": 0
+    },
+    {
+      "planId": "515146e3-c4b5-43e7-b7f3-ca50b95753ec",
+      "identityId": "e57519a5-bc62-4bfe-b29d-2be809e8d9af",
+      "identityName": "Aneeb",
+      "channel": "linkedin",
+      "profileId": "87c10cd5-58e3-4742-910d-4de549d522c7",
+      "activityType": "followup",
+      "targetCount": 10,
+      "targetable": true,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 10,
+      "personal": 0
+    },
+    {
+      "planId": "01483a70-d8e8-4943-bb37-aa509df8cb29",
+      "identityId": "a2986f64-aec6-4827-905f-e61903106089",
+      "identityName": "Aneeb",
+      "channel": "upwork",
+      "profileId": "ebefd356-0db6-4273-b8dc-a26be14fcd06",
+      "activityType": "proposal",
+      "targetCount": 2,
+      "targetable": false,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [
+        {
+          "repId": "aaaaaaaa-0000-0000-0000-000000000004",
+          "targetCount": 2
+        },
+        {
+          "repId": "aaaaaaaa-0000-0000-0000-000000000003",
+          "targetCount": 2
+        }
+      ],
+      "completed": 0,
+      "personal": 2
+    },
+    {
+      "planId": "88b66aa0-9e10-4a65-8e4b-e72e536673d0",
+      "identityId": "e57519a5-bc62-4bfe-b29d-2be809e8d9af",
+      "identityName": "Aneeb",
+      "channel": "linkedin",
+      "profileId": "87c10cd5-58e3-4742-910d-4de549d522c7",
+      "activityType": "prospect_extracted",
+      "targetCount": 1,
+      "targetable": true,
+      "seats": [
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 38,
+      "personal": 0
+    },
+    {
+      "planId": "a6128754-7931-4852-89ef-3daf9dfb040b",
+      "identityId": "034fec42-6deb-4458-a2e4-539f29dd0d09",
+      "identityName": "Fizza",
+      "channel": "upwork",
+      "profileId": "6e92e611-dd09-464e-8b07-b82ef009e813",
+      "activityType": "application",
+      "targetCount": 10,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 0
+    },
+    {
+      "planId": "b6e93df7-03bc-46ed-a2a9-9a5c95d0dd25",
+      "identityId": "d3e2b6bf-d2f8-4ef3-a8c5-1a3bafe1be1c",
+      "identityName": "Fizza",
+      "channel": "linkedin",
+      "profileId": "d1dc8330-8689-42ad-b90b-bb3947f97f68",
+      "activityType": "connection_request",
+      "targetCount": 20,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 0
+    },
+    {
+      "planId": "4799a20f-6408-4fbd-8657-11c7b9dc8f29",
+      "identityId": "d3e2b6bf-d2f8-4ef3-a8c5-1a3bafe1be1c",
+      "identityName": "Fizza",
+      "channel": "linkedin",
+      "profileId": "d1dc8330-8689-42ad-b90b-bb3947f97f68",
+      "activityType": "dm",
+      "targetCount": 20,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 0
+    },
+    {
+      "planId": "4b08857d-577f-4d32-8438-b6801c45f6be",
+      "identityId": "d3e2b6bf-d2f8-4ef3-a8c5-1a3bafe1be1c",
+      "identityName": "Fizza",
+      "channel": "linkedin",
+      "profileId": "d1dc8330-8689-42ad-b90b-bb3947f97f68",
+      "activityType": "followup",
+      "targetCount": 5,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 0
+    },
+    {
+      "planId": "fb7b4402-8725-4112-b99f-d1299a5bd535",
+      "identityId": "034fec42-6deb-4458-a2e4-539f29dd0d09",
+      "identityName": "Fizza",
+      "channel": "upwork",
+      "profileId": "6e92e611-dd09-464e-8b07-b82ef009e813",
+      "activityType": "proposal",
+      "targetCount": 2,
+      "targetable": false,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 0
+    },
+    {
+      "planId": "41fa8750-bea9-4361-88a9-0596ba963b46",
+      "identityId": "d3e2b6bf-d2f8-4ef3-a8c5-1a3bafe1be1c",
+      "identityName": "Fizza",
+      "channel": "linkedin",
+      "profileId": "d1dc8330-8689-42ad-b90b-bb3947f97f68",
+      "activityType": "prospect_extracted",
+      "targetCount": 30,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000001",
+        "aaaaaaaa-0000-0000-0000-000000000002"
+      ],
+      "allocations": [],
+      "completed": 1,
+      "personal": 0
+    },
+    {
+      "planId": "99580556-b31c-45fd-944c-94fdf6144657",
+      "identityId": "44af6e41-a501-42cc-8904-65494623dcce",
+      "identityName": "Hassan",
+      "channel": "upwork",
+      "profileId": "cdbc68b6-61e3-484e-8611-980682e2cc5b",
+      "activityType": "application",
+      "targetCount": 10,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003",
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 0
+    },
+    {
+      "planId": "20e6f84c-504b-4aeb-bffe-ccaeb3aba268",
+      "identityId": "c26a685b-a18b-4672-b7ad-a55e211539b2",
+      "identityName": "Hassan",
+      "channel": "linkedin",
+      "profileId": "f67c1ba3-69bd-43a4-8410-7b35e0b79d44",
+      "activityType": "connection_request",
+      "targetCount": 25,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003",
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace"
+      ],
+      "allocations": [],
+      "completed": 24,
+      "personal": 0
+    },
+    {
+      "planId": "b777824a-e0a6-4ab4-9777-9d08f825020c",
+      "identityId": "c26a685b-a18b-4672-b7ad-a55e211539b2",
+      "identityName": "Hassan",
+      "channel": "linkedin",
+      "profileId": "f67c1ba3-69bd-43a4-8410-7b35e0b79d44",
+      "activityType": "dm",
+      "targetCount": 20,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003",
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace"
+      ],
+      "allocations": [],
+      "completed": 19,
+      "personal": 0
+    },
+    {
+      "planId": "d6f04e81-de71-469d-868a-4590f3d4e0e0",
+      "identityId": "c26a685b-a18b-4672-b7ad-a55e211539b2",
+      "identityName": "Hassan",
+      "channel": "linkedin",
+      "profileId": "f67c1ba3-69bd-43a4-8410-7b35e0b79d44",
+      "activityType": "followup",
+      "targetCount": 5,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003",
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace"
+      ],
+      "allocations": [],
+      "completed": 10,
+      "personal": 0
+    },
+    {
+      "planId": "e3606bb8-151e-4ba1-be6f-b02350a31154",
+      "identityId": "44af6e41-a501-42cc-8904-65494623dcce",
+      "identityName": "Hassan",
+      "channel": "upwork",
+      "profileId": "cdbc68b6-61e3-484e-8611-980682e2cc5b",
+      "activityType": "proposal",
+      "targetCount": 2,
+      "targetable": false,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003",
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 0
+    },
+    {
+      "planId": "b6d9afc4-6599-4a30-9355-89cc2cd89c38",
+      "identityId": "c26a685b-a18b-4672-b7ad-a55e211539b2",
+      "identityName": "Hassan",
+      "channel": "linkedin",
+      "profileId": "f67c1ba3-69bd-43a4-8410-7b35e0b79d44",
+      "activityType": "prospect_extracted",
+      "targetCount": 40,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003",
+        "ec4f844d-24ca-4fb5-ae4f-4138244abace"
+      ],
+      "allocations": [],
+      "completed": 76,
+      "personal": 0
+    },
+    {
+      "planId": "cbe21b61-428c-4f3a-b79a-7dc0657389e1",
+      "identityId": "41431c1f-bc48-4dde-99af-9973c87d81a9",
+      "identityName": "Madiha Irfan",
+      "channel": "upwork",
+      "profileId": "ddc00fee-4bfb-4fc9-8da9-348eb034858c",
+      "activityType": "application",
+      "targetCount": 10,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 10
+    },
+    {
+      "planId": "39ef7de7-be38-4071-a899-f9563047dc44",
+      "identityId": "41431c1f-bc48-4dde-99af-9973c87d81a9",
+      "identityName": "Madiha Irfan",
+      "channel": "upwork",
+      "profileId": "ddc00fee-4bfb-4fc9-8da9-348eb034858c",
+      "activityType": "proposal",
+      "targetCount": 2,
+      "targetable": false,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000003"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 2
+    },
+    {
+      "planId": "348c44eb-90b4-41ad-a20a-60f89983bfd7",
+      "identityId": "4e2bf898-b182-459d-b6b0-17aa0556750c",
+      "identityName": "Mehak",
+      "channel": "upwork",
+      "profileId": "06e0a372-8e1c-456f-8a9c-4d052906cc36",
+      "activityType": "application",
+      "targetCount": 10,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 10
+    },
+    {
+      "planId": "e11ead2b-1a82-48fa-82bf-501befc898e4",
+      "identityId": "2d46d5da-e2ea-4c3f-a4e7-e495598bcd3c",
+      "identityName": "Mehak",
+      "channel": "linkedin",
+      "profileId": "fb589293-16e9-42f8-806c-9ad4f4222ac9",
+      "activityType": "connection_request",
+      "targetCount": 25,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 31,
+      "personal": 25
+    },
+    {
+      "planId": "7228f505-6310-4cf5-8eed-7da919a249fe",
+      "identityId": "2d46d5da-e2ea-4c3f-a4e7-e495598bcd3c",
+      "identityName": "Mehak",
+      "channel": "linkedin",
+      "profileId": "fb589293-16e9-42f8-806c-9ad4f4222ac9",
+      "activityType": "dm",
+      "targetCount": 15,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 1,
+      "personal": 15
+    },
+    {
+      "planId": "6239b5e4-ac06-4f3c-a65d-bd2aadf1b79a",
+      "identityId": "2d46d5da-e2ea-4c3f-a4e7-e495598bcd3c",
+      "identityName": "Mehak",
+      "channel": "linkedin",
+      "profileId": "fb589293-16e9-42f8-806c-9ad4f4222ac9",
+      "activityType": "followup",
+      "targetCount": 10,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 10
+    },
+    {
+      "planId": "eef89eb8-7ba9-4529-a956-38bc68d8ffe8",
+      "identityId": "4e2bf898-b182-459d-b6b0-17aa0556750c",
+      "identityName": "Mehak",
+      "channel": "upwork",
+      "profileId": "06e0a372-8e1c-456f-8a9c-4d052906cc36",
+      "activityType": "proposal",
+      "targetCount": 2,
+      "targetable": false,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 2
+    },
+    {
+      "planId": "548c73a0-4b5f-4d61-9179-536566a1dfd7",
+      "identityId": "2d46d5da-e2ea-4c3f-a4e7-e495598bcd3c",
+      "identityName": "Mehak",
+      "channel": "linkedin",
+      "profileId": "fb589293-16e9-42f8-806c-9ad4f4222ac9",
+      "activityType": "prospect_extracted",
+      "targetCount": 15,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 2,
+      "personal": 15
+    },
+    {
+      "planId": "3d81239e-5efb-4ef6-9a38-880d3b617863",
+      "identityId": "ab50b6a7-0b85-44c2-b8c9-52816f8adf93",
+      "identityName": "Zaira",
+      "channel": "upwork",
+      "profileId": "37ee6e21-17ec-4041-a5cc-1cfafe60ffd3",
+      "activityType": "application",
+      "targetCount": 10,
+      "targetable": true,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000002",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 0
+    },
+    {
+      "planId": "86afda95-1881-4a39-a67b-d745d989d49c",
+      "identityId": "ab50b6a7-0b85-44c2-b8c9-52816f8adf93",
+      "identityName": "Zaira",
+      "channel": "upwork",
+      "profileId": "37ee6e21-17ec-4041-a5cc-1cfafe60ffd3",
+      "activityType": "proposal",
+      "targetCount": 2,
+      "targetable": false,
+      "seats": [
+        "aaaaaaaa-0000-0000-0000-000000000002",
+        "aaaaaaaa-0000-0000-0000-000000000004"
+      ],
+      "allocations": [],
+      "completed": 0,
+      "personal": 0
+    }
+  ]
+}
