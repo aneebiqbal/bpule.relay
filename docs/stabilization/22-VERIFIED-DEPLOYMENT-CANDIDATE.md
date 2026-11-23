@@ -7,8 +7,9 @@
 
 | Item | Value |
 |---|---|
-| Branch tip after this pass | `ef9eca01` |
+| Last code + tests commit | `ef9eca01` |
 | CI fix (live-DB test classification) | `ef9eca01` |
+| Documentation commits | `349d9cc` and following |
 | Fail-closed adapter + real-PG harness | `de94026e` |
 | Prior closure RC | `87ccbeaa` |
 | Production currently reports | `e68110a` (**not this branch**) |
