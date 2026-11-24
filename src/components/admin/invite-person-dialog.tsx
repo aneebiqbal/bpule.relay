@@ -67,7 +67,7 @@ export function InvitePersonDialog({ isOwner }: { isOwner: boolean }) {
       <dialog
         ref={dialog}
         aria-labelledby="invite-title"
-        className="w-[min(26rem,calc(100vw-2rem))] rounded-xl border border-line bg-bone p-0 text-ink backdrop:bg-black/40"
+        className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-bone p-0 text-ink backdrop:bg-black/40"
         onClose={() => { setError(null); setInvited(null) }}
       >
         <form onSubmit={submit} className="space-y-4 p-5">

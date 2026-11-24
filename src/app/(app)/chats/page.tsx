@@ -338,13 +338,20 @@ export default async function ChatsPage({
             )}
           </section>
 
-          {leadId && (
-            <aside aria-label="Lead intelligence pane" tabIndex={0} className="hidden min-h-0 min-w-0 overflow-y-auto rounded-lg border border-line bg-bone-raised xl:block">
+          <aside aria-label="Lead intelligence pane" tabIndex={0} className="hidden min-h-0 min-w-0 overflow-y-auto rounded-lg border border-line bg-bone-raised xl:block">
+            {/* Always mounted so opening a conversation never reflows the grid (QA UI-036). */}
+            {leadId ? (
               <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
                 <IntelligenceSlot ctx={ctx} leadId={leadId} reps={reps} repIds={repIds} authorizedIdentityIds={authorizedIdentityIds} />
               </Suspense>
-            </aside>
-          )}
+            ) : (
+              <div className="flex h-full min-h-[240px] flex-col items-center justify-center p-6 text-center">
+                <p className="max-w-[28ch] text-[13px] leading-relaxed text-graphite">
+                  Select a conversation to see the person, the deal and the coverage behind it.
+                </p>
+              </div>
+            )}
+          </aside>
         </div>
       )}
     </div>

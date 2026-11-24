@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Plus, ChevronRight } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { cn } from 'cn'
 import { buildGlobalCreateItems } from '@/lib/navigation/global-create-items'
 
@@ -78,7 +78,6 @@ export function GlobalCreateMenu({ isAdmin, isManager = false }: GlobalCreateMen
                 </span>
                 <span className="mt-0.5 block text-[11px] text-stone">{item.description}</span>
               </span>
-              <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-stone" aria-hidden />
             </Link>
           ))}
         </div>

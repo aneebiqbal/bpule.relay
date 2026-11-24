@@ -484,6 +484,12 @@ export function LeadsTable({
     [navigate],
   )
 
+  // Page 2 must open at its top, not inherit the scroll offset of page 1
+  // (QA UI-027: the new page opened scrolled to the end of the list).
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [page])
+
   const runAction = useCallback(async (leadId: string, path: string, body: Record<string, unknown>) => {
     setError(null)
     try {
@@ -735,7 +741,7 @@ export function LeadsTable({
   )
 
   const footer = (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-16 pr-20">
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-[12px] text-graphite">
           {total} {total === 1 ? 'lead' : 'leads'}

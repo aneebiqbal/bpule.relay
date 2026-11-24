@@ -397,7 +397,7 @@ export function LeadConversation({
                     </svg>
                   </button>
                   {moreOpen && (
-                    <div role="menu" aria-label="Composer options" className="absolute right-0 z-30 mb-1 w-56 rounded-lg border border-line bg-bone-raised p-1 shadow-lg">
+                    <div role="menu" aria-label="Composer options" className="absolute bottom-full right-0 z-30 mb-1 max-h-[70dvh] overflow-y-auto w-56 rounded-lg border border-line bg-bone-raised p-1 shadow-lg">
                       {THREAD_INTENTS.map((i) => (
                         <button
                           key={i}
