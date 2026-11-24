@@ -295,7 +295,8 @@ describe('REPORTS', () => {
     const rep = secondaryItems('insights', { isOwner: false, isAdmin: false, isManager: false }).map((i) => i.href)
     const mgr = secondaryItems('insights', { isOwner: false, isAdmin: false, isManager: true }).map((i) => i.href)
     const admin = secondaryItems('insights', { isOwner: false, isAdmin: true, isManager: true }).map((i) => i.href)
-    const reports = ['/reports/sales', '/reports/pipeline', '/reports/revenue', '/reports/activity']
+    // QA 7.3: the rep consistency page must be reachable from the rail.
+    const reports = ['/reports/sales', '/reports/pipeline', '/reports/revenue', '/reports/activity', '/performance']
     expect(rep).toEqual(reports)
     expect(mgr).toEqual(reports)
     expect(admin).toEqual(reports)

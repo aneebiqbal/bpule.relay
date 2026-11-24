@@ -301,7 +301,10 @@ export function LeadConversation({
     : null
 
   return (
-    <div className={cn('grid gap-4 h-full', variant === 'full' && 'lg:grid-cols-[minmax(0,1fr)_300px]')}>
+    // Thread variant sits under the page's ThreadHeader: flex-1 fills only the
+    // remaining height. h-full here would add the header's height on top and
+    // clip the composer at the bottom of the overflow-hidden workspace.
+    <div className={cn('grid gap-4', variant === 'full' ? 'h-full lg:grid-cols-[minmax(0,1fr)_300px]' : 'min-h-0 flex-1')}>
       {/* h-full + internal scroll: the thread must fill the workspace instead of
           stopping at a fixed 520px and leaving a dead band above the composer. */}
       <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-bone-raised" aria-label="Conversation">
