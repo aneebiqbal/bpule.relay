@@ -61,6 +61,10 @@ e2e/.auth/
 # Local QA audit output (screenshots + reports)
 artifacts/
 
+# Sprint deliverables under docs/ are source, not local QA output.
+!docs/sprints/*/artifacts/
+!docs/sprints/*/artifacts/**
+
 # Production PII dump — see docs/PII_GIT_REMEDIATION.md (P0-5, Step 1).
 # Never re-add: the directory holds real prospect emails, LinkedIn URLs and
 # message bodies. History rewrite is tracked separately in that document.

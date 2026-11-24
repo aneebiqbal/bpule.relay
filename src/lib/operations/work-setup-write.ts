@@ -338,8 +338,8 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
           throw new Error(`${lane.activityType} is not a valid activity.`)
         }
         const targetCount = Math.round(Number(lane.targetCount))
-        if (!Number.isFinite(targetCount) || targetCount <= 0) {
-          throw new Error(`${label(lane.activityType)} must be a positive number.`)
+        if (!Number.isFinite(targetCount) || targetCount < 0) {
+          throw new Error(`${label(lane.activityType)} must be zero or a positive number.`)
         }
         if (seen.has(lane.activityType)) throw new Error(`Duplicate ${label(lane.activityType)} lane.`)
         seen.add(lane.activityType)
@@ -352,6 +352,20 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
           .eq('activity_type', lane.activityType)
           .limit(1)
         const id = (existing?.[0] as { id: string } | undefined)?.id
+        // An explicit zero means "no expectation for this lane": deactivate an
+        // existing plan instead of failing to save the rest of the form.
+        if (targetCount === 0) {
+          if (id) {
+            const deactivating = await c
+              .from('daily_target_plans')
+              .update({ active: false, updated_at: new Date().toISOString() })
+              .eq('id', id)
+              .select('id')
+              .single()
+            if (deactivating.error) throw new Error(deactivating.error.message)
+          }
+          continue
+        }
         const writing = id
           ? await c
               .from('daily_target_plans')
@@ -401,22 +415,21 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
         byActivity.set(row.activityType, map)
       }
 
-      // An explicit empty list clears the affected lanes. With targets
-      // supplied those lanes are known; otherwise use the account's active plan
-      // lanes so an omitted target list still clears the right rows.
-      if (input.allocations.length === 0) {
-        if (input.targets) {
-          for (const lane of input.targets) activities.add(lane.activityType)
-        } else {
-          const { data: planRows } = await c
-            .from('daily_target_plans')
-            .select('activity_type')
-            .eq('organization_id', input.orgId)
-            .eq('revenue_identity_id', input.identityId)
-            .eq('active', true)
-            .limit(50)
-          for (const row of (planRows ?? []) as Array<{ activity_type: string }>) activities.add(row.activity_type)
-        }
+      // Every supplied target lane is in scope for this write, so blanking one
+      // lane's shares while another keeps them still clears the blanked lane.
+      if (input.targets) {
+        for (const lane of input.targets) activities.add(lane.activityType)
+      } else if (input.allocations.length === 0) {
+        // No target list supplied: fall back to the account's active plan lanes
+        // so an omitted list still clears the right rows.
+        const { data: planRows } = await c
+          .from('daily_target_plans')
+          .select('activity_type')
+          .eq('organization_id', input.orgId)
+          .eq('revenue_identity_id', input.identityId)
+          .eq('active', true)
+          .limit(50)
+        for (const row of (planRows ?? []) as Array<{ activity_type: string }>) activities.add(row.activity_type)
       }
 
       for (const activityType of activities) {

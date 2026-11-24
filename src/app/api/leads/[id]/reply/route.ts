@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createScoutStore } from '@/lib/store'
 import { safeErrorResponse } from '@/lib/errors'
+import { resolveConversationAuthz } from '@/lib/operations/conversation-authz'
 
 /**
  * Persist a prospect's inbound reply as a message row, flip the lead to
@@ -36,8 +37,10 @@ export async function POST(
   }
 
   try {
-    await store.recordProspectReply(id, replyText, { receivedAt })
-    const detail = await store.getLead(id)
+    const authz = await resolveConversationAuthz(store.getSupabaseClient())
+    if (!authz) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+    await store.recordProspectReply(id, replyText, { receivedAt, scope: authz })
+    const detail = await store.getLead(id, authz)
     return NextResponse.json({ ok: true, lead: detail })
   } catch (error) {
     return safeErrorResponse(error, 500, 'Could not record the reply.', 'leads/reply')

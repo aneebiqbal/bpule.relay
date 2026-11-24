@@ -201,7 +201,7 @@ function ResponsibilityRow({
               ? row.role === 'operator' && summaryLane
                 ? ` · Profile ${summaryLane.profileCompletedCount}/${summaryLane.targetCount} ${activityLabel(summaryLane.activityType as Parameters<typeof activityLabel>[0])} · Your contribution ${summaryLane.completedCount} · ${Math.max(0, summaryLane.targetCount - summaryLane.profileCompletedCount)} remaining`
                 : row.contributorCount > 1
-                  ? ` · Profile ${row.profileCompleted}/${row.target} · Your contribution ${row.completed}`
+                  ? ` · Profile ${row.profileCompleted}/${row.profileTarget} · Your contribution ${row.completed}`
                   : ` · ${row.remaining} of ${row.target} left`
               : ' · No daily plan'}
           </p>
@@ -224,7 +224,9 @@ function ResponsibilityRow({
               >
                 Transfer
               </button>
-              {row.target > 0 && (
+              {/* Channel plans belong to the account, so only the primary row can
+                  remove one — deactivating it would strip every seat's target. */}
+              {row.target > 0 && row.role === 'primary' && (
                 <button
                   type="button"
                   onClick={onRemovePlan}
@@ -355,14 +357,23 @@ function AssignDialog({
       if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status}). Please retry.`)
       // Apply the edited target pack on top of the seeded defaults.
       if (role === 'primary') {
+        const failures: string[] = []
         for (const row of pack) {
           const targetCount = counts[row.activityType] ?? row.targetCount
           if (targetCount <= 0) continue
-          await fetch('/api/admin/targets', {
+          const res = await fetch('/api/admin/targets', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ repId, revenueIdentityId: identityId, activityType: row.activityType, targetCount }),
           })
+          const body = await res.json().catch(() => null)
+          if (!res.ok) failures.push(`${row.activityType}: ${body?.error ?? `HTTP ${res.status}`}`)
+        }
+        // The assignment is already committed; report target failures instead of
+        // closing as an unqualified success.
+        if (failures.length > 0) {
+          setError(`Responsibility saved, but targets were not: ${failures.join('; ')}`)
+          return
         }
       }
       router.refresh()

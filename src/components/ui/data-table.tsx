@@ -63,6 +63,8 @@ export interface DataTableProps<T> {
   empty?: React.ReactNode
   error?: string | null
   onRowClick?: (row: T) => void
+  /** Narrows row interactivity to rows that actually navigate somewhere. */
+  isRowClickable?: (row: T) => boolean
   /** Compact record card rendered below md instead of the table. */
   renderCard?: (row: T) => React.ReactNode
   density?: "default" | "roomy"
@@ -94,6 +96,7 @@ export function DataTable<T>({
   empty,
   error,
   onRowClick,
+  isRowClickable,
   renderCard,
   density = "default",
   footer,
@@ -237,14 +240,15 @@ export function DataTable<T>({
       {rows.map((row) => {
         const key = rowKey(row)
         const isSelected = selected.has(key)
+        const rowClickable = clickable && (!isRowClickable || isRowClickable(row))
         return (
           <TableRow
             key={key}
             data-state={isSelected ? "selected" : undefined}
-            tabIndex={clickable ? 0 : undefined}
-            onClick={clickable ? () => onRowClick!(row) : undefined}
+            tabIndex={rowClickable ? 0 : undefined}
+            onClick={rowClickable ? () => onRowClick!(row) : undefined}
             onKeyDown={
-              clickable
+              rowClickable
                 ? (event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault()
@@ -254,7 +258,7 @@ export function DataTable<T>({
                 : undefined
             }
             className={cn(
-              clickable && "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/30",
+              rowClickable && "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange/30",
             )}
           >
             {selectable ? (

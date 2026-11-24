@@ -122,6 +122,26 @@ create policy "pom_insert" on profile_opportunity_matches for insert with check 
 -- Upwork Jobs + Applications
 -- ============================================================================
 
+-- The table already exists from 0009 with the pre-V2 column set, so the
+-- `create table if not exists` below cannot introduce the new columns. Add them
+-- idempotently instead of assuming a fresh database.
+alter table upwork_jobs add column if not exists organization_id uuid references organizations(id) on delete cascade;
+alter table upwork_jobs add column if not exists skills jsonb not null default '[]'::jsonb;
+alter table upwork_jobs add column if not exists budget numeric;
+alter table upwork_jobs add column if not exists budget_type text;
+alter table upwork_jobs add column if not exists experience_level text;
+alter table upwork_jobs add column if not exists project_length text;
+alter table upwork_jobs add column if not exists location_restrictions jsonb not null default '[]'::jsonb;
+alter table upwork_jobs add column if not exists client_name text;
+alter table upwork_jobs add column if not exists client_rating numeric;
+alter table upwork_jobs add column if not exists client_spend text;
+alter table upwork_jobs add column if not exists client_hires integer;
+alter table upwork_jobs add column if not exists posted_at timestamptz;
+alter table upwork_jobs add column if not exists url text;
+alter table upwork_jobs add column if not exists raw_content_hash text;
+alter table upwork_jobs add column if not exists screening_questions jsonb not null default '[]'::jsonb;
+alter table upwork_jobs add column if not exists updated_at timestamptz not null default now();
+
 create table if not exists upwork_jobs (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,

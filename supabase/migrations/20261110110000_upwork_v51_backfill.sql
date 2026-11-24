@@ -71,6 +71,22 @@ where status in ('new','drafted','applied','replied','dead','no');
 -- ============================================================================
 -- 2. Applications from real submission evidence (one per job)
 -- ============================================================================
+-- v5.1 applications carry fields the earlier table does not have yet; add them
+-- idempotently rather than assuming a fresh database.
+alter table upwork_applications add column if not exists rep_id uuid references reps(id) on delete set null;
+alter table upwork_applications add column if not exists person_profile_id uuid references profiles(id) on delete set null;
+alter table upwork_applications add column if not exists revenue_identity_id uuid references revenue_identities(id) on delete set null;
+alter table upwork_applications add column if not exists submitted_at timestamptz;
+alter table upwork_applications add column if not exists proposal_text text;
+alter table upwork_applications add column if not exists connects_spent integer;
+alter table upwork_applications add column if not exists boost_connects integer;
+alter table upwork_applications add column if not exists screening_answers jsonb;
+alter table upwork_applications add column if not exists first_reply_at timestamptz;
+alter table upwork_applications add column if not exists latest_reply_at timestamptz;
+alter table upwork_messages add column if not exists direction text;
+alter table upwork_messages add column if not exists sender_profile_id uuid references profiles(id) on delete set null;
+create unique index if not exists upwork_applications_job_id_key on upwork_applications(job_id);
+
 insert into upwork_applications (
   organization_id, job_id, rep_id, person_profile_id, revenue_identity_id,
   submitted_at, proposal_text, connects_spent, boost_connects, screening_answers, status

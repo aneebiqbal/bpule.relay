@@ -579,7 +579,7 @@ async function PerformanceTab({ ctx, repId, filters }: { ctx: OpsPageContext; re
       </Section>
       {activity && (
         <Section title="Consistency" description="Daily executed activity, last 12 weeks. Drafts and failures never count.">
-          <ContributionHeatmap daily={activity.daily} timezone={timezone} dayHref={`${base}?tab=performance&range=${filters.range}`} />
+          <ContributionHeatmap daily={activity.daily} timezone={timezone} />
         </Section>
       )}
       {perf.truncated && <p className="text-[12px] text-status-warning">This window hit the read limit; totals may be incomplete. Narrow the range.</p>}

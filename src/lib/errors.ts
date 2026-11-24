@@ -62,6 +62,17 @@ export class AppError extends Error {
   }
 }
 
+/**
+ * A caller asked for a lead they may not read or act on. Surfaced as HTTP 404 so
+ * an out-of-scope id is indistinguishable from a missing one, and never as a 500
+ * that would look like a server fault.
+ */
+export class LeadAccessDeniedError extends AppError {
+  constructor(message = "You are not the owner of this lead.") {
+    super(404, message, "Lead not found.")
+  }
+}
+
 export function safeErrorResponse(
   error: unknown,
   fallbackStatus: number = 500,

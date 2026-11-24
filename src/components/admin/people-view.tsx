@@ -81,7 +81,7 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
           <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-orange">Owner</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {data.owners.map((person) => (
-              <PersonCard key={person.id} person={person} isOwner={data.isOwner} />
+              <PersonCard key={person.id} person={person} />
             ))}
           </div>
         </section>
@@ -93,7 +93,7 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
           <p className="text-mono-medium text-[10px] uppercase tracking-[0.14em] text-cobalt-ink">Admins</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {data.admins.map((person) => (
-              <PersonCard key={person.id} person={person} isOwner={data.isOwner} />
+              <PersonCard key={person.id} person={person} />
             ))}
           </div>
         </section>
@@ -128,7 +128,7 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
                     <p className="text-[10px] uppercase tracking-wide text-stone mb-1">Managers</p>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {teamManagers.map((person) => (
-                        <PersonCard key={person.id} person={person} isOwner={data.isOwner} />
+                        <PersonCard key={person.id} person={person} />
                       ))}
                     </div>
                   </div>
@@ -138,7 +138,7 @@ export function PeopleView({ dataPromise }: { dataPromise: Promise<PeopleData> }
                     <p className="text-[10px] uppercase tracking-wide text-stone mb-1">Members</p>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {teamMembers.map((person) => (
-                        <PersonCard key={person.id} person={person} isOwner={data.isOwner} />
+                        <PersonCard key={person.id} person={person} />
                       ))}
                     </div>
                   </div>
@@ -184,7 +184,7 @@ function BypassAllButton() {
   )
 }
 
-function PersonCard({ person, isOwner }: { person: any; isOwner: boolean }) {
+function PersonCard({ person }: { person: any }) {
   return (
     <div className="rounded border border-line bg-bone p-3 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -204,11 +204,6 @@ function PersonCard({ person, isOwner }: { person: any; isOwner: boolean }) {
           </div>
         </div>
       </div>
-      {isOwner && (
-        <button className="rounded border border-line px-2 py-1 text-[11px] text-graphite hover:text-ink hover:bg-bone-raised transition-colors">
-          Edit
-        </button>
-      )}
     </div>
   )
 }

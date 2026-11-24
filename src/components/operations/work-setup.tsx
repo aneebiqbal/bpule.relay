@@ -32,6 +32,56 @@ interface Draft {
   backupIds: string[]
   targets: Array<{ activityType: string; targetCount: number }>
   allocations: Array<{ activityType: string; repId: string; targetCount: number }>
+  /** Compare-and-set token captured when the drawer opened. */
+  expectedRevision: string | null
+}
+
+/**
+ * Pure: what a revision conflict means for the admin, in words. Used by the
+ * drawer's conflict panel and unit-tested so the explanation cannot drift from
+ * the committed row.
+ */
+export function workSetupConflictLines(
+  current: WorkSetupRow,
+  draft: Pick<Draft, 'primaryRepId' | 'operatorIds'>,
+  reps: Array<{ id: string; name: string }>,
+): string[] {
+  const nameOf = (repId: string) => reps.find((rep) => rep.id === repId)?.name ?? 'Unknown rep'
+  const lines: string[] = []
+  const committedPrimary = current.primaryRepName ?? 'Unassigned'
+  const draftPrimary = draft.primaryRepId ? nameOf(draft.primaryRepId) : 'Unassigned'
+  if (committedPrimary !== draftPrimary) lines.push(`Primary rep is now ${committedPrimary} (you had ${draftPrimary}).`)
+  const committedOperators = current.operators.map((seat) => seat.repName)
+  const draftOperators = draft.operatorIds.map(nameOf)
+  const added = draftOperators.filter((name) => !committedOperators.includes(name))
+  const removed = committedOperators.filter((name) => !draftOperators.includes(name))
+  if (added.length) lines.push(`Operators added: ${added.join(', ')}.`)
+  if (removed.length) lines.push(`Operators removed: ${removed.join(', ')}.`)
+  return lines
+}
+
+/** Build the editable draft from one canonical row. */
+function draftFromRow(row: WorkSetupRow, presets: WorkSetupPayload['presets']): Draft {
+  const preset = presets[row.channel] ?? []
+  const known = new Map(row.lanes.map((lane) => [lane.activityType, lane.targetCount]))
+  const activities = [...new Set([...preset.map((p) => p.activityType), ...known.keys()])]
+  return {
+    primaryRepId: row.primaryRepId ?? '',
+    operatorIds: row.operators.map((o) => o.repId),
+    backupIds: row.backups.map((b) => b.repId),
+    targets: activities.map((activityType) => ({
+      activityType,
+      targetCount: known.get(activityType) ?? preset.find((p) => p.activityType === activityType)?.targetCount ?? 0,
+    })),
+    allocations: row.lanes.flatMap((lane) =>
+      lane.allocations.map((allocation) => ({
+        activityType: lane.activityType,
+        repId: allocation.repId,
+        targetCount: allocation.targetCount,
+      })),
+    ),
+    expectedRevision: row.revision ?? null,
+  }
 }
 
 const ISSUE_LABEL: Record<string, string> = {
@@ -55,6 +105,7 @@ export function WorkSetupManager() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [conflict, setConflict] = useState<{ current: WorkSetupRow } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -64,8 +115,10 @@ export function WorkSetupManager() {
       const body = (await res.json().catch(() => ({}))) as WorkSetupPayload & { error?: string }
       if (!res.ok) throw new Error(body.error ?? 'Failed to load work setup.')
       setData(body)
+      return body
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load work setup.')
+      return null
     } finally {
       setLoading(false)
     }
@@ -99,26 +152,9 @@ export function WorkSetupManager() {
   const selected = data?.rows.find((row) => row.identityId === selectedId) ?? null
 
   function openRow(row: WorkSetupRow) {
-    const preset = data?.presets[row.channel] ?? []
-    const known = new Map(row.lanes.map((lane) => [lane.activityType, lane.targetCount]))
-    const activities = [...new Set([...preset.map((p) => p.activityType), ...known.keys()])]
-    setDraft({
-      primaryRepId: row.primaryRepId ?? '',
-      operatorIds: row.operators.map((o) => o.repId),
-      backupIds: row.backups.map((b) => b.repId),
-      targets: activities.map((activityType) => ({
-        activityType,
-        targetCount: known.get(activityType) ?? preset.find((p) => p.activityType === activityType)?.targetCount ?? 0,
-      })),
-      allocations: row.lanes.flatMap((lane) =>
-        lane.allocations.map((allocation) => ({
-          activityType: lane.activityType,
-          repId: allocation.repId,
-          targetCount: allocation.targetCount,
-        })),
-      ),
-    })
+    setDraft(draftFromRow(row, data?.presets ?? { linkedin: [], upwork: [], email: [], other: [] }))
     setSaveError(null)
+    setConflict(null)
     setSelectedId(row.identityId)
   }
 
@@ -126,6 +162,7 @@ export function WorkSetupManager() {
     setSelectedId(null)
     setDraft(null)
     setSaveError(null)
+    setConflict(null)
   }
 
   function toggleSeat(field: 'operatorIds' | 'backupIds', repId: string) {
@@ -176,11 +213,25 @@ export function WorkSetupManager() {
           primaryRepId: draft.primaryRepId,
           operators: draft.operatorIds.map((repId) => ({ repId })),
           backups: draft.backupIds.map((repId) => ({ repId })),
-          targets: draft.targets.filter((row) => row.targetCount > 0),
+          targets: draft.targets,
           allocations: draft.allocations,
+          expectedRevision: draft.expectedRevision ?? undefined,
         }),
       })
-      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string
+        code?: string
+        revision?: string
+        current?: WorkSetupRow | null
+      }
+      // A concurrent edit won the race. Keep the drawer on the stale draft and
+      // show what was committed instead of overwriting it.
+      if (res.status === 409 && body.code === 'CONFLICT') {
+        const current = body.current ?? data?.rows.find((row) => row.identityId === selected.identityId) ?? null
+        if (current) setConflict({ current })
+        else setSaveError(body.error ?? 'This account was changed by someone else. Reload and try again.')
+        return
+      }
       if (!res.ok) throw new Error(body.error ?? 'Could not save.')
       closeDrawer()
       await load()
@@ -190,6 +241,17 @@ export function WorkSetupManager() {
     } finally {
       setSaving(false)
     }
+  }
+
+  /** Discard the stale draft, reload, and reopen the row at its new revision. */
+  async function loadLatest() {
+    if (!selectedId) return
+    setConflict(null)
+    setSaveError(null)
+    const payload = await load()
+    const fresh = payload?.rows.find((row) => row.identityId === selectedId) ?? null
+    if (fresh) openRow(fresh)
+    else closeDrawer()
   }
 
   if (loading && !data) {
@@ -542,6 +604,38 @@ export function WorkSetupManager() {
               </div>
             )}
 
+            {conflict && (
+              <div role="alert" className="rounded-lg border border-status-warning/40 bg-status-warning/5 px-3 py-2.5">
+                <p className="flex items-start gap-2 text-[12px] font-medium text-status-warning">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                  This account was changed by another admin while you were editing. Your changes were not applied.
+                </p>
+                <ul className="mt-1.5 space-y-0.5 text-[12px] text-graphite">
+                  {workSetupConflictLines(conflict.current, draft, data.reps).map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void loadLatest()}
+                    disabled={saving}
+                    className="rounded-lg bg-ink px-2.5 py-1 text-[12px] font-medium text-bone transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    Load latest and re-edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeDrawer}
+                    disabled={saving}
+                    className="rounded-lg border border-line px-2.5 py-1 text-[12px] text-graphite disabled:opacity-50"
+                  >
+                    Discard my changes
+                  </button>
+                </div>
+              </div>
+            )}
+
             {saveError && (
               <div role="alert" className="flex items-start gap-2 rounded-lg border border-status-danger/30 bg-status-danger/5 px-3 py-2 text-[12px] text-status-danger">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -560,7 +654,8 @@ export function WorkSetupManager() {
               <button
                 type="button"
                 onClick={() => void save()}
-                disabled={saving || !draft.primaryRepId}
+                disabled={saving || !draft.primaryRepId || conflict !== null}
+                title={conflict ? 'Load the latest version before saving again' : undefined}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-[12px] font-medium text-bone transition-transform active:scale-[0.98] disabled:opacity-50"
               >
                 {saving ? <RotateCw className="size-3.5 animate-spin" aria-hidden /> : <CheckCircle2 className="size-3.5" aria-hidden />}

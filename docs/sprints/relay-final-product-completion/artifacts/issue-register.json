@@ -1,0 +1,376 @@
+{
+  "sprint": "relay-ui-ux-recovery",
+  "branch": "feat/relay-job-intelligence-v2",
+  "baseSha": "5bcb0f9d6d5d80c73d1b608fdf10095b95224cc2",
+  "generatedAt": "2026-11-23T22:36:38.602Z",
+  "severityOrder": [
+    "P0",
+    "P1",
+    "P2",
+    "P3"
+  ],
+  "fixed": [
+    {
+      "id": "SR-01",
+      "severity": "P0",
+      "title": "Inbox thread cannot be opened outside the owner rep",
+      "route": "/chats?lead=[id]",
+      "roles": [
+        "ADMIN",
+        "MANAGER",
+        "MEMBER(coverage)"
+      ],
+      "evidence": "src/app/api/leads/[id]/conversation/route.ts called loadConversation(store,id); store.getLead(id) with no scope throws 'You are not the owner of this lead.' unless reps.role='admin'. invitations.ts repRoleFor() maps MANAGER and MEMBER to reps.role='rep', so every manager opening a teammate conversation (desktop auto-select picks one) saw 'Could not load the conversation.'.",
+      "rootCause": "Queue authority (operational scope + executable/covered identities) was never threaded into the conversation read/write paths.",
+      "fix": "Added LeadReadScope.identityIds; resolveConversationAuthz(); threaded scope through loadConversation/composeForLead/logSentMessage/saveDraft path/markContacted/recordProspectReply.",
+      "regressionTest": "tests/relay-ui-recovery.test.ts (CONVERSATION_SCOPE_PARITY)",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-02",
+      "severity": "P1",
+      "title": "Intelligence pane used a different, broader scope than the queue",
+      "route": "/chats",
+      "roles": [
+        "ADMIN",
+        "MANAGER",
+        "MEMBER(coverage)"
+      ],
+      "evidence": "chat-intelligence.ts authorized on repInScope(scope, ownerRepId) only. A manager who chose scope=me still received full context for a teammate lead the queue hid; a covering rep got 'Lead context could not be loaded.' for a row the queue surfaced.",
+      "rootCause": "loadChatIntelligence received raw ctx.scope and ignored covered/executable profiles and the personal-scope override.",
+      "fix": "canOpenConversationLead() + explicit repIds/authorizedIdentityIds from the page's queue computation; getIntelligence is failure-isolated.",
+      "regressionTest": "tests/relay-ui-recovery.test.ts; tests/inbox-v4-rebuild-contracts.test.ts updated",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-03",
+      "severity": "P1",
+      "title": "Work Setup silently overwrites a concurrent admin edit",
+      "route": "/admin/targets",
+      "roles": [
+        "ADMIN",
+        "OWNER"
+      ],
+      "evidence": "GET returns row.revision documented as 'POST this back as expectedRevision'; the component contained zero occurrences of revision/expectedRevision, so computeAccountRevision was never called. A 409 response body's `current` row was discarded and only a string shown.",
+      "rootCause": "Client/server CAS contract half-wired.",
+      "fix": "draftFromRow captures expectedRevision; save() posts it; HTTP 409 renders workSetupConflictLines(current,draft) with 'Load latest and re-edit' / 'Discard my changes'; Save disabled while a conflict is open.",
+      "regressionTest": "tests/relay-ui-recovery.test.ts (WORK_SETUP_CONFLICT_EXPLANATION)",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-04",
+      "severity": "P1",
+      "title": "Clearing one lane's allocations is a silent no-op",
+      "route": "/admin/targets",
+      "roles": [
+        "ADMIN",
+        "OWNER"
+      ],
+      "evidence": "work-setup-write.ts seeded affected lanes from input.allocations only; blanking lane A while lane B kept shares left A's shares active although the drawer showed 0/10 before saving.",
+      "rootCause": "Lane set derived from the supplied allocation rows instead of the supplied target lanes.",
+      "fix": "Always seed activities from input.targets; keep the active-plan fallback only when no target list is supplied.",
+      "regressionTest": "tests/work-setup-accounting-rules.test.ts (structural); real-PG harness scripts/qa/postgres-txn-integration.mjs",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-05",
+      "severity": "P1",
+      "title": "'Remove plan' on an operator row deletes the whole channel plan",
+      "route": "/team/[repId]",
+      "roles": [
+        "ADMIN",
+        "MANAGER",
+        "OWNER"
+      ],
+      "evidence": "supabase-store.deactivateDailyPlanAdmin updates every active daily_target_plans row for the revenue_identity and ignores repId apart from audit text; the UI rendered the button for any row with target>0, including operators/backups.",
+      "rootCause": "Channel-level operation exposed on seat-level rows.",
+      "fix": "Control now renders only on the PRIMARY responsibility row, where 'the channel's plan' is accurate.",
+      "regressionTest": "none (UI-gating change; verify in browser when staging is available)",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-06",
+      "severity": "P1",
+      "title": "End day always records an incomplete shortfall",
+      "route": "/dashboard, /team/[repId]",
+      "roles": [
+        "MEMBER"
+      ],
+      "evidence": "Both close controls hardcoded { mode: 'incomplete' }; the API accepts 'complete' and only refuses when requiredRemaining>0 without an approved exception.",
+      "rootCause": "Client never attempted the completing close.",
+      "fix": "Attempt mode:'complete'; on refusal show the API message and offer 'End day anyway' (incomplete).",
+      "regressionTest": "none (two components; browser verification blocked)",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-07",
+      "severity": "P1",
+      "title": "/admin/people admitted a demoted admin via stale reps.role",
+      "route": "/admin/people",
+      "roles": [
+        "OWNER",
+        "ADMIN"
+      ],
+      "evidence": "Page gate was user.rep.role !== 'admin' && !authCtx.isOwner && !isAdmin, contradicting src/lib/auth/admin-page.ts and the canonical organization_roles source.",
+      "rootCause": "Non-canonical role check.",
+      "fix": "Use requireProductAdmin(); removed the redundant imports.",
+      "regressionTest": "existing admin authorization suites",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-08",
+      "severity": "P2",
+      "title": "V4Drawer is not an accessible modal",
+      "route": "shared (Work Setup, setup assistant, assignment drawer)",
+      "roles": [
+        "ALL"
+      ],
+      "evidence": "v4/primitives.tsx V4Drawer had role=dialog/aria-modal but no Escape handler, no Tab trap, no body scroll lock and no focus restoration.",
+      "rootCause": "Missing modal behaviour.",
+      "fix": "Escape closes, focus moves into the panel, Tab cycles inside, background scroll locks, focus returns to the trigger.",
+      "regressionTest": "none (requires an authenticated surface; fixture surfaces do not use V4Drawer)",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-09",
+      "severity": "P2",
+      "title": "Dialog has no focus trap or scroll lock and can exceed the viewport",
+      "route": "shared",
+      "roles": [
+        "ALL"
+      ],
+      "evidence": "ui/dialog.tsx handled Escape and focus restore only.",
+      "rootCause": "Missing modal behaviour.",
+      "fix": "Focus trap, body scroll lock, max-h-[90dvh] overflow-y-auto.",
+      "regressionTest": "none",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-10",
+      "severity": "P2",
+      "title": "Optional relay-queue reads could crash /tasks",
+      "route": "/tasks",
+      "roles": [
+        "ALL"
+      ],
+      "evidence": "store.getRelayQueueData() and store.getSuppressedLeadIds() were awaited without .catch, unlike the dashboard's identical reads.",
+      "rootCause": "Missing graceful degradation.",
+      "fix": "Mirror the dashboard fallbacks.",
+      "regressionTest": "tests/prospect-initial-load.test.ts pattern",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-11",
+      "severity": "P2",
+      "title": "QuickComplete failed silently",
+      "route": "/tasks",
+      "roles": [
+        "ALL"
+      ],
+      "evidence": "try/finally without catch; a 403/409 rejected inside void complete() with no user feedback.",
+      "rootCause": "Unhandled rejection.",
+      "fix": "Catch and render an inline role=alert error next to the action.",
+      "regressionTest": "none",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-12",
+      "severity": "P2",
+      "title": "Recent-prospect rows looked clickable but did nothing",
+      "route": "/prospect",
+      "roles": [
+        "ALL"
+      ],
+      "evidence": "DataTable marks every row clickable when onRowClick exists; the handler only navigated when row.convertedLeadId was set.",
+      "rootCause": "Table-wide interactivity without a per-row predicate.",
+      "fix": "Added DataTable isRowClickable; recent tab supplies Boolean(row.convertedLeadId).",
+      "regressionTest": "none",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-13",
+      "severity": "P2",
+      "title": "POST /api/tasks dropped revenueIdentityId",
+      "route": "/api/tasks",
+      "roles": [
+        "ALL"
+      ],
+      "evidence": "Route destructured assigneeRepId..profileId but not revenueIdentityId, so assigned tasks lost channel attribution even though createAssignedTask accepts it.",
+      "rootCause": "Omitted field in the request mapping.",
+      "fix": "Forward revenueIdentityId.",
+      "regressionTest": "tests/task-execution-contracts.test.ts, tests/task-ux-contracts.test.ts",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-14",
+      "severity": "P2",
+      "title": "Inbox tab counts ignored Age/Stage filters; Won drill-down was always empty",
+      "route": "/chats, /reports/pipeline, /reports/sales",
+      "roles": [
+        "ALL"
+      ],
+      "evidence": "counts were computed over `all` before minAgeHours/stageGroup narrowed rows; stage=won links land on view=all which excludes closed rows, so a Won conversation could never match.",
+      "rootCause": "Counts and rows derived from different candidate sets; stage applied after the closed-excluding view filter.",
+      "fix": "Compute counts from the filtered candidate set; apply the stage to all rows and let it reach closed conversations when the effective view is All.",
+      "regressionTest": "tests/qa-relay-cross-surface-parity.test.ts, tests/sidebar-counts.test.ts",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-15",
+      "severity": "P2",
+      "title": "Manager scope=me was silently dropped from URL state",
+      "route": "/chats",
+      "roles": [
+        "MANAGER",
+        "ADMIN",
+        "OWNER"
+      ],
+      "evidence": "current/linkState omitted scope, so AutoSelectConversation replaced the URL and every tab/filter/conversation link widened back to the team without warning; Clear filters also omitted scope.",
+      "rootCause": "URL state incomplete.",
+      "fix": "Persist scope=me in current/linkState and in the clear-filters record.",
+      "regressionTest": "tests/relay-shell-nav.test.ts",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-16",
+      "severity": "P2",
+      "title": "An intelligence read failure took down the whole thread",
+      "route": "/chats?lead=[id]",
+      "roles": [
+        "ALL"
+      ],
+      "evidence": "SelectedThread/IntelligenceSlot awaited getIntelligence with no try/catch despite comments promising isolation.",
+      "rootCause": "Unguarded await.",
+      "fix": "getIntelligence catches loader errors and returns null (the already-handled unavailable path).",
+      "regressionTest": "tests/inbox-v4-rebuild-contracts.test.ts (INBOX_CONTEXT_FAILURE_ISOLATED)",
+      "status": "FIXED_PENDING_COMMIT"
+    },
+    {
+      "id": "SR-U1",
+      "severity": "P1",
+      "title": "Upwork history logging claimed a send and swallowed failures",
+      "reason": "Requires a product decision: implement a real Upwork send or relabel to Log reply/Log follow-up. Route comments state the endpoint is history-only.",
+      "rootCause": "History-only endpoints were labelled as sending; the UI appended optimistically inside catch{} and ignored non-2xx.",
+      "fix": "Check res.ok, surface an inline error, append only after success; relabel to Log reply and stop claiming delivery in the follow-up prompt.",
+      "regressionTest": "tests/relay-p1-closure.test.ts (UPWORK_HISTORY_IS_LABELLED_HONESTLY)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U3",
+      "severity": "P1",
+      "title": "Rep360 mixed personal target with lane/profile totals",
+      "reason": "Needs a single chosen basis (personal share vs profile requirement); accounting parity is protected, so no unilateral change.",
+      "rootCause": "The header summed lane targets while per-lane remaining used the same number against a profile total, so shared unallocated lanes looked like a personal expectation.",
+      "fix": "Compute each lane through lanePersonalTarget using allocations + seats; expose target (personal) and profileTarget (lane) separately; todayRemaining sums personal remaining.",
+      "regressionTest": "tests/relay-p1-closure.test.ts (PERSONAL_TARGET_ONE_RULE, REP360_USES_CANONICAL_PERSONAL_TARGET)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U5",
+      "severity": "P1",
+      "title": "Team profile detail hid people/coverage/knowledge controls from MANAGE_REVENUE_IDENTITIES managers",
+      "reason": "Verified gate mismatch; fix is one predicate but touches a protected authorization surface.",
+      "rootCause": "Page gate was admin-only while the list page and the APIs accept MANAGE_REVENUE_IDENTITIES; target editing is a different capability again.",
+      "fix": "Split canManage (people/coverage/knowledge, capability-aware) from canManageTargets (MANAGE_TEAM_TARGETS).",
+      "regressionTest": "tests/relay-p1-closure.test.ts (PROFILE_DETAIL_CAPABILITY_SPLIT)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U6",
+      "severity": "P1",
+      "title": "Setup assistant / Rep360 wrote targets through MANAGE_TEAM_TARGETS without checking results",
+      "reason": "Needs capability gating plus response checking across two flows.",
+      "rootCause": "Entry gate granted only MANAGE_REVENUE_IDENTITIES; target responses were never inspected.",
+      "fix": "Thread canManageTargets into the setup assistant (skip with an explicit log when absent) and check every Rep360 target response.",
+      "regressionTest": "tests/relay-p1-closure.test.ts (SETUP_TARGET_WRITES_ARE_HONEST)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U8",
+      "severity": "P1",
+      "title": "Performance targets attributed an unallocated shared lane to the primary",
+      "reason": "Contradicts canonical lanePersonalTarget; requires the same product decision as SR-U3.",
+      "rootCause": "The targets projection fell back to the PRIMARY rep for any lane without allocations.",
+      "fix": "Project only seats through lanePersonalTarget; unallocated multi-seat lanes produce no personal row.",
+      "regressionTest": "tests/relay-p1-closure.test.ts (REP360_USES_CANONICAL_PERSONAL_TARGET)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U4",
+      "severity": "P2",
+      "title": "Setting a daily target to 0 was silently ignored",
+      "reason": "Editors drop zeros and the writer rejects non-positive lanes; needs an agreed '0 = remove lane' semantic in the atomic writer.",
+      "rootCause": "Editors dropped zero lanes and the writer rejected non-positive targets, so the UI reported success while the old value survived.",
+      "fix": "Explicit zero deactivates an existing lane in the atomic writer; Work Setup sends zero lanes instead of filtering them out. Negative/NaN still rejected.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (ZERO_TARGET_IS_A_REAL_VALUE)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U7",
+      "severity": "P2",
+      "title": "Profiles Table density ignored workspace filters",
+      "reason": "Filter state must be lifted into the workspace or passed to the table.",
+      "rootCause": "The workspace passed the unfiltered profiles array; the table restarted from its own default filters.",
+      "fix": "Pass the already-filtered set to TeamProfilesTable.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (PROFILES_TABLE_HONOURS_WORKSPACE_FILTERS)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U9",
+      "severity": "P2",
+      "title": "Dead Edit control in /admin/people",
+      "reason": "No role editor exists; either build one or remove the control.",
+      "rootCause": "Owner-only button with no action and no role editor anywhere.",
+      "fix": "Control removed; no broken affordance remains.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (DEAD_AFFORDANCES_REMOVED)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U10",
+      "severity": "P2",
+      "title": "/team/[repId] heatmap day cells looked drillable with no drilldown",
+      "reason": "No drilldown exists on that surface; decide between adding one and removing the affordance.",
+      "rootCause": "dayHref pointed at the same page with no date token.",
+      "fix": "Affordance removed; cells are informational.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (DEAD_AFFORDANCES_REMOVED)",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR-U11",
+      "severity": "P2",
+      "title": "Thread-review totals counted a different population than the rows",
+      "reason": "Review count is capped at the scanned page; comment references UI copy that does not exist.",
+      "rootCause": "total used every open conversation while rows and counts used review matches on the scanned page.",
+      "fix": "total now reports the review-match population; stale UI comment corrected.",
+      "regressionTest": "tests/relay-p2-closure.test.ts (THREAD_REVIEW_TOTALS_MATCH)",
+      "status": "FIXED"
+    }
+  ],
+  "unresolved": [
+    {
+      "id": "SR-U2",
+      "severity": "P2",
+      "title": "/leads/new attributes manual leads to the active workspace",
+      "reason": "API supports senderProfileId/revenueIdentityId and Prospect Analyzer sends them; whether manual intake should follow the active workspace is a product decision."
+    },
+    {
+      "id": "SR-U12",
+      "severity": "P2",
+      "title": "Daily-action CTAs for TARGET/COVERAGE/READINESS self-link to /dashboard",
+      "reason": "Need agreed deep-link targets."
+    },
+    {
+      "id": "SR-U13",
+      "severity": "P3",
+      "title": "Duplicate nav hrefs and label divergence across sidebar/palette",
+      "reason": "Cosmetic IA cleanup; preserve deep links."
+    },
+    {
+      "id": "SR-U14",
+      "severity": "P3",
+      "title": "Orphan/no-nav routes and dead exports",
+      "reason": "Cleanup only; no functional impact established."
+    }
+  ],
+  "followUpNote": "Five previously open P1 findings closed by 395425c8; see docs/sprints/relay-final-product-completion/08-OPEN-P1-CLOSURE.md."
+}

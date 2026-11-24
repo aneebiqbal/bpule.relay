@@ -41,10 +41,16 @@ const STAGE_OPTIONS = [
 const UUIDISH = /^[0-9a-f-]{36}$/i
 
 /** One intelligence load per request even though the panel renders twice (pane + drawer). */
-const getIntelligence = cache(async (leadId: string) => {
+const getIntelligence = cache(async (leadId: string, repIds: readonly string[] | null, authorizedIdentityIds: readonly string[] | null) => {
   const ctx = await requireOpsContext()
   const capabilities = await getDatabaseCapabilities(ctx.client)
-  return measureLoader('chats.intelligence', (c) => loadChatIntelligence(c!, ctx.auth, ctx.scope, leadId, { tasks: capabilities.assignedTasks }), ctx.client)
+  // A failed context pane must never take the thread down with it.
+  try {
+    return await measureLoader('chats.intelligence', (c) => loadChatIntelligence(c!, ctx.auth, ctx.scope, leadId, { tasks: capabilities.assignedTasks, repIds, authorizedIdentityIds }), ctx.client)
+  } catch (error) {
+    console.error('chats.intelligence failed:', error)
+    return null
+  }
 })
 
 /**
@@ -92,6 +98,9 @@ export default async function ChatsPage({
     getDatabaseCapabilities(ctx.client),
   ])
   const teamMemberIds = filters.team ? directory?.teams.find((t) => t.id === filters.team)?.memberIds ?? [] : null
+  // The thread context authorizes the same set the queue shows: primary assignments
+  // plus active coverage, so a covering rep never gets "context unavailable".
+  const authorizedIdentityIds = executableIdentities ? executableIdentities.map((identity) => identity.revenueIdentityId) : null
   // Admins (ctx.scope.mode === 'org') get the whole organization; managers get
   // their team; reps get their own queue. Scope is never narrowed client-side.
   const repIds = personalScope
@@ -133,6 +142,9 @@ export default async function ChatsPage({
     age: minAgeHours ? String(minAgeHours) : null,
     cstage: stageGroup,
     limit: limit ? 'all' : null,
+    // A manager's personal scope must survive every tab, filter and
+    // conversation link, or the queue silently widens back to the whole team.
+    scope: rawScope === 'me' ? 'me' : null,
   }
   // Links keep the explicit All view so opening a conversation from All does
   // not snap the queue back to the rep default.
@@ -260,7 +272,7 @@ export default async function ChatsPage({
               {!leadId && queue.rows.length === 0 && hasFilters && view !== 'waiting_me' && (
                 <div className="border-t border-line px-3 py-2">
                   <Link
-                    href={opsHref('/chats', { view: null, rep: null, team: null, profile: null, source: null, q: null, age: null, cstage: null, lead: null })}
+                    href={opsHref('/chats', { view: null, rep: null, team: null, profile: null, source: null, q: null, age: null, cstage: null, limit: null, scope: null, lead: null })}
                     scroll={false}
                     className="text-[12px] font-medium text-orange-ink hover:underline"
                   >
@@ -306,6 +318,8 @@ export default async function ChatsPage({
                   leadId={leadId}
                   row={selectedRow}
                   reps={reps}
+                  repIds={repIds}
+                  authorizedIdentityIds={authorizedIdentityIds}
                   backHref={opsHref('/chats', linkState, { lead: null })}
                   tasksAvailable={capabilities.assignedTasks}
                 />
@@ -327,7 +341,7 @@ export default async function ChatsPage({
           {leadId && (
             <aside aria-label="Lead intelligence pane" tabIndex={0} className="hidden min-h-0 min-w-0 overflow-y-auto rounded-lg border border-line bg-bone-raised xl:block">
               <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
-                <IntelligenceSlot ctx={ctx} leadId={leadId} reps={reps} />
+                <IntelligenceSlot ctx={ctx} leadId={leadId} reps={reps} repIds={repIds} authorizedIdentityIds={authorizedIdentityIds} />
               </Suspense>
             </aside>
           )}
@@ -342,6 +356,8 @@ async function SelectedThread({
   leadId,
   row,
   reps,
+  repIds,
+  authorizedIdentityIds,
   backHref,
   tasksAvailable,
 }: {
@@ -349,10 +365,12 @@ async function SelectedThread({
   leadId: string
   row: ChatQueue['rows'][number] | null
   reps: Array<{ id: string; name: string }>
+  repIds: readonly string[] | null
+  authorizedIdentityIds: readonly string[] | null
   backHref: string
   tasksAvailable: boolean
 }) {
-  const intel = await getIntelligence(leadId)
+  const intel = await getIntelligence(leadId, repIds, authorizedIdentityIds)
   // A lead that is not in the queue and has no intelligence is out of scope.
   // A lead that IS in the queue but failed to load context still opens: the
   // thread must never be taken down by the intelligence pane.
@@ -402,7 +420,7 @@ async function SelectedThread({
         contextAction={
           <div className="xl:hidden">
             <IntelligenceDrawer>
-              <IntelligenceSlot ctx={ctx} leadId={leadId} reps={reps} />
+              <IntelligenceSlot ctx={ctx} leadId={leadId} reps={reps} repIds={repIds} authorizedIdentityIds={authorizedIdentityIds} />
             </IntelligenceDrawer>
           </div>
         }
@@ -412,9 +430,9 @@ async function SelectedThread({
   )
 }
 
-async function IntelligenceSlot({ ctx, leadId, reps }: { ctx: OpsPageContext; leadId: string; reps: Array<{ id: string; name: string }> }) {
+async function IntelligenceSlot({ ctx, leadId, reps, repIds, authorizedIdentityIds }: { ctx: OpsPageContext; leadId: string; reps: Array<{ id: string; name: string }>; repIds: readonly string[] | null; authorizedIdentityIds: readonly string[] | null }) {
   const now = Date.now()
-  const [intel, capabilities] = await Promise.all([getIntelligence(leadId), getDatabaseCapabilities(ctx.client)])
+  const [intel, capabilities] = await Promise.all([getIntelligence(leadId, repIds, authorizedIdentityIds), getDatabaseCapabilities(ctx.client)])
   if (!intel) {
     // A failed context pane must never take the thread down with it.
     return (

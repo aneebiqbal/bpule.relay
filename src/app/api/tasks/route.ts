@@ -56,6 +56,7 @@ export async function POST(request: Request) {
     dueAt,
     leadId,
     profileId,
+    revenueIdentityId,
   } = body as {
     assigneeRepId?: string
     kind?: AssignedTaskKind
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
     dueAt?: string
     leadId?: string
     profileId?: string
+    revenueIdentityId?: string
   }
 
   if (!assigneeRepId || !kind || !title?.trim()) {
@@ -87,6 +89,7 @@ export async function POST(request: Request) {
       dueAt: dueAt ?? null,
       leadId: leadId ?? null,
       profileId: profileId ?? null,
+      revenueIdentityId: revenueIdentityId ?? null,
     })
     return NextResponse.json({ task: toUnifiedTaskFromAssigned(row) }, { status: 201 })
   } catch (err) {

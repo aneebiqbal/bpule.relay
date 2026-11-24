@@ -1,0 +1,2359 @@
+{
+ "generatedAt": "2026-11-24T00:08:14.708Z",
+ "base": "http://localhost:3000",
+ "roles": [
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+  "MEMBER"
+ ],
+ "routes": 24,
+ "viewports": [
+  "390",
+  "768",
+  "1280",
+  "1440"
+ ],
+ "checks": 164,
+ "passed": 164,
+ "failed": 0,
+ "screenshots": 4,
+ "results": [
+  {
+   "role": "OWNER",
+   "route": "home",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "home@390",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "home@768",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "home@1280",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "home@1440",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "inbox",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "inbox@390",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "inbox@768",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "inbox@1280",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "inbox@1440",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "tasks",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "tasks@390",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "tasks@768",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "tasks@1280",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "tasks@1440",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "leads",
+   "path": "/leads",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/leads",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "prospect",
+   "path": "/prospect",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/prospect",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "upwork",
+   "path": "/upwork",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/upwork",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "jobs",
+   "path": "/jobs",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/jobs",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "content",
+   "path": "/content",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/content",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "content-ideas",
+   "path": "/content/ideas",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/content/ideas",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "content-growth",
+   "path": "/content/growth",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/content/growth",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "team",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "team@390",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "team@768",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "team@1280",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "team@1440",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "team-people",
+   "path": "/team/people",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team/people",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "team-profiles",
+   "path": "/team/profiles",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team/profiles",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "team-performance",
+   "path": "/team/performance",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team/performance",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "reports-sales",
+   "path": "/reports/sales",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/reports/sales",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "reports-pipeline",
+   "path": "/reports/pipeline",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/reports/pipeline",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "reports-revenue",
+   "path": "/reports/revenue",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/reports/revenue",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "reports-activity",
+   "path": "/reports/activity",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/reports/activity",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "settings",
+   "path": "/settings",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/settings",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "notifications",
+   "path": "/notifications",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/notifications",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "admin-targets",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "admin-targets@390",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "admin-targets@768",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "admin-targets@1280",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "admin-targets@1440",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "OWNER",
+   "route": "admin-people",
+   "path": "/admin/people",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/people",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "admin-control-center",
+   "path": "/admin/control-center",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/control-center",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "OWNER",
+   "route": "admin-system",
+   "path": "/admin/system",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/system",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "home",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "home@390",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "home@768",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "home@1280",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "home@1440",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "inbox",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "inbox@390",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "inbox@768",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "inbox@1280",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "inbox@1440",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "tasks",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "tasks@390",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "tasks@768",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "tasks@1280",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "tasks@1440",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "leads",
+   "path": "/leads",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/leads",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "prospect",
+   "path": "/prospect",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/prospect",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "upwork",
+   "path": "/upwork",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/upwork",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "jobs",
+   "path": "/jobs",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/jobs",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "content",
+   "path": "/content",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/content",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "content-ideas",
+   "path": "/content/ideas",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/content/ideas",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "content-growth",
+   "path": "/content/growth",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/content/growth",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "team",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "team@390",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "team@768",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "team@1280",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "team@1440",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "team-people",
+   "path": "/team/people",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team/people",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "team-profiles",
+   "path": "/team/profiles",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team/profiles",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "team-performance",
+   "path": "/team/performance",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team/performance",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "reports-sales",
+   "path": "/reports/sales",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/reports/sales",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "reports-pipeline",
+   "path": "/reports/pipeline",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/reports/pipeline",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "reports-revenue",
+   "path": "/reports/revenue",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/reports/revenue",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "reports-activity",
+   "path": "/reports/activity",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/reports/activity",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "settings",
+   "path": "/settings",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/settings",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "notifications",
+   "path": "/notifications",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/notifications",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "admin-targets",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "admin-targets@390",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "admin-targets@768",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "admin-targets@1280",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "admin-targets@1440",
+   "path": "/admin/targets",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "ADMIN",
+   "route": "admin-people",
+   "path": "/admin/people",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/people",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "admin-control-center",
+   "path": "/admin/control-center",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/control-center",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "ADMIN",
+   "route": "admin-system",
+   "path": "/admin/system",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/admin/system",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "home",
+   "path": "/dashboard",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "home@390",
+   "path": "/dashboard",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "home@768",
+   "path": "/dashboard",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "home@1280",
+   "path": "/dashboard",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "home@1440",
+   "path": "/dashboard",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "inbox",
+   "path": "/chats",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/chats",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "inbox@390",
+   "path": "/chats",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "inbox@768",
+   "path": "/chats",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "inbox@1280",
+   "path": "/chats",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "inbox@1440",
+   "path": "/chats",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "tasks",
+   "path": "/tasks",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/tasks",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "tasks@390",
+   "path": "/tasks",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "tasks@768",
+   "path": "/tasks",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "tasks@1280",
+   "path": "/tasks",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "tasks@1440",
+   "path": "/tasks",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "leads",
+   "path": "/leads",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/leads",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "prospect",
+   "path": "/prospect",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/prospect",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "upwork",
+   "path": "/upwork",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/upwork",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "jobs",
+   "path": "/jobs",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/jobs",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "content",
+   "path": "/content",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/content",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "content-ideas",
+   "path": "/content/ideas",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/content/ideas",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "content-growth",
+   "path": "/content/growth",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/content/growth",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "team",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "team@390",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "team@768",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "team@1280",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "team@1440",
+   "path": "/team",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "MANAGER",
+   "route": "team-people",
+   "path": "/team/people",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team/people",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "team-profiles",
+   "path": "/team/profiles",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team/profiles",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "team-performance",
+   "path": "/team/performance",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/team/performance",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "reports-sales",
+   "path": "/reports/sales",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/reports/sales",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "reports-pipeline",
+   "path": "/reports/pipeline",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/reports/pipeline",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "reports-revenue",
+   "path": "/reports/revenue",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/reports/revenue",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "reports-activity",
+   "path": "/reports/activity",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/reports/activity",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "settings",
+   "path": "/settings",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/settings",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "notifications",
+   "path": "/notifications",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/notifications",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "admin-targets",
+   "path": "/admin/targets",
+   "expected": "no",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "title": "Relay — Know what to do next",
+   "denied": true,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "admin-people",
+   "path": "/admin/people",
+   "expected": "no",
+   "status": 200,
+   "finalPath": "/admin/people",
+   "title": "Relay — Know what to do next",
+   "denied": true,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "admin-control-center",
+   "path": "/admin/control-center",
+   "expected": "no",
+   "status": 200,
+   "finalPath": "/admin/control-center",
+   "title": "Relay — Know what to do next",
+   "denied": true,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MANAGER",
+   "route": "admin-system",
+   "path": "/admin/system",
+   "expected": "no",
+   "status": 200,
+   "finalPath": "/admin/system",
+   "title": "Relay — Know what to do next",
+   "denied": true,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "home",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "home@390",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "home@768",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "home@1280",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "home@1440",
+   "path": "/dashboard",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/dashboard",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "inbox",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "inbox@390",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "inbox@768",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "inbox@1280",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "inbox@1440",
+   "path": "/chats",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/chats",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "tasks",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "tasks@390",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 390,
+    "innerWidth": 390
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "tasks@768",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 768,
+    "innerWidth": 768
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "tasks@1280",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1280,
+    "innerWidth": 1280
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "tasks@1440",
+   "path": "/tasks",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/tasks",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": [],
+   "overflow": {
+    "scrollWidth": 1440,
+    "innerWidth": 1440
+   }
+  },
+  {
+   "role": "MEMBER",
+   "route": "leads",
+   "path": "/leads",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/leads",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "prospect",
+   "path": "/prospect",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/prospect",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "upwork",
+   "path": "/upwork",
+   "expected": "yes",
+   "status": 200,
+   "finalPath": "/upwork",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "jobs",
+   "path": "/jobs",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/jobs",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "content",
+   "path": "/content",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/content",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "content-ideas",
+   "path": "/content/ideas",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/content/ideas",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "content-growth",
+   "path": "/content/growth",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/content/growth",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "team",
+   "path": "/team",
+   "expected": "no",
+   "status": 200,
+   "finalPath": "/team",
+   "title": "Relay — Know what to do next",
+   "denied": true,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "team-people",
+   "path": "/team/people",
+   "expected": "no",
+   "status": 200,
+   "finalPath": "/team/people",
+   "title": "Relay — Know what to do next",
+   "denied": true,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "team-profiles",
+   "path": "/team/profiles",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/team/profiles",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "team-performance",
+   "path": "/team/performance",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/team/performance",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "reports-sales",
+   "path": "/reports/sales",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/reports/sales",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "reports-pipeline",
+   "path": "/reports/pipeline",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/reports/pipeline",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "reports-revenue",
+   "path": "/reports/revenue",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/reports/revenue",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "reports-activity",
+   "path": "/reports/activity",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/reports/activity",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "settings",
+   "path": "/settings",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/settings",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "notifications",
+   "path": "/notifications",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/notifications",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "admin-targets",
+   "path": "/admin/targets",
+   "expected": "no",
+   "status": 200,
+   "finalPath": "/admin/targets",
+   "title": "Relay — Know what to do next",
+   "denied": true,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "admin-people",
+   "path": "/admin/people",
+   "expected": "no",
+   "status": 200,
+   "finalPath": "/admin/people",
+   "title": "Relay — Know what to do next",
+   "denied": true,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "admin-control-center",
+   "path": "/admin/control-center",
+   "expected": "no",
+   "status": 200,
+   "finalPath": "/admin/control-center",
+   "title": "Relay — Know what to do next",
+   "denied": true,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  },
+  {
+   "role": "MEMBER",
+   "route": "admin-system",
+   "path": "/admin/system",
+   "expected": "?",
+   "status": 200,
+   "finalPath": "/admin/system",
+   "title": "Relay — Know what to do next",
+   "denied": false,
+   "passed": true,
+   "errors": [],
+   "serverErrors": []
+  }
+ ]
+}

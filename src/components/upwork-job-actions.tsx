@@ -223,7 +223,7 @@ export function UpworkJobActions({
   }, [jobId, proposal, screeningAnswers, connectsSpent, boostConnects, generationMode, activeProfileId, actingRepId, router])
 
   const followUp = useCallback(async () => {
-    const text = window.prompt('Follow-up message (sent on Upwork):')
+    const text = window.prompt('Follow-up message (Relay records it as history; send it on Upwork yourself):')
     if (!text?.trim()) return
     setBusy(true)
     setError(null)

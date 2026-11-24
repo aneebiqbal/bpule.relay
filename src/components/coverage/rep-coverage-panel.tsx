@@ -68,6 +68,8 @@ export function RepCoveragePanel({
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // "Complete" is attempted first; only a real shortfall offers the incomplete path.
+  const [shortfall, setShortfall] = useState(false)
   const [until, setUntil] = useState('')
   const [pendingProfile, setPendingProfile] = useState<CoverageProfileResult | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
@@ -78,6 +80,7 @@ export function RepCoveragePanel({
   async function call(key: string, init: { url: string; method: string; body?: unknown }) {
     setBusy(key)
     setError(null)
+    setShortfall(false)
     try {
       const res = await fetch(init.url, {
         method: init.method,
@@ -87,6 +90,7 @@ export function RepCoveragePanel({
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(body.error ?? 'Something went wrong. Please try again.')
+        setShortfall(Boolean(body.error))
         return
       }
       router.refresh()
@@ -261,10 +265,20 @@ export function RepCoveragePanel({
                 <button
                   type="button"
                   disabled={busy !== null}
-                  onClick={() => call('close', { url: '/api/rep/day/close', method: 'POST', body: { mode: 'incomplete' } })}
+                  onClick={() => call('close', { url: '/api/rep/day/close', method: 'POST', body: { mode: 'complete' } })}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-bone-raised px-3 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-bone disabled:opacity-60"
                 >
                   End day
+                </button>
+              )}
+              {shortfall && (
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => call('close', { url: '/api/rep/day/close', method: 'POST', body: { mode: 'incomplete' } })}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-status-danger/40 bg-bone-raised px-3 py-2 text-[13px] font-medium text-status-danger transition-colors hover:bg-bone disabled:opacity-60"
+                >
+                  End day anyway
                 </button>
               )}
             </div>

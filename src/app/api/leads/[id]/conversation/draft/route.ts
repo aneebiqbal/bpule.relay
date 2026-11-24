@@ -3,6 +3,7 @@ import { createScoutStore } from '@/lib/store'
 import { safeErrorResponse } from '@/lib/errors'
 import { saveDraft } from '@/lib/conversation/service'
 import type { ComposeIntent } from '@/lib/conversation/types'
+import { resolveConversationAuthz } from '@/lib/operations/conversation-authz'
 
 const INTENTS: ComposeIntent[] = ['connection', 'dm', 'followup', 'reply', 'custom']
 
@@ -24,7 +25,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
   try {
-    const lead = await store.getLead(id)
+    const authz = await resolveConversationAuthz(store.getSupabaseClient())
+    if (!authz) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+    const lead = await store.getLead(id, authz)
     if (!lead) return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
     const draft = await saveDraft(store, id, text, intent)
     return NextResponse.json({ draft })

@@ -26,12 +26,14 @@ export function TeamCommandCenter({
   profiles,
   identities,
   canManage,
+  canManageTargets,
 }: {
   data: CommandCenterData
   reps: Array<{ id: string; name: string }>
   profiles: Array<{ id: string; name: string }>
   identities: Array<{ id: string; profileId: string; channel: string; name: string }>
   canManage: boolean
+  canManageTargets: boolean
 }) {
   const [query, setQuery] = useState('')
   const [channel, setChannel] = useState('')
@@ -345,6 +347,7 @@ export function TeamCommandCenter({
             profiles={profiles}
             reps={reps}
             identities={identities}
+            canManageTargets={canManageTargets}
           />
         </>
       )}

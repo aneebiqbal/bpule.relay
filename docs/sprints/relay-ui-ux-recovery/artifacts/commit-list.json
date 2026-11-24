@@ -1,0 +1,32 @@
+{
+  "branch": "feat/relay-job-intelligence-v2",
+  "baseSha": "5bcb0f9d6d5d80c73d1b608fdf10095b95224cc2",
+  "commits": [
+    {
+      "sha": "23231c65",
+      "title": "fix(relay): align Inbox authority, Work Setup CAS, and rep/admin workflows",
+      "scope": "src/**",
+      "defects": ["SR-01", "SR-02", "SR-03", "SR-04", "SR-05", "SR-06", "SR-07", "SR-08", "SR-09", "SR-10", "SR-11", "SR-12", "SR-13", "SR-14", "SR-15", "SR-16"]
+    },
+    {
+      "sha": "65aab262",
+      "title": "test(relay): UI-recovery regression contracts and sprint QA harnesses",
+      "scope": "tests/relay-ui-recovery.test.ts, tests/inbox-v4-rebuild-contracts.test.ts, scripts/qa/sprint-*.mjs"
+    },
+    {
+      "sha": "16379f78",
+      "title": "docs(sprint): relay UI/UX recovery deliverables and evidence",
+      "scope": "docs/sprints/relay-ui-ux-recovery/**"
+    },
+    {
+      "sha": "3b38864c",
+      "title": "docs(sprint): release certification, commit list and remaining blockers",
+      "scope": "docs/sprints/relay-ui-ux-recovery/**"
+    }
+  ],
+  "codeCandidateSha": "23231c65",
+  "note": "Documentation commits follow the code candidate; run `git log --oneline 5bcb0f9d..HEAD` for the exact final tip.",
+  "pushed": false,
+  "merged": false,
+  "deployed": false
+}

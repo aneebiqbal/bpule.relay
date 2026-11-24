@@ -1,0 +1,21 @@
+ok   manager signs in — http://localhost:3000/dashboard
+ok   manager queue shows a teammate-owned conversation
+ok   manager queue shows a member-owned conversation
+ok   manager queue does not leak org B data
+ok   manager opens the teammate thread
+ok   manager sees the message history
+ok   intelligence pane did not fail
+ok   composer names a sending profile
+ok   refresh keeps the selected conversation
+ok   no page errors on the manager journey
+ok   member sees their own conversations
+ok   member does not see an identity with no seat or coverage
+ok   member API request for an out-of-scope conversation is denied — HTTP 404
+ok   cross-org conversation request is denied — HTTP 404
+ok   suspended account is refused — http://localhost:3000/login
+ok   admin Work Setup renders
+ok   Work Setup save succeeds with the current revision — HTTP 200 
+ok   stale revision produces HTTP 409 — HTTP 409
+ok   over-target allocation is rejected — HTTP 400
+
+19 passed, 0 failed

@@ -1,0 +1,32 @@
+{
+ "generatedAt": "2026-11-23T23:37:20.789Z",
+ "database": "postgres://mac@127.0.0.1:5433/relay_staging_local",
+ "migrationsTotal": 202,
+ "applied": 198,
+ "skipped": [
+  {
+   "file": "0044_seed_revenue_identities.sql",
+   "reason": "demo identities bound to production-era reps (Aneeb/Hassan) absent from a clean database"
+  },
+  {
+   "file": "0079_seed_client_contracts.sql",
+   "reason": "depends on profile 60000000-…-0010 created by 0044"
+  },
+  {
+   "file": "0080_seed_portfolio_projects.sql",
+   "reason": "depends on profile 60000000-…-0010 created by 0044"
+  },
+  {
+   "file": "20261110080000_responsibility_reconciliation_v49.sql",
+   "reason": "reconciles profiles that do not exist before the synthetic fixture load"
+  }
+ ],
+ "failed": [],
+ "objects": {
+  "organizations": 2,
+  "reps": 4,
+  "profiles": 12,
+  "revenueIdentities": 0,
+  "authUsers": 0
+ }
+}

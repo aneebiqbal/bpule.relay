@@ -1,0 +1,9 @@
+{
+ "base": "http://localhost:3000",
+ "total": 112,
+ "ok": 31,
+ "authGated": 81,
+ "nonAuthHardFailures": [],
+ "crashing": [],
+ "withConsole": []
+}

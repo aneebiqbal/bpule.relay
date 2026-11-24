@@ -7,6 +7,7 @@ import type { ComposeIntent } from '@/lib/conversation/types'
 import { captureSent, findLatestSampleForLead } from '@/lib/dataset/service'
 import { createServiceSupabase } from '@/lib/supabase/service'
 import { getAuthContext } from '@/lib/auth/organization'
+import { resolveConversationAuthz } from '@/lib/operations/conversation-authz'
 
 export const maxDuration = 60
 
@@ -44,7 +45,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
   try {
-    const outcome = await logSentMessage(store, id, text, intent, body.idempotencyKey ?? null)
+    const authz = await resolveConversationAuthz(store.getSupabaseClient())
+    if (!authz) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+    const outcome = await logSentMessage(store, id, text, intent, body.idempotencyKey ?? null, authz)
     if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status ?? 400 })
 
     // Dataset: capture SENT event (best-effort, never breaks send).
@@ -56,7 +59,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const sampleId = auth ? await findLatestSampleForLead(datasetClient, auth.orgId, id) : null
     if (sampleId) void captureSent(datasetClient, sampleId, sentText, repId).catch(() => {})
 
-    const loaded = await loadConversation(store, id)
+    const loaded = await loadConversation(store, id, authz)
     return NextResponse.json(loaded?.view ?? { ok: true })
   } catch (error) {
     // Lock / follow-up-not-due rules surface as readable errors.

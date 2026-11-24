@@ -56,6 +56,7 @@ export default async function TeamPage() {
       profiles={profiles}
       identities={identities}
       canManage={ctx.auth.isAdmin || ctx.auth.isOwner || ctx.auth.capabilities.has('MANAGE_REVENUE_IDENTITIES')}
+      canManageTargets={ctx.auth.capabilities.has('MANAGE_TEAM_TARGETS')}
     />
   )
 }

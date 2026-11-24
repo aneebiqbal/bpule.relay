@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
-import { getAuthContext } from '@/lib/auth/organization'
+import { can, getAuthContext } from '@/lib/auth/organization'
 import { createServerSupabase } from '@/lib/supabase/server'
 import { loadProfileOperatingModel } from '@/lib/profiles/operating-model'
 import { loadCoveragePlan } from '@/lib/coverage/load'
@@ -72,9 +72,11 @@ export default async function TeamProfileDetailPage({
     .eq('organization_id', ctx.orgId)
     .limit(2000)
 
-  // Coverage actions are admin-only and need the derived plan; managers and reps
-  // see the same channel status without paying for it.
-  const canManage = ctx.isAdmin || ctx.isOwner
+  // People, coverage and knowledge writers accept the same capability as the
+  // bulk assignment writer (MANAGE_REVENUE_IDENTITIES); only the target editor
+  // is gated on MANAGE_TEAM_TARGETS.
+  const canManage = ctx.isAdmin || ctx.isOwner || can(ctx, 'MANAGE_REVENUE_IDENTITIES')
+  const canManageTargets = can(ctx, 'MANAGE_TEAM_TARGETS')
   const coverage = canManage ? await loadCoveragePlan(ctx.orgId) : null
   const coveragePending: Record<
     string,
@@ -138,6 +140,7 @@ export default async function TeamProfileDetailPage({
     <TeamProfileDetailView
       model={model}
       canManage={canManage}
+      canManageTargets={canManageTargets}
       reps={(repRows ?? []).map((rep) => ({ id: rep.id, name: rep.name }))}
       coveragePending={coveragePending}
       activeCoverage={activeCoverage}

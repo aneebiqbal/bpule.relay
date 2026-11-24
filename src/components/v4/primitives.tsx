@@ -8,10 +8,12 @@
  * drop shadows, and a single restrained orange accent. Composition carries
  * hierarchy; nothing here is decorative.
  */
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, RefreshCw, X } from 'lucide-react'
 import { cn } from 'cn'
+
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 export type V4Tone = 'neutral' | 'danger' | 'warning' | 'success' | 'info'
 export type V4Priority = 'critical' | 'high' | 'normal' | 'watch'
@@ -358,11 +360,62 @@ export function V4Drawer({
   children: ReactNode
   width?: string
 }) {
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const restoreRef = useRef<HTMLElement | null>(null)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  // Modal behaviour: Escape closes, Tab stays inside, background scroll locks and
+  // focus returns to the trigger on close.
+  useEffect(() => {
+    if (!open) return
+    restoreRef.current = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const panel = panelRef.current
+    const focusables = () =>
+      panel ? Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)) : []
+    ;(focusables()[0] ?? panel)?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const items = focusables()
+      if (items.length === 0) {
+        event.preventDefault()
+        panel?.focus()
+        return
+      }
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onKeyDown, true)
+      restoreRef.current?.focus?.()
+    }
+  }, [open])
+
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
       <div className="absolute inset-0 bg-ink/25" aria-hidden onClick={onClose} />
       <div
+        ref={panelRef}
+        tabIndex={-1}
         className={cn(
           'absolute inset-y-0 right-0 flex w-full flex-col bg-bone shadow-2xl ring-1 ring-line',
           width,
