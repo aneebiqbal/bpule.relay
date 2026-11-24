@@ -98,9 +98,12 @@ async function main() {
   const repIds = {}
   for (const [key, n, name, legacy, orgRole] of people) {
     const org = key.startsWith('b') ? ORG_B : ORG_A
-    const rid = await rep(org, n, name, legacy)
-    repIds[key] = rid
+    const rid = id(org === ORG_A ? '0a' : '0b', n)
+    // The auth account must exist first: reps.auth_user_id is a real FK to the
+    // Better Auth user table.
     await user(`${key}.stg@${key.startsWith('b') ? 'org-b' : 'org-a'}.test`, name, rid, { banned: key === 'suspended' })
+    await rep(org, n, name, legacy)
+    repIds[key] = rid
     await db.query(
       `insert into organization_roles (id, organization_id, person_id, role, granted_by, created_at, updated_at)
        values ($1,$2,$3,$4,$5,now(),now())
@@ -231,6 +234,29 @@ async function main() {
     `insert into leads (id, organization_id, owner_rep_id, company, contact_name, status, source, archived, is_test, created_at)
      values ($1,$2,$3,'Foreign Co','Foreign Contact','contacted','linkedin',false,false,now()) on conflict (id) do nothing`,
     [id('1a', 99), ORG_B, repIds.bmember],
+  )
+  // Org B also needs its own identity and conversation state so RLS can be shown
+  // to scope them (otherwise org A would trivially see "everything").
+  const pB = id('0d', 20)
+  const iB = id('0e', 20)
+  await db.query(
+    `insert into profiles (id, rep_id, platform, label, organization_id, person_id, display_name, readiness)
+     values ($1,$2,'linkedin','B LinkedIn',$3,$1,'B profile','ready') on conflict (id) do nothing`,
+    [pB, repIds.bmember, ORG_B],
+  )
+  await db.query(
+    `insert into revenue_identities (id, organization_id, slug, identity_name, channel, profile_id, status, created_at, updated_at)
+     values ($1,$2,'b-linkedin','B LinkedIn','linkedin',$3,'active',now(),now()) on conflict (id) do nothing`,
+    [iB, ORG_B, pB],
+  )
+  await db.query(
+    `update leads set revenue_identity_id = $1 where id = $2`,
+    [iB, id('1a', 99)],
+  )
+  await db.query(
+    `insert into conversation_states (organization_id, lead_id, stage, last_reply_at, memory, created_at, updated_at)
+     values ($1,$2,'replied',now(),'{}',now(),now()) on conflict (lead_id) do nothing`,
+    [ORG_B, id('1a', 99)],
   )
 
   // Tasks for the member.

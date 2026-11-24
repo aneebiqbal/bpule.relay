@@ -1,0 +1,176 @@
+OWNER   /dashboard           p50=59ms p95=65ms
+OWNER   /chats               p50=39ms p95=40ms
+OWNER   /tasks               p50=30ms p95=33ms
+OWNER   /leads               p50=33ms p95=44ms
+OWNER   /prospect            p50=27ms p95=33ms
+OWNER   /jobs                p50=29ms p95=31ms
+OWNER   /admin/targets       p50=28ms p95=32ms
+OWNER   /team                p50=38ms p95=43ms
+OWNER   /settings            p50=31ms p95=33ms
+ADMIN   /dashboard           p50=39ms p95=44ms
+ADMIN   /chats               p50=35ms p95=35ms
+ADMIN   /tasks               p50=28ms p95=30ms
+ADMIN   /leads               p50=32ms p95=33ms
+ADMIN   /prospect            p50=27ms p95=29ms
+ADMIN   /jobs                p50=25ms p95=29ms
+ADMIN   /admin/targets       p50=29ms p95=30ms
+ADMIN   /team                p50=37ms p95=42ms
+ADMIN   /settings            p50=34ms p95=48ms
+MANAGER /dashboard           p50=30ms p95=35ms
+MANAGER /chats               p50=38ms p95=40ms
+MANAGER /tasks               p50=33ms p95=39ms
+MANAGER /leads               p50=36ms p95=47ms
+MANAGER /prospect            p50=26ms p95=35ms
+MANAGER /jobs                p50=28ms p95=31ms
+MANAGER /admin/targets       p50=28ms p95=37ms
+MANAGER /team                p50=34ms p95=42ms
+MANAGER /settings            p50=32ms p95=43ms
+{
+ "generatedAt": "2026-11-24T00:11:58.572Z",
+ "base": "http://localhost:3002",
+ "samplesPerRoute": 5,
+ "caveat": "Local disposable PostgreSQL, single concurrent user. Not a production benchmark.",
+ "results": {
+  "OWNER": {
+   "/dashboard": {
+    "p50": 59,
+    "p95": 65,
+    "n": 5
+   },
+   "/chats": {
+    "p50": 39,
+    "p95": 40,
+    "n": 5
+   },
+   "/tasks": {
+    "p50": 30,
+    "p95": 33,
+    "n": 5
+   },
+   "/leads": {
+    "p50": 33,
+    "p95": 44,
+    "n": 5
+   },
+   "/prospect": {
+    "p50": 27,
+    "p95": 33,
+    "n": 5
+   },
+   "/jobs": {
+    "p50": 29,
+    "p95": 31,
+    "n": 5
+   },
+   "/admin/targets": {
+    "p50": 28,
+    "p95": 32,
+    "n": 5
+   },
+   "/team": {
+    "p50": 38,
+    "p95": 43,
+    "n": 5
+   },
+   "/settings": {
+    "p50": 31,
+    "p95": 33,
+    "n": 5
+   }
+  },
+  "ADMIN": {
+   "/dashboard": {
+    "p50": 39,
+    "p95": 44,
+    "n": 5
+   },
+   "/chats": {
+    "p50": 35,
+    "p95": 35,
+    "n": 5
+   },
+   "/tasks": {
+    "p50": 28,
+    "p95": 30,
+    "n": 5
+   },
+   "/leads": {
+    "p50": 32,
+    "p95": 33,
+    "n": 5
+   },
+   "/prospect": {
+    "p50": 27,
+    "p95": 29,
+    "n": 5
+   },
+   "/jobs": {
+    "p50": 25,
+    "p95": 29,
+    "n": 5
+   },
+   "/admin/targets": {
+    "p50": 29,
+    "p95": 30,
+    "n": 5
+   },
+   "/team": {
+    "p50": 37,
+    "p95": 42,
+    "n": 5
+   },
+   "/settings": {
+    "p50": 34,
+    "p95": 48,
+    "n": 5
+   }
+  },
+  "MANAGER": {
+   "/dashboard": {
+    "p50": 30,
+    "p95": 35,
+    "n": 5
+   },
+   "/chats": {
+    "p50": 38,
+    "p95": 40,
+    "n": 5
+   },
+   "/tasks": {
+    "p50": 33,
+    "p95": 39,
+    "n": 5
+   },
+   "/leads": {
+    "p50": 36,
+    "p95": 47,
+    "n": 5
+   },
+   "/prospect": {
+    "p50": 26,
+    "p95": 35,
+    "n": 5
+   },
+   "/jobs": {
+    "p50": 28,
+    "p95": 31,
+    "n": 5
+   },
+   "/admin/targets": {
+    "p50": 28,
+    "p95": 37,
+    "n": 5
+   },
+   "/team": {
+    "p50": 34,
+    "p95": 42,
+    "n": 5
+   },
+   "/settings": {
+    "p50": 32,
+    "p95": 43,
+    "n": 5
+   }
+  }
+ }
+}

@@ -1,0 +1,202 @@
+ok   harness connects as the runtime role, not a superuser — {"current_user":"relay_app","rolsuper":false}
+ok   org A sees only its own leads — 5/6
+ok   org B sees only its own leads — 1/6
+ok   org A and org B lead sets are disjoint — 5+1 vs 6
+ok   org A conversation states are org-scoped — 5/6
+ok   org A revenue identities are org-scoped — 3/4
+ok   direct cross-org lead id is invisible — rows=0
+ok   cross-org UPDATE affects zero rows — rowCount=0
+ok   cross-org DELETE affects zero rows — rowCount=0
+ok   forged organization_id INSERT is blocked by RLS — blocked-by-rls
+ok   forged row was not written — rows=0
+ok   unknown user id sees nothing — rows=0
+ok   empty identity sees nothing — rows=0
+ok   identity switch inside a transaction changes scope — {"before":5,"after":1}
+ok   conversation_states has RLS enabled and policies — rls=true policies=3
+ok   daily_target_plans has RLS enabled and policies — rls=true policies=4
+ok   leads has RLS enabled and policies — rls=true policies=4
+ok   profile_coverage has RLS enabled and policies — rls=true policies=4
+ok   revenue_identities has RLS enabled and policies — rls=true policies=4
+ok   auth.uid derives identity without touching relations — auth
+ok   current_rep_id is SECURITY DEFINER — owner=mac
+ok   current_rep_id pins search_path — search_path=public
+ok   current_org_id is SECURITY DEFINER — owner=mac
+ok   current_org_id pins search_path — search_path=public
+ok   is_org_admin is SECURITY DEFINER — owner=mac
+ok   is_org_admin pins search_path — search_path=public
+ok   a seeded account exists for the writer test — A LinkedIn
+ok   first write with the current revision succeeds — {"ok":true,"identityId":"0e000000-4000-8000-0000-000000000001","profileId":"0d000000-4000-8000-0000-000000000001","primaryRepId":"0a000000-4000-8000-0000-000000
+ok   replayed stale revision returns CONFLICT — {"ok":false,"code":"CONFLICT","error":"This account was changed by someone else. Review the current values and retry.","revision":"2026-11-24 05:00:44.906+05","
+ok   account remains intact after the conflict — 2/2 lanes
+ok   canonical writer refuses an identity owned by another organization — {"ok":false,"error":"Account not found in this organization.","identityId":"","profileId":null,"primaryRepId":"","operatorIds":[],"backupIds":[],"targetsWritten
+{
+ "generatedAt": "2026-11-24T00:00:44.909Z",
+ "target": "postgres://mac@127.0.0.1:5433/relay_staging_local",
+ "role": "relay_app (member of authenticated)",
+ "checks": 31,
+ "passed": 31,
+ "failed": 0,
+ "results": [
+  {
+   "name": "harness connects as the runtime role, not a superuser",
+   "ok": true,
+   "detail": "{\"current_user\":\"relay_app\",\"rolsuper\":false}"
+  },
+  {
+   "name": "org A sees only its own leads",
+   "ok": true,
+   "detail": "5/6"
+  },
+  {
+   "name": "org B sees only its own leads",
+   "ok": true,
+   "detail": "1/6"
+  },
+  {
+   "name": "org A and org B lead sets are disjoint",
+   "ok": true,
+   "detail": "5+1 vs 6"
+  },
+  {
+   "name": "org A conversation states are org-scoped",
+   "ok": true,
+   "detail": "5/6"
+  },
+  {
+   "name": "org A revenue identities are org-scoped",
+   "ok": true,
+   "detail": "3/4"
+  },
+  {
+   "name": "direct cross-org lead id is invisible",
+   "ok": true,
+   "detail": "rows=0"
+  },
+  {
+   "name": "cross-org UPDATE affects zero rows",
+   "ok": true,
+   "detail": "rowCount=0"
+  },
+  {
+   "name": "cross-org DELETE affects zero rows",
+   "ok": true,
+   "detail": "rowCount=0"
+  },
+  {
+   "name": "forged organization_id INSERT is blocked by RLS",
+   "ok": true,
+   "detail": "blocked-by-rls"
+  },
+  {
+   "name": "forged row was not written",
+   "ok": true,
+   "detail": "rows=0"
+  },
+  {
+   "name": "unknown user id sees nothing",
+   "ok": true,
+   "detail": "rows=0"
+  },
+  {
+   "name": "empty identity sees nothing",
+   "ok": true,
+   "detail": "rows=0"
+  },
+  {
+   "name": "identity switch inside a transaction changes scope",
+   "ok": true,
+   "detail": "{\"before\":5,\"after\":1}"
+  },
+  {
+   "name": "conversation_states has RLS enabled and policies",
+   "ok": true,
+   "detail": "rls=true policies=3"
+  },
+  {
+   "name": "daily_target_plans has RLS enabled and policies",
+   "ok": true,
+   "detail": "rls=true policies=4"
+  },
+  {
+   "name": "leads has RLS enabled and policies",
+   "ok": true,
+   "detail": "rls=true policies=4"
+  },
+  {
+   "name": "profile_coverage has RLS enabled and policies",
+   "ok": true,
+   "detail": "rls=true policies=4"
+  },
+  {
+   "name": "revenue_identities has RLS enabled and policies",
+   "ok": true,
+   "detail": "rls=true policies=4"
+  },
+  {
+   "name": "auth.uid derives identity without touching relations",
+   "ok": true,
+   "detail": "auth"
+  },
+  {
+   "name": "current_rep_id is SECURITY DEFINER",
+   "ok": true,
+   "detail": "owner=mac"
+  },
+  {
+   "name": "current_rep_id pins search_path",
+   "ok": true,
+   "detail": [
+    "search_path=public"
+   ]
+  },
+  {
+   "name": "current_org_id is SECURITY DEFINER",
+   "ok": true,
+   "detail": "owner=mac"
+  },
+  {
+   "name": "current_org_id pins search_path",
+   "ok": true,
+   "detail": [
+    "search_path=public"
+   ]
+  },
+  {
+   "name": "is_org_admin is SECURITY DEFINER",
+   "ok": true,
+   "detail": "owner=mac"
+  },
+  {
+   "name": "is_org_admin pins search_path",
+   "ok": true,
+   "detail": [
+    "search_path=public"
+   ]
+  },
+  {
+   "name": "a seeded account exists for the writer test",
+   "ok": true,
+   "detail": "A LinkedIn"
+  },
+  {
+   "name": "first write with the current revision succeeds",
+   "ok": true,
+   "detail": "{\"ok\":true,\"identityId\":\"0e000000-4000-8000-0000-000000000001\",\"profileId\":\"0d000000-4000-8000-0000-000000000001\",\"primaryRepId\":\"0a000000-4000-8000-0000-000000"
+  },
+  {
+   "name": "replayed stale revision returns CONFLICT",
+   "ok": true,
+   "detail": "{\"ok\":false,\"code\":\"CONFLICT\",\"error\":\"This account was changed by someone else. Review the current values and retry.\",\"revision\":\"2026-11-24 05:00:44.906+05\",\""
+  },
+  {
+   "name": "account remains intact after the conflict",
+   "ok": true,
+   "detail": "2/2 lanes"
+  },
+  {
+   "name": "canonical writer refuses an identity owned by another organization",
+   "ok": true,
+   "detail": "{\"ok\":false,\"error\":\"Account not found in this organization.\",\"identityId\":\"\",\"profileId\":null,\"primaryRepId\":\"\",\"operatorIds\":[],\"backupIds\":[],\"targetsWritten"
+  }
+ ]
+}

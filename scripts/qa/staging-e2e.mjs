@@ -47,11 +47,12 @@ const browser = await chromium.launch()
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await ctx.newPage()
   const errors = []
-  const instrumentationNoise = []
+  const unattributed = []
   page.on('pageerror', (e) => {
-    // Known perf-instrumentation defect: measure() with a negative timestamp on
-    // TodayPage. Recorded, not hidden — see 04-DEFECTS-FOUND-AND-FIXED.md.
-    if (/negative time stamp/.test(e.message)) instrumentationNoise.push(e.message)
+    // Observed intermittently in dev: a performance.measure() with a negative
+    // timestamp attributed to "TodayPage". No such call exists in src/, so it is
+    // recorded with its stack rather than assumed to be ours.
+    if (/negative time stamp/.test(e.message)) unattributed.push({ message: e.message, stack: e.stack })
     else errors.push(e.message)
   })
   const url = await signIn(page, 'manager.stg@org-a.test')
@@ -76,6 +77,7 @@ const browser = await chromium.launch()
   await page.waitForTimeout(800)
   check('refresh keeps the selected conversation', (await page.locator('body').innerText()).includes('Manager Client'))
   check('no page errors on the manager journey', errors.length === 0, errors.slice(0, 2).join(' | '))
+  if (unattributed.length > 0) console.log(`note: ${unattributed.length} unattributed performance.measure error(s)\n${unattributed[0].stack ?? ''}`)
   await ctx.close()
 }
 

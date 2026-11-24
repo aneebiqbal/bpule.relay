@@ -39,64 +39,10 @@ const SKIP = new Map([
   ['20261110080000_responsibility_reconciliation_v49.sql', 'reconciles profiles that do not exist before the synthetic fixture load'],
 ])
 
-const SHIMS = `
-create extension if not exists pgcrypto;
-create extension if not exists vector;
-create schema if not exists auth;
-create table if not exists auth.users (id uuid primary key default gen_random_uuid());
-alter table auth.users add column if not exists instance_id text;
-alter table auth.users add column if not exists aud text;
-alter table auth.users add column if not exists role text;
-alter table auth.users add column if not exists email text;
-alter table auth.users add column if not exists encrypted_password text;
-alter table auth.users add column if not exists email_confirmed_at timestamptz;
-alter table auth.users add column if not exists raw_app_meta_data jsonb;
-alter table auth.users add column if not exists raw_user_meta_data jsonb;
-alter table auth.users add column if not exists created_at timestamptz;
-alter table auth.users add column if not exists updated_at timestamptz;
-create table if not exists auth.identities (id uuid primary key default gen_random_uuid(), user_id uuid);
-alter table auth.identities add column if not exists provider_id text;
-alter table auth.identities add column if not exists identity_data jsonb;
-alter table auth.identities add column if not exists provider text;
-alter table auth.identities add column if not exists last_sign_in_at timestamptz;
-alter table auth.identities add column if not exists email text;
-alter table auth.identities add column if not exists created_at timestamptz;
-alter table auth.identities add column if not exists updated_at timestamptz;
-create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
-create or replace function auth.role() returns text language sql stable as $$ select 'authenticated'::text $$;
-create or replace function auth.email() returns text language sql stable as $$ select null::text $$;
-create or replace function auth.jwt() returns jsonb language sql stable as $$ select '{}'::jsonb $$;
-create schema if not exists storage;
-create table if not exists storage.objects (id uuid primary key default gen_random_uuid());
-alter table storage.objects add column if not exists bucket_id text;
-alter table storage.objects add column if not exists name text;
-alter table storage.objects add column if not exists owner uuid;
-alter table storage.objects add column if not exists owner_id text;
-alter table storage.objects add column if not exists metadata jsonb;
-alter table storage.objects add column if not exists path_tokens text[];
-alter table storage.objects add column if not exists mime_type text;
-create table if not exists storage.buckets (id text primary key);
-alter table storage.buckets add column if not exists name text;
-alter table storage.buckets add column if not exists public boolean;
-alter table storage.buckets add column if not exists file_size_limit bigint;
-alter table storage.buckets add column if not exists allowed_mime_types text[];
-create or replace function storage.foldername(p text) returns text[] language sql as $$ select string_to_array(p, '/') $$;
-create schema if not exists extensions;
-create extension if not exists pgcrypto with schema extensions;
-create or replace function extensions.gen_salt(p text) returns text language sql as $$ select public.gen_salt($1) $$;
-create or replace function extensions.crypt(p text, s text) returns text language sql as $$ select public.crypt($1, $2) $$;
-create or replace function extensions.gen_random_bytes(n int) returns bytea language sql as $$ select public.gen_random_bytes($1) $$;
-create schema if not exists supabase_migrations;
-create table if not exists supabase_migrations.schema_migrations (version text primary key);
-alter table supabase_migrations.schema_migrations add column if not exists name text;
-alter table supabase_migrations.schema_migrations add column if not exists applied_at timestamptz;
-create table if not exists auth_user_mapping (id uuid primary key default gen_random_uuid(), user_id uuid, email text);
-do $$ begin create role anon; exception when duplicate_object then null; end $$;
-do $$ begin create role authenticated; exception when duplicate_object then null; end $$;
-do $$ begin create role service_role; exception when duplicate_object then null; end $$;
-do $$ begin create role neondb_owner; exception when duplicate_object then null; end $$;
-do $$ begin create role relay_app; exception when duplicate_object then null; end $$;
-`
+// Use the repository's canonical provider-compatibility bootstrap instead of a
+// private copy, so the disposable environment matches the documented Aiven path
+// (roles, RLS identity function, storage shim, default privileges).
+const SHIMS = fs.readFileSync(path.join(process.cwd(), 'supabase/aiven/bootstrap.sql'), 'utf8')
 
 function authDdl() {
   const tables = getAuthTables({ emailAndPassword: { enabled: true }, plugins: [admin()] })
@@ -135,7 +81,21 @@ async function main() {
   const db = new pg.Client({ connectionString: target })
   await db.connect()
 
+  // The canonical Aiven bootstrap references the hosted admin role in its
+  // default-privilege statements; provide an equivalent local role so the file
+  // runs unmodified on a disposable cluster.
+  await db.query(`
+    do $$ begin if not exists (select 1 from pg_roles where rolname = 'avnadmin') then create role avnadmin; end if; end $$;
+    grant avnadmin to current_user;
+  `)
   await db.query(SHIMS)
+  // Roles are cluster-wide and survive a database drop, so re-assert the runtime
+  // role's shape even when an earlier probe created a partial version.
+  await db.query(`
+    alter role relay_app login password 'relay_app_cert_632';
+    alter role relay_service login password 'relay_service_cert_632';
+    grant authenticated to relay_app;
+  `)
   // The auth schema must exist before the migrations that reference it.
   await db.query(authDdl())
 
@@ -174,7 +134,14 @@ async function main() {
   }
   for (const file of pending) if (!SKIP.has(path.basename(file))) failed[path.basename(file)] = failed[path.basename(file)] ?? 'deferred'
 
-  await db.query(authDdl())
+  // The hosted default privileges target the Aiven admin role; on this cluster
+  // the migrations ran as the bootstrap user, so grant the runtime role directly.
+  await db.query(`
+    grant usage on schema public to relay_app, relay_service;
+    grant select, insert, update, delete on all tables in schema public to relay_app;
+    alter default privileges for role current_user in schema public
+      grant select, insert, update, delete on tables to relay_app;
+  `)
 
   const count = async (table) => (await db.query(`select count(*)::int n from ${table}`)).rows[0].n
   const summary = {
