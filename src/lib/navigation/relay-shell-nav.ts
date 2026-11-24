@@ -149,6 +149,8 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
       // readiness, coverage and targets are managed inside the operating center.
       { id: 'team-profiles', label: 'Profiles', href: '/team/profiles' },
       { id: 'performance', label: 'Performance', href: '/team/performance' },
+      // Manager scoring harness; the route existed but had no inbound link.
+      { id: 'team-eval', label: 'Eval', href: '/team/eval' },
       // Teams are real structure (scoping, memberships, roll-ups) — the one
       // configuration surface kept beside the four operating surfaces.
       { id: 'groups', label: 'Structure', href: '/team/groups' },

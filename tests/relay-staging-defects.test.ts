@@ -33,13 +33,16 @@ describe('OUT_OF_SCOPE_LEAD_IS_404_NOT_500', () => {
 })
 
 describe('WORK_SETUP_REVISION_SCHEMA_EXISTS', () => {
-  it('identity_assignments carries the updated_at the revision query reads', () => {
-    const migration = read('supabase/migrations/20261124000000_add_identity_assignments_updated_at.sql')
-    expect(migration).toContain("alter table identity_assignments add column if not exists updated_at")
+  it('identity_assignments revision clock is readable without an owner-only migration', () => {
+    // The DDL is a hand-run helper: the deploy role cannot ALTER avnadmin-owned
+    // tables. The readers therefore use created_at, which is the same clock
+    // because assignments are deleted and re-inserted rather than updated.
+    const helper = read('supabase/migrations/helper_add_identity_assignments_updated_at.sql')
+    expect(helper).toContain("alter table identity_assignments add column if not exists updated_at")
     const writer = read('src/lib/operations/work-setup-write.ts')
-    expect(writer).toContain('MAX(updated_at) FROM identity_assignments')
+    expect(writer).toContain('MAX(created_at) FROM identity_assignments')
     const loader = read('src/lib/operations/work-setup.ts')
-    expect(loader).toContain('MAX(ia.updated_at)')
+    expect(loader).toContain('MAX(ia.created_at)')
   })
 
   it('the staging bootstrap provisions the full schema with no migration failures', () => {
