@@ -177,6 +177,9 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
       { id: 'pipeline-report', label: 'Pipeline', href: '/reports/pipeline', group: 'Reports' },
       { id: 'revenue-report', label: 'Revenue', href: '/reports/revenue', group: 'Reports' },
       { id: 'activity-report', label: 'Activity', href: '/reports/activity', group: 'Reports' },
+      // Rep consistency surface; /performance resolves to this domain in
+      // domainForPathname, so without the entry the page was unreachable.
+      { id: 'performance', label: 'Performance', href: '/performance', group: 'Reports' },
     ],
   },
   {
