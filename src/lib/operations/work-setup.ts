@@ -248,7 +248,8 @@ export async function loadWorkSetup(
              COALESCE((SELECT MAX(pc.updated_at) FROM profile_coverage pc WHERE pc.organization_id = ri.organization_id AND pc.profile_id = ri.profile_id), to_timestamp(0)),
              COALESCE((SELECT MAX(p.updated_at) FROM daily_target_plans p WHERE p.organization_id = ri.organization_id AND p.revenue_identity_id = ri.id), to_timestamp(0)),
              COALESCE((SELECT MAX(a.updated_at) FROM daily_plan_allocations a JOIN daily_target_plans p ON p.id = a.plan_id WHERE p.organization_id = ri.organization_id AND p.revenue_identity_id = ri.id), to_timestamp(0)),
-             COALESCE((SELECT MAX(ia.updated_at) FROM identity_assignments ia WHERE ia.organization_id = ri.organization_id AND ia.revenue_identity_id = ri.id), to_timestamp(0))
+             -- Assignments are deleted and re-inserted, never updated, so created_at is the revision clock.
+             COALESCE((SELECT MAX(ia.created_at) FROM identity_assignments ia WHERE ia.organization_id = ri.organization_id AND ia.revenue_identity_id = ri.id), to_timestamp(0))
            )::text AS revision
            FROM revenue_identities ri WHERE ri.organization_id = $1`,
           [input.orgId],

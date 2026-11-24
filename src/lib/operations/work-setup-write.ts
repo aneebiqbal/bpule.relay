@@ -135,7 +135,8 @@ export async function computeAccountRevision(
          COALESCE((SELECT MAX(updated_at) FROM profile_coverage WHERE organization_id = $1 AND profile_id = $2), to_timestamp(0)),
          COALESCE((SELECT MAX(updated_at) FROM daily_target_plans WHERE organization_id = $1 AND revenue_identity_id = $3), to_timestamp(0)),
          COALESCE((SELECT MAX(a.updated_at) FROM daily_plan_allocations a JOIN daily_target_plans p ON p.id = a.plan_id WHERE p.organization_id = $1 AND p.revenue_identity_id = $3), to_timestamp(0)),
-         COALESCE((SELECT MAX(updated_at) FROM identity_assignments WHERE organization_id = $1 AND revenue_identity_id = $3), to_timestamp(0))
+         -- Assignments are deleted and re-inserted, never updated, so created_at is the revision clock.
+         COALESCE((SELECT MAX(created_at) FROM identity_assignments WHERE organization_id = $1 AND revenue_identity_id = $3), to_timestamp(0))
        )::text AS revision`,
       [orgId, profileId, identityId],
     )
