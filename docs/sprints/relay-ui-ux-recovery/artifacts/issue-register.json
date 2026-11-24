@@ -2,7 +2,7 @@
   "sprint": "relay-ui-ux-recovery",
   "branch": "feat/relay-job-intelligence-v2",
   "baseSha": "5bcb0f9d6d5d80c73d1b608fdf10095b95224cc2",
-  "generatedAt": "2026-11-23T22:36:38.597Z",
+  "generatedAt": "2026-11-24T00:15:26.948Z",
   "severityOrder": [
     "P0",
     "P1",
@@ -370,7 +370,28 @@
       "severity": "P3",
       "title": "Orphan/no-nav routes and dead exports",
       "reason": "Cleanup only; no functional impact established."
+    },
+    {
+      "id": "SR-U15",
+      "severity": "P2",
+      "title": "Role-forbidden pages return HTTP 200 with destination content instead of a redirect status",
+      "reason": "Verified in dev and production build; APIs still reject with 403, so no damaging action is possible, but the URL/content mismatch is misleading. Fix direction: gate roles in src/proxy.ts before rendering.",
+      "evidence": "docs/sprints/production-certification/03-AUTHENTICATED-ROUTE-MATRIX.md"
+    },
+    {
+      "id": "SR-U16",
+      "severity": "P3",
+      "title": "Intermittent performance.measure() negative-timestamp error attributed to TodayPage",
+      "reason": "No performance.measure call site exists in src/; not reproducible on demand and carries no stack attributable to product code. E2E records it with stack instead of hiding it."
     }
   ],
-  "followUpNote": "Five previously open P1 findings closed by 395425c8; see docs/sprints/relay-final-product-completion/08-OPEN-P1-CLOSURE.md."
+  "followUpNote": "Five previously open P1 findings closed by 395425c8; see docs/sprints/relay-final-product-completion/08-OPEN-P1-CLOSURE.md.",
+  "staging_certification": {
+    "date": "2026-11-24T00:15:26.946Z",
+    "environment": "disposable local PostgreSQL 18 + Better Auth sessions",
+    "rls_adversarial": "31/31 (real runtime role relay_app)",
+    "authenticated_e2e": "19/19",
+    "route_role_matrix": "164/164",
+    "migration_bootstrap": "198 applied / 0 failed / 4 documented skips"
+  }
 }
