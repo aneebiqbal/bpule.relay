@@ -324,7 +324,7 @@ export function AddProfileWizard({
 
             {source === 'paste' ? (
               <div className="space-y-3">
-                <Field label="Name" value={fullName} onChange={setFullName} placeholder="Hassan Saulat" />
+                <Field label="Name" value={fullName} onChange={setFullName} placeholder="Jane Doe" />
                 <Field label="Title" value={title} onChange={setTitle} placeholder="Senior Engineer" />
                 <Field label="Summary" value={summary} onChange={setSummary} placeholder="Short professional summary" multiline />
                 <Field label="Skills" value={skills} onChange={setSkills} placeholder="React, Node, Postgres" hint="Separate with commas." />

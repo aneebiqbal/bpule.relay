@@ -17,6 +17,12 @@ const KINDS: Array<{ value: AssignedTaskKind; label: string }> = [
 ]
 
 const PRIORITIES: UnifiedTaskPriority[] = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
+const PRIORITY_LABELS: Record<UnifiedTaskPriority, string> = {
+  LOW: 'Low',
+  NORMAL: 'Normal',
+  HIGH: 'High',
+  CRITICAL: 'Critical',
+}
 
 export interface AssignTaskLeadOption {
   id: string
@@ -181,12 +187,15 @@ export function AssignTaskDialog({
         </label>
 
         <label className="block space-y-1">
-          <span className="text-[12px] font-medium text-graphite">Title</span>
+          <span className="text-[12px] font-medium text-graphite">
+            Title <span className="text-status-danger" aria-hidden="true">*</span>
+          </span>
           <input
             className="w-full rounded-lg border border-line bg-bone px-3 py-2 text-[13px] text-ink"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="What should they do?"
+            required
           />
         </label>
 
@@ -247,7 +256,7 @@ export function AssignTaskDialog({
               onChange={(e) => setPriority(e.target.value as UnifiedTaskPriority)}
             >
               {PRIORITIES.map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
               ))}
             </select>
           </label>
@@ -296,7 +305,7 @@ export function AssignTaskDialog({
         <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
           Cancel
         </Button>
-        <Button type="button" onClick={submit} disabled={busy}>
+        <Button type="button" onClick={submit} disabled={busy || !title.trim()}>
           {busy ? 'Saving…' : 'Assign'}
         </Button>
       </DialogActions>
