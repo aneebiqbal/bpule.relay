@@ -47,6 +47,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const authz = await resolveConversationAuthz(store.getSupabaseClient())
     if (!authz) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+
+    // Shared execution gate: a pending connection cannot enter the
+    // post-acceptance DM/reply/follow-up workflow. Connection invitations are
+    // exempt. This is enforced here, at the API boundary, not only in the UI.
+    if (intent !== 'connection') {
+      const { data: gateLead } = await store
+        .getSupabaseClient()
+        .from('leads')
+        .select('archived, connection_accepted_at')
+        .eq('id', id)
+        .maybeSingle()
+      if (gateLead?.archived) {
+        return NextResponse.json({ error: 'This lead is archived.' }, { status: 409 })
+      }
+      if (gateLead && !gateLead.connection_accepted_at) {
+        return NextResponse.json(
+          { error: 'Connection is still pending. Post-acceptance messaging is blocked until LinkedIn accepts.' },
+          { status: 409 },
+        )
+      }
+    }
+
     const outcome = await logSentMessage(store, id, text, intent, body.idempotencyKey ?? null, authz)
     if (!outcome.ok) return NextResponse.json({ error: outcome.error }, { status: outcome.status ?? 400 })
 

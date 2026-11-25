@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceSupabase, requireCronSecret } from '@/lib/supabase/service'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
-import { isArchiveEligible } from '@/lib/leads/followup'
+import { ARCHIVE_POLICY, resolveArchiveReview } from '@/lib/leads/archive-policy'
 import { emitAction } from '@/lib/action-ledger'
 
 export const dynamic = 'force-dynamic'
@@ -116,32 +116,24 @@ export async function GET(request: Request) {
     const now = new Date()
     const toArchive: string[] = []
 
-    const nowMs = now.getTime()
-    const NEW_LEAD_ARCHIVE_DAYS = 30
-    const CONNECTION_PENDING_ARCHIVE_DAYS = 21
-
     for (const lead of leads) {
       try {
         const leadId = lead.id as string
-        let eligible = false
-
-        if (lead.status === 'new') {
-          const daysSinceCreated = (nowMs - new Date(lead.created_at as string).getTime()) / (1000 * 60 * 60 * 24)
-          eligible = daysSinceCreated >= NEW_LEAD_ARCHIVE_DAYS
-        } else if (lead.status === 'contacted' && !lead.connection_accepted_at && lead.locked_reason === 'connection_note_sent') {
-          // Connection sent but not accepted for 21+ days → archive
-          const lastSend = lastOutboundSendByLead.get(leadId)
-          if (lastSend) {
-            const daysPending = (nowMs - new Date(lastSend).getTime()) / (1000 * 60 * 60 * 24)
-            eligible = daysPending >= CONNECTION_PENDING_ARCHIVE_DAYS
-          }
-        } else {
-          eligible = isArchiveEligible({
-            followupCount: followupCountByLead.get(leadId) ?? 0,
-            lastSendAt: lastOutboundSendByLead.get(leadId) ?? null,
-            hasRepliedSinceLastSend: (lead.status === 'replied') || (repliedSinceByLead.get(leadId) ?? false),
-            now,
-          })
+        // One policy resolver for the sweep, so it cannot drift from the state
+        // machine's 14-day pending-connection review window.
+        const decision = resolveArchiveReview({
+          status: lead.status as string | null,
+          createdAt: lead.created_at as string | null,
+          connectionAcceptedAt: lead.connection_accepted_at as string | null,
+          lockedReason: lead.locked_reason as string | null,
+          lastOutboundAt: lastOutboundSendByLead.get(leadId) ?? null,
+          followupCount: followupCountByLead.get(leadId) ?? 0,
+          hasRepliedSinceLastSend: (lead.status === 'replied') || (repliedSinceByLead.get(leadId) ?? false),
+          now,
+        })
+        const eligible = decision.due
+        if (!eligible && decision.reason === 'pending_connection') {
+          diagnostics.push(`Lead ${leadId}: pending connection review at ${decision.elapsedDays ?? 0}/${ARCHIVE_POLICY.pendingConnectionDays} days.`)
         }
 
         if (eligible) {
