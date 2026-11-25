@@ -25,6 +25,9 @@ import {
 import { ChannelBadge } from '@/components/ui/channel-badge'
 import { activityLabel } from '@/lib/accountability/default-targets'
 import type { WorkSetupPayload, WorkSetupRow } from '@/lib/operations/work-setup'
+import { catalogKeyLabels, legacyChannelSlug, type ActivityCatalog } from '@/lib/execution/activity-catalog'
+
+const EMPTY_CATALOG: ActivityCatalog = { channels: [], definitions: [], aliases: [] }
 
 interface Draft {
   primaryRepId: string
@@ -60,11 +63,17 @@ export function workSetupConflictLines(
   return lines
 }
 
-/** Build the editable draft from one canonical row. */
-function draftFromRow(row: WorkSetupRow, presets: WorkSetupPayload['presets']): Draft {
+/** Build the editable draft from one canonical row, including catalog activities. */
+function draftFromRow(row: WorkSetupRow, presets: WorkSetupPayload['presets'], catalog: ActivityCatalog): Draft {
   const preset = presets[row.channel] ?? []
   const known = new Map(row.lanes.map((lane) => [lane.activityType, lane.targetCount]))
-  const activities = [...new Set([...preset.map((p) => p.activityType), ...known.keys()])]
+  const channelId = row.channelId ?? catalog.channels.find(
+    (channel) => channel.organizationId === null && channel.slug === legacyChannelSlug(row.channel),
+  )?.id
+  const catalogActivities = channelId
+    ? catalog.definitions.filter((definition) => definition.channelId === channelId && definition.enabled && definition.effectiveUntil === null).map((definition) => definition.key)
+    : []
+  const activities = [...new Set([...preset.map((p) => p.activityType), ...catalogActivities, ...known.keys()])]
   return {
     primaryRepId: row.primaryRepId ?? '',
     operatorIds: row.operators.map((o) => o.repId),
@@ -150,9 +159,33 @@ export function WorkSetupManager() {
   }, [data, query, repFilter, channelFilter, onlyProblems])
 
   const selected = data?.rows.find((row) => row.identityId === selectedId) ?? null
+  const catalogLabels = catalogKeyLabels(data?.catalog ?? EMPTY_CATALOG)
+  const labelFor = (key: string): string => catalogLabels[key]?.label ?? activityLabel(key as never)
+
+  const [capacityDraft, setCapacityDraft] = useState<Record<string, string>>({})
+
+  async function saveCapacity(repId: string): Promise<void> {
+    const raw = capacityDraft[repId] ?? ''
+    const value = raw === '' ? null : Number(raw)
+    if (value !== null && (!Number.isFinite(value) || value <= 0 || value > 1440)) return
+    const response = await fetch('/api/admin/capacity', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repId, availableMinutes: value }),
+    })
+    if (response.ok) router.refresh()
+  }
+
+  function addTarget(activityType: string) {
+    setDraft((current) =>
+      current && !current.targets.some((lane) => lane.activityType === activityType)
+        ? { ...current, targets: [...current.targets, { activityType, targetCount: 0 }] }
+        : current,
+    )
+  }
 
   function openRow(row: WorkSetupRow) {
-    setDraft(draftFromRow(row, data?.presets ?? { linkedin: [], upwork: [], email: [], other: [] }))
+    setDraft(draftFromRow(row, data?.presets ?? { linkedin: [], upwork: [], email: [], other: [] }, data?.catalog ?? EMPTY_CATALOG))
     setSaveError(null)
     setConflict(null)
     setSelectedId(row.identityId)
@@ -297,6 +330,7 @@ export function WorkSetupManager() {
           { key: 'unallocated', label: 'Unallocated', value: totals.unallocatedTarget, tone: totals.unallocatedTarget > 0 ? 'warning' : 'success' },
           { key: 'completed', label: 'Completed today', value: totals.completedActions, tone: 'success' },
           { key: 'remaining', label: 'Remaining', value: totals.remainingOrganization },
+          { key: 'effort', label: 'Estimated effort / day', value: `${totals.estimatedEffortMinutes}m` },
         ]}
       />
       <V4StatStrip
@@ -309,6 +343,77 @@ export function WorkSetupManager() {
           { key: 'rows', label: 'Accounts listed', value: rows.length },
         ]}
       />
+
+      {data && data.people.length > 0 && (
+        <V4Panel className="mb-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-ink">People workload</h2>
+            <span className="text-[11px] text-stone">personal allocations · capacity not configured where blank</span>
+          </div>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-line text-[10px] uppercase tracking-[0.14em] text-stone">
+                  <th scope="col" className="py-2 pr-3 font-medium">Rep</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Accounts</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Allocated</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Completed</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Remaining</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Completion</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Est. min</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Available min</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Capacity</th>
+                  <th scope="col" className="py-2 pr-3 text-right font-medium">Overdue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.people.map((person) => (
+                  <tr key={person.repId} className="border-b border-line/60 last:border-0">
+                    <td className="py-2 pr-3 text-[12px] text-ink">{person.repName}</td>
+                    <td className="py-2 pr-3 text-right text-[12px] tabular-nums text-graphite">{person.identities}</td>
+                    <td className="py-2 pr-3 text-right text-[12px] tabular-nums text-ink">{person.assignedUnits}</td>
+                    <td className="py-2 pr-3 text-right text-[12px] tabular-nums text-graphite">{person.completedUnits}</td>
+                    <td className="py-2 pr-3 text-right text-[12px] tabular-nums text-graphite">{person.remainingUnits}</td>
+                    <td className="py-2 pr-3 text-right text-[12px] tabular-nums text-graphite">
+                      {person.completionPct === null ? 'No assigned activity target.' : `${person.completionPct}%`}
+                    </td>
+                    <td className="py-2 pr-3 text-right text-[12px] tabular-nums text-graphite">{person.estimatedEffortMinutes}</td>
+                    <td className="py-2 pr-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <input
+                          type="number"
+                          min={1}
+                          max={1440}
+                          value={capacityDraft[person.repId] ?? (person.availableMinutes ?? '')}
+                          onChange={(event) => setCapacityDraft({ ...capacityDraft, [person.repId]: event.target.value })}
+                          onBlur={() => void saveCapacity(person.repId)}
+                          className="h-6 w-16 rounded border border-line bg-bone px-1 text-right text-[11px] tabular-nums text-ink focus:border-orange/50 focus:outline-none"
+                          aria-label={`Available minutes for ${person.repName}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void saveCapacity(person.repId)}
+                          className="rounded bg-bone-raised px-1.5 py-0.5 text-[10px] text-stone ring-1 ring-line hover:text-ink"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3 text-right text-[12px] tabular-nums">
+                      {person.capacityStatus === 'not_configured'
+                        ? <span className="text-stone">Capacity not configured</span>
+                        : <span className={person.capacityStatus === 'overloaded' ? 'text-status-danger' : person.capacityStatus === 'near_capacity' ? 'text-status-warning' : 'text-status-success'}>
+                            {person.utilizationPct}% · {person.capacityStatus === 'overloaded' ? 'Overloaded' : person.capacityStatus === 'near_capacity' ? 'Near capacity' : 'Available'}
+                          </span>}
+                    </td>
+                    <td className={`py-2 pr-3 text-right text-[12px] tabular-nums ${person.overdueTasks > 0 ? 'text-status-danger' : 'text-graphite'}`}>{person.overdueTasks}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </V4Panel>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
@@ -373,6 +478,7 @@ export function WorkSetupManager() {
                   <th scope="col" className="px-3 py-2.5 font-medium">Primary rep</th>
                   <th scope="col" className="px-3 py-2.5 font-medium">Operators</th>
                   <th scope="col" className="px-3 py-2.5 text-right font-medium">Daily target</th>
+                  <th scope="col" className="px-3 py-2.5 text-right font-medium">Est. min</th>
                   <th scope="col" className="px-3 py-2.5 text-right font-medium">Allocated</th>
                   <th scope="col" className="px-3 py-2.5 text-right font-medium">Progress</th>
                   <th scope="col" className="px-3 py-2.5 font-medium">Status</th>
@@ -415,6 +521,7 @@ export function WorkSetupManager() {
                       )}
                     </td>
                     <td className="px-3 py-3 text-right text-[13px] tabular-nums text-ink">{row.requirement}</td>
+                    <td className="px-3 py-3 text-right text-[12px] tabular-nums text-stone">{row.estimatedEffortMinutes}</td>
                     <td className="px-3 py-3 text-right text-[13px] tabular-nums text-graphite">
                       {row.allocated}
                       {row.unallocated > 0 && <span className="ml-1 text-[10px] text-status-warning">+{row.unallocated}</span>}
@@ -537,7 +644,7 @@ export function WorkSetupManager() {
               <div className="mt-2 space-y-1.5">
                 {draft.targets.map((lane) => (
                   <label key={lane.activityType} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-bone-raised px-3 py-2">
-                    <span className="text-[12px] text-ink">{activityLabel(lane.activityType as never)}</span>
+                    <span className="text-[12px] text-ink">{labelFor(lane.activityType)}</span>
                     <input
                       type="number"
                       min={0}
@@ -548,6 +655,37 @@ export function WorkSetupManager() {
                   </label>
                 ))}
               </div>
+              {(() => {
+                const channelId = selected?.channelId ?? data?.catalog.channels.find(
+                  (channel) => channel.organizationId === null && channel.slug === legacyChannelSlug(selected?.channel),
+                )?.id
+                const available = (data?.catalog.definitions ?? []).filter(
+                  (definition) =>
+                    channelId &&
+                    definition.channelId === channelId &&
+                    definition.enabled &&
+                    definition.effectiveUntil === null &&
+                    !draft.targets.some((lane) => lane.activityType === definition.key),
+                )
+                if (!available.length) return null
+                return (
+                  <label className="mt-2 flex items-center gap-2 text-[11px] text-stone">
+                    Add activity
+                    <select
+                      value=""
+                      onChange={(event) => {
+                        if (event.target.value) addTarget(event.target.value)
+                      }}
+                      className="h-7 flex-1 rounded border border-line bg-bone px-1.5 text-[12px] text-ink focus:border-orange/50 focus:outline-none"
+                    >
+                      <option value="">Choose…</option>
+                      {available.map((definition) => (
+                        <option key={definition.id} value={definition.key}>{definition.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                )
+              })()}
               <p className="mt-2 text-[11px] text-stone">
                 Presets fill the fields; nothing is written until you save.
               </p>
@@ -568,7 +706,7 @@ export function WorkSetupManager() {
                       return (
                         <div key={lane.activityType} className="rounded-lg border border-line bg-bone-raised px-3 py-2">
                           <div className="flex items-center justify-between text-[12px]">
-                            <span className="text-ink">{activityLabel(lane.activityType as never)}</span>
+                            <span className="text-ink">{labelFor(lane.activityType)}</span>
                             <span className={cn('tabular-nums', total > lane.targetCount ? 'text-status-danger' : 'text-stone')}>
                               {total}/{lane.targetCount}
                             </span>
