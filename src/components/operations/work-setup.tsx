@@ -350,7 +350,7 @@ export function WorkSetupManager() {
             <h2 className="text-sm font-medium text-ink">People workload</h2>
             <span className="text-[11px] text-stone">personal allocations · capacity not configured where blank</span>
           </div>
-          <div className="mt-3 overflow-x-auto">
+          <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label="People workload, horizontally scrollable">
             <table className="w-full min-w-[760px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-line text-[10px] uppercase tracking-[0.14em] text-stone">
@@ -469,7 +469,7 @@ export function WorkSetupManager() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Accounts, horizontally scrollable">
             <table className="w-full min-w-[860px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-line text-[10px] uppercase tracking-[0.14em] text-stone">

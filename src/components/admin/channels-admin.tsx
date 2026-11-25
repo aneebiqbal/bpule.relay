@@ -114,7 +114,7 @@ export function ChannelsAdmin() {
             <input className={inputClass} placeholder="Name (e.g. Partner Outreach)" value={channelForm.name} onChange={(event) => setChannelForm({ ...channelForm, name: event.target.value })} />
             <input className={inputClass} placeholder="slug (e.g. partner-outreach)" value={channelForm.slug} onChange={(event) => setChannelForm({ ...channelForm, slug: event.target.value.toLowerCase() })} />
             <textarea className="min-h-16 w-full rounded-md border border-line bg-bone px-2 py-1.5 text-[12px] text-ink outline-none focus:border-orange/50" placeholder="Description" value={channelForm.description} onChange={(event) => setChannelForm({ ...channelForm, description: event.target.value })} />
-            <select className={inputClass} value={channelForm.operationMode} onChange={(event) => setChannelForm({ ...channelForm, operationMode: event.target.value })}>
+            <select aria-label="Operation mode" className={inputClass} value={channelForm.operationMode} onChange={(event) => setChannelForm({ ...channelForm, operationMode: event.target.value })}>
               {OPERATION_MODES.map((mode) => <option key={mode} value={mode}>{mode.replace(/_/g, ' ')}</option>)}
             </select>
             <Button type="button" variant="orange" disabled={busy || !channelForm.name.trim() || !channelForm.slug.trim()} onClick={async () => {
@@ -184,19 +184,19 @@ export function ChannelsAdmin() {
                   <div className="mt-3 rounded-lg border border-dashed border-line p-2.5">
                     <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-stone">Add activity</p>
                     <div className="mt-2 grid grid-cols-2 gap-2">
-                      <input className={inputClass} placeholder="key (e.g. intro_sent)" value={draft.key} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, key: event.target.value } })} />
-                      <input className={inputClass} placeholder="Label" value={draft.label} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, label: event.target.value } })} />
-                      <select className={inputClass} value={draft.countingMode} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, countingMode: event.target.value } })}>
+                      <input aria-label={`Activity key for ${channel.name}`} className={inputClass} placeholder="key (e.g. intro_sent)" value={draft.key} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, key: event.target.value } })} />
+                      <input aria-label={`Activity label for ${channel.name}`} className={inputClass} placeholder="Label" value={draft.label} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, label: event.target.value } })} />
+                      <select aria-label={`Counting mode for ${channel.name}`} className={inputClass} value={draft.countingMode} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, countingMode: event.target.value } })}>
                         {COUNTING_MODES.map((mode) => <option key={mode} value={mode}>{mode.replace(/_/g, ' ')}</option>)}
                       </select>
-                      <select className={inputClass} value={draft.evidencePolicy} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, evidencePolicy: event.target.value } })}>
+                      <select aria-label={`Evidence policy for ${channel.name}`} className={inputClass} value={draft.evidencePolicy} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, evidencePolicy: event.target.value } })}>
                         {EVIDENCE_POLICIES.map((policy) => <option key={policy} value={policy}>{policy.replace(/_/g, ' ')}</option>)}
                       </select>
                       <label className="flex items-center gap-1.5 text-[11px] text-graphite">
                         <input type="checkbox" checked={draft.targetable} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, targetable: event.target.checked } })} />
                         Targetable
                       </label>
-                      <input className={inputClass} type="number" min={0} max={480} value={draft.effortMinutes} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, effortMinutes: Number(event.target.value) || 0 } })} />
+                      <input aria-label={`Effort minutes for ${channel.name}`} className={inputClass} type="number" min={0} max={480} value={draft.effortMinutes} onChange={(event) => setActivityForm({ ...activityForm, [channel.id]: { ...draft, effortMinutes: Number(event.target.value) || 0 } })} />
                     </div>
                     <Button type="button" size="sm" variant="secondary" className="mt-2" disabled={busy || !draft.key.trim() || !draft.label.trim()} onClick={async () => {
                       const ok = await post(`/api/admin/channels/${channel.id}/activities`, 'POST', {

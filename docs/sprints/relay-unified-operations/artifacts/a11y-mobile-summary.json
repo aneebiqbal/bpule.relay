@@ -1,0 +1,72 @@
+[
+  {
+    "page": "channels",
+    "viewport": "desktop",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/channels-desktop.png"
+  },
+  {
+    "page": "channels",
+    "viewport": "mobile",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/channels-mobile.png"
+  },
+  {
+    "page": "work-setup",
+    "viewport": "desktop",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/work-setup-desktop.png"
+  },
+  {
+    "page": "work-setup",
+    "viewport": "mobile",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/work-setup-mobile.png"
+  },
+  {
+    "page": "handoff",
+    "viewport": "desktop",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/handoff-desktop.png"
+  },
+  {
+    "page": "handoff",
+    "viewport": "mobile",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/handoff-mobile.png"
+  },
+  {
+    "page": "rep-today",
+    "viewport": "desktop",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/rep-today-desktop.png"
+  },
+  {
+    "page": "rep-today",
+    "viewport": "mobile",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/rep-today-mobile.png"
+  },
+  {
+    "page": "jobs",
+    "viewport": "desktop",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/jobs-desktop.png"
+  },
+  {
+    "page": "jobs",
+    "viewport": "mobile",
+    "violations": [],
+    "errors": [],
+    "screenshot": "/Users/mac/Desktop/products/scout/docs/sprints/relay-unified-operations/artifacts/jobs-mobile.png"
+  }
+]
