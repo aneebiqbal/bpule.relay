@@ -9,6 +9,7 @@
 import type { DbClient } from '@/lib/db/types'
 import { loadProfileEvidence } from '@/lib/generation/profile-evidence'
 import type { JobEligibility } from './eligibility'
+import { defaultFreshnessDays } from '@/lib/jobs/config'
 import { computeJobMatch, MATCH_SCORE_VERSION, type MatchProfile } from './match'
 import type { DiscoveryJob } from './types'
 
@@ -56,6 +57,23 @@ export interface JobFilters {
   verificationStatus?: string
   matchCategory?: string
   sort?: 'posted_desc' | 'posted_asc' | 'match_desc' | 'freshness_desc' | 'salary_desc'
+}
+
+/** Views whose product contract is "fresh opportunities". */
+export const FRESH_FEED_VIEWS: ReadonlySet<JobsView> = new Set([
+  'shortlist',
+  'latest',
+  'for-you',
+  'verified-remote',
+])
+
+/**
+ * The window a feed actually uses. An explicit value always wins — including 0,
+ * which means "all open" — so only an absent value falls back to the default.
+ */
+export function resolveFreshnessWindow(view: JobsView, freshnessDays?: number): number | undefined {
+  if (freshnessDays !== undefined) return freshnessDays
+  return FRESH_FEED_VIEWS.has(view) ? defaultFreshnessDays() : undefined
 }
 
 export interface ListJobsOptions {
@@ -259,6 +277,9 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
   }
 
   const filters = options.filters ?? {}
+  // Fresh-first default for the proactive feed. An explicit window (including 0
+  // = all open) always wins; an unset window shows only genuinely recent work.
+  const freshnessDays = resolveFreshnessWindow(options.view, filters.freshnessDays)
   if (filters.title) {
     where += ` and j.title ilike ?`
     whereParams.push(`%${filters.title}%`)
@@ -291,9 +312,11 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
     where += ` and j.employment_type ilike ?`
     whereParams.push(`%${filters.employmentType}%`)
   }
-  if (filters.freshnessDays != null && filters.freshnessDays > 0) {
+  if (freshnessDays != null && freshnessDays > 0) {
+    // NULL posted_at fails the comparison naturally: an unknown publication
+    // date is never presented as freshly published.
     where += ` and j.posted_at >= ?`
-    whereParams.push(new Date(Date.now() - filters.freshnessDays * 86_400_000))
+    whereParams.push(new Date(Date.now() - freshnessDays * 86_400_000))
   }
   if (filters.verificationStatus) {
     where += ` and j.verification_status = ?`
@@ -305,11 +328,14 @@ export async function listJobs(db: DbClient, orgId: string, options: ListJobsOpt
   }
 
   const sort = filters.sort ?? (options.view === 'for-you' || options.view === 'shortlist' ? 'match_desc' : 'posted_desc')
+  // Publication age is the honest ordering signal. first_seen_at is discovery
+  // time, not publication time, so it never stands in for a missing posted_at:
+  // an unknown-date listing sorts last instead of masquerading as newest.
   const sortOrder: Record<NonNullable<JobFilters['sort']>, string> = {
-    posted_desc: `coalesce(j.posted_at, j.first_seen_at) desc`,
-    posted_asc: `coalesce(j.posted_at, j.first_seen_at) asc nulls last`,
-    match_desc: `case when m.category = 'not_eligible' then 1 else 0 end asc, m.score desc nulls last, coalesce(j.posted_at, j.first_seen_at) desc`,
-    freshness_desc: `j.last_seen_at desc, coalesce(j.posted_at, j.first_seen_at) desc`,
+    posted_desc: `j.posted_at desc nulls last`,
+    posted_asc: `j.posted_at asc nulls last`,
+    match_desc: `case when m.category = 'not_eligible' then 1 else 0 end asc, m.score desc nulls last, j.posted_at desc nulls last`,
+    freshness_desc: `j.last_seen_at desc, j.posted_at desc nulls last`,
     salary_desc: `j.salary_min desc nulls last, j.salary_max desc nulls last`,
   }
   const order =
@@ -625,6 +651,35 @@ export interface SourceHealthRow {
   last_error: string | null
   consecutive_failures: number
   jobCount: number
+}
+
+export interface JobsFeedStatus {
+  /** Last successful source run across every enabled source. */
+  lastSyncAt: string | null
+  /** Last attempt, success or failure — shown when it is more recent. */
+  lastRunAt: string | null
+  activeSources: number
+}
+
+/**
+ * The honest freshness stamp for the feed header. `last_ok_at` is a completed
+ * successful fetch; a failed attempt must never be presented as a sync.
+ */
+export async function getJobsFeedStatus(db: DbClient): Promise<JobsFeedStatus> {
+  const result = await db.raw!<Array<{ last_sync_at: string | null; last_run_at: string | null; active_sources: number }>>(
+    `select max(last_ok_at) as last_sync_at,
+            max(last_run_at) as last_run_at,
+            count(*) filter (where enabled)::int as active_sources
+       from job_sources`,
+    [],
+  )
+  if (result.error) throw new Error(result.error.message)
+  const row = result.data?.[0]
+  return {
+    lastSyncAt: row?.last_sync_at ?? null,
+    lastRunAt: row?.last_run_at ?? null,
+    activeSources: Number(row?.active_sources ?? 0),
+  }
 }
 
 export async function listSources(db: DbClient): Promise<SourceHealthRow[]> {

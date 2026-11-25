@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Bookmark,
   Briefcase,
@@ -43,6 +43,8 @@ interface JobsWorkspaceProps {
   prepared: PreparedCard[]
   sources: Array<Record<string, unknown>>
   isAdmin: boolean
+  /** Last successful source sync; null when no source has completed a run. */
+  lastSyncAt: string | null
 }
 
 const VIEW_LABELS: Record<JobsView, string> = {
@@ -141,6 +143,7 @@ function verificationLabel(status: string): { text: string; tone: 'success' | 'w
 
 export function JobsWorkspace(props: JobsWorkspaceProps) {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [search, setSearch] = useState(props.search)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -150,6 +153,9 @@ export function JobsWorkspace(props: JobsWorkspaceProps) {
   const [filters, setFilters] = useState<JobFilters>(props.initialFilters)
   const [showFilters, setShowFilters] = useState(false)
   const [savedFilters, setSavedFilters] = useState<Array<Record<string, unknown>>>([])
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [syncNotice, setSyncNotice] = useState<string | null>(null)
+  const syncTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     fetch('/api/jobs/filters')
@@ -157,6 +163,60 @@ export function JobsWorkspace(props: JobsWorkspaceProps) {
       .then((data: { filters: Array<Record<string, unknown>> }) => setSavedFilters(data.filters))
       .catch(() => {})
   }, [])
+
+  // The worker runs off-request; polling stops on unmount so a background tab
+  // never keeps a timer alive.
+  useEffect(() => () => {
+    if (syncTimer.current) clearInterval(syncTimer.current)
+  }, [])
+
+  function stopSyncPolling(): void {
+    if (syncTimer.current) {
+      clearInterval(syncTimer.current)
+      syncTimer.current = null
+    }
+  }
+
+  function pollManualSync(requestId: string): void {
+    stopSyncPolling()
+    syncTimer.current = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/jobs/sync?requestId=${encodeURIComponent(requestId)}`)
+        if (!response.ok) return
+        const row = (await response.json()) as { status: string; result?: Record<string, unknown>; error?: string | null }
+        if (row.status !== 'succeeded' && row.status !== 'failed') return
+        stopSyncPolling()
+        setSyncBusy(false)
+        if (row.status === 'succeeded') {
+          const r = row.result ?? {}
+          const failed = Number(r.failedSources ?? 0)
+          setSyncNotice(
+            `Sync complete · ${Number(r.inserted ?? 0)} new · ${Number(r.updated ?? 0)} updated · ${Number(r.expired ?? 0)} expired${failed > 0 ? ` · ${failed} source(s) failed` : ''}`,
+          )
+          router.refresh()
+        } else {
+          setSyncNotice(row.error ?? 'Sync failed.')
+        }
+      } catch {
+        // Transient read failure: keep polling the same run.
+      }
+    }, 2000)
+  }
+
+  async function startManualSync(): Promise<void> {
+    setSyncBusy(true)
+    setSyncNotice('Syncing latest jobs…')
+    try {
+      const response = await fetch('/api/jobs/sync', { method: 'POST' })
+      if (!response.ok) throw new Error('Could not start a sync.')
+      const data = (await response.json()) as { requestId?: string }
+      if (!data.requestId) throw new Error('Could not start a sync.')
+      pollManualSync(data.requestId)
+    } catch {
+      setSyncNotice('Could not start a sync.')
+      setSyncBusy(false)
+    }
+  }
   const activeView = (searchParams.get('view') as JobsView) ?? props.initialView
   const profileId = searchParams.get('profileId') ?? props.activeProfileId ?? ''
 
@@ -273,6 +333,14 @@ export function JobsWorkspace(props: JobsWorkspaceProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <span className="hidden text-xs text-stone sm:inline">
+            Last synced <RelativeTime value={props.lastSyncAt} />
+          </span>
+          {props.isAdmin && (
+            <Button type="button" variant="outline" size="sm" onClick={startManualSync} disabled={syncBusy}>
+              {syncBusy ? 'Syncing…' : 'Sync now'}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setImportOpen(true)}>Add job</Button>
           <form onSubmit={submitSearch} className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone" aria-hidden />
@@ -300,6 +368,12 @@ export function JobsWorkspace(props: JobsWorkspaceProps) {
           </select>
         </div>
       </div>
+
+      {syncNotice && (
+        <p className="mb-4 rounded-lg bg-bone-raised px-3 py-2 text-xs text-graphite ring-1 ring-line" role="status">
+          {syncNotice}
+        </p>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => setShowFilters((value) => !value)}>
@@ -351,12 +425,10 @@ export function JobsWorkspace(props: JobsWorkspaceProps) {
           <label className="block text-[11px] font-medium text-stone">Max salary<input type="number" className={inputClass} value={filters.maxSalary ?? ''} onChange={(event) => update('maxSalary', event.target.value === '' ? undefined : Number(event.target.value))} /></label>
           <label className="block text-[11px] font-medium text-stone">Freshness
             <select className={inputClass} value={filters.freshnessDays ?? ''} onChange={(event) => update('freshnessDays', event.target.value === '' ? undefined : Number(event.target.value))}>
-              <option value="">Any</option>
-              <option value="1">Today</option>
-              <option value="3">3 days</option>
-              <option value="7">7 days</option>
-              <option value="14">14 days</option>
-              <option value="30">30 days</option>
+              <option value="1">Last 24 hours</option>
+              <option value="3">Last 72 hours</option>
+              <option value="7">Last 7 days</option>
+              <option value="0">All open</option>
             </select>
           </label>
           <label className="block text-[11px] font-medium text-stone">Verification
@@ -564,7 +636,7 @@ function JobCardView({ job, profileId, busy, onSave }: { job: JobCard; profileId
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-2 text-[11px] text-stone">
-        <span className="flex items-center gap-1"><Clock className="size-3" aria-hidden /> Posted <RelativeTime value={job.postedAt} /></span>
+        <span className="flex items-center gap-1"><Clock className="size-3" aria-hidden /> Posted {job.postedAt ? <RelativeTime value={job.postedAt} /> : <span className="text-graphite">unknown date</span>}</span>
         <span className="flex items-center gap-1"><ShieldCheck className="size-3" aria-hidden /> Checked <RelativeTime value={job.lastVerifiedAt ?? job.lastSeenAt} /></span>
         <span className="col-span-2">First seen {formatDate(job.firstSeenAt)} · last seen <RelativeTime value={job.lastSeenAt} /></span>
         {salary && <span className="col-span-2 text-graphite">{salary}</span>}

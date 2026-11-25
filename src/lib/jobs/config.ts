@@ -38,6 +38,17 @@ export function providerTimeoutMs(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 8000
 }
 
+/**
+ * Manual "Sync Now" cooldown per organization, in minutes
+ * (JOBS_MANUAL_SYNC_COOLDOWN_MINUTES, default 15). A request inside the window
+ * returns the existing run instead of enqueueing a second crawl.
+ */
+export function manualSyncCooldownMinutes(): number {
+  const raw = Number(process.env.JOBS_MANUAL_SYNC_COOLDOWN_MINUTES ?? '15')
+  if (!Number.isFinite(raw) || raw < 0) return 15
+  return Math.round(raw)
+}
+
 /** Max raw jobs to feed the AI matcher after hard filtering. */
 export function aiMatchCandidateCap(): number {
   const raw = Number(process.env.JOBS_AI_CANDIDATE_CAP ?? '50')
@@ -59,6 +70,20 @@ export function maxAgeDays(): number {
   const raw = Number(process.env.JOBS_MAX_AGE_DAYS ?? '90')
   if (!Number.isFinite(raw) || raw < 0) return 90
   if (raw === 0) return 0
+  return Math.round(raw)
+}
+
+/**
+ * Default freshness window for the proactive feed, in days
+ * (JOBS_DEFAULT_FRESHNESS_DAYS, default 3 = 72 hours).
+ *
+ * Only applies when the caller did not choose a window explicitly. A listing
+ * with an unknown publication date never qualifies as fresh: absence of a
+ * date is not evidence of recency.
+ */
+export function defaultFreshnessDays(): number {
+  const raw = Number(process.env.JOBS_DEFAULT_FRESHNESS_DAYS ?? '3')
+  if (!Number.isFinite(raw) || raw < 0) return 3
   return Math.round(raw)
 }
 
