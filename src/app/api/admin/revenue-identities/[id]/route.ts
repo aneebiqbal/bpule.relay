@@ -58,9 +58,10 @@ export async function PATCH(
     'identityName', 'title', 'positioning', 'profileUrl', 'skills', 'expertise',
     'industries', 'technologies', 'allowedFirstPersonClaims', 'forbiddenClaims',
     'channelRules', 'voiceTone', 'preferredOpportunityTypes', 'proposalPositioning',
-    'status', 'slug',
+    'status', 'slug', 'channelId',
   ] as const
   const dbFields: Record<string, string> = {
+    channelId: 'channel_id',
     identityName: 'identity_name',
     profileUrl: 'profile_url',
     allowedFirstPersonClaims: 'allowed_first_person_claims',

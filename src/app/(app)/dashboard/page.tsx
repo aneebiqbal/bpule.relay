@@ -28,6 +28,7 @@ import {
 import { actionDeepLink } from '@/lib/rep-home/action-presentation'
 import { REP_V3_ACTIVITY_LIMIT } from '@/lib/rep-home/v3-present'
 import { buildProfilesToday } from '@/lib/rep-home/profile-completion'
+import { catalogKeyLabels, loadActivityCatalog } from '@/lib/execution/activity-catalog'
 import { loadTimeline } from '@/lib/operations/activity'
 import type { OpenLeadFact } from '@/lib/team/admin-command-summary'
 import { businessDateRange, currentInstant, orgDate, addDays, isOrgWorkingDay, weekdayOfDate } from '@/lib/org-clock'
@@ -492,6 +493,10 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
     lastOutboundAt: null,
   }))
 
+  const activityLabels = catalogKeyLabels(
+    await loadActivityCatalog(store.getSupabaseClient()).catch(() => ({ channels: [], definitions: [], aliases: [] })),
+  )
+
   return {
     rep: workspace.rep,
     activeWorkspace: activeWorkspace
@@ -515,6 +520,7 @@ async function loadRepWorkspaceData(repId: string): Promise<RepWorkspaceData> {
       profileTotalsByIdentity.byIdentity,
       profileTotalsByIdentity.byActivity,
       profileTotalsByIdentity.allocations,
+      Object.fromEntries(Object.entries(activityLabels).map(([key, value]) => [key, value.label])),
     ),
     targetSummary: {
       ...workspace.targetSummary,

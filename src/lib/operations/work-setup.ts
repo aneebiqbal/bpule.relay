@@ -6,6 +6,7 @@ import { loadCanonicalProfileAssignments } from '@/lib/profiles/canonical'
 import { defaultTargetsForChannel, type DefaultDailyTarget } from '@/lib/accountability/default-targets'
 import { countOverdueAssignedByRep } from '@/lib/tasks/assigned-tasks'
 import { loadTeamDay } from '@/lib/rep-day/team'
+import { catalogKeyLabels, loadActivityCatalog, type ActivityCatalog } from '@/lib/execution/activity-catalog'
 
 /**
  * Admin → Work Setup read model.
@@ -26,6 +27,8 @@ export interface WorkSetupLane {
   targetable: boolean
   completed: number
   allocated: number
+  /** Effective estimated minutes per unit from the canonical catalog. */
+  effortMinutes: number
   allocations: Array<{ repId: string; repName: string; targetCount: number }>
 }
 
@@ -33,6 +36,8 @@ export interface WorkSetupRow {
   identityId: string
   identityName: string
   channel: RevenueIdentityChannel
+  /** Explicit canonical channel; null means the legacy enum decided. */
+  channelId: string | null
   profileId: string | null
   profileName: string | null
   status: string
@@ -48,6 +53,8 @@ export interface WorkSetupRow {
   unallocated: number
   completed: number
   remaining: number
+  /** Σ(targetable requirement × effective estimated minutes). */
+  estimatedEffortMinutes: number
   lanes: WorkSetupLane[]
   issues: string[]
   /** Compare-and-set token: POST this back as `expectedRevision`. */
@@ -61,6 +68,7 @@ export interface WorkSetupTotals {
   completedActions: number
   remainingAllocated: number
   remainingOrganization: number
+  estimatedEffortMinutes: number
   overdueTasks: number
   activePeople: number
   activeAccounts: number
@@ -73,12 +81,36 @@ export interface WorkSetupPayload {
   rows: WorkSetupRow[]
   totals: WorkSetupTotals
   presets: Record<RevenueIdentityChannel, DefaultDailyTarget[]>
+  /** Canonical catalog so custom channels render without code changes. */
+  catalog: ActivityCatalog
+  /** Per-rep personal workload from the same canonical projection. */
+  people: WorkSetupPerson[]
+}
+
+export interface WorkSetupPerson {
+  repId: string
+  repName: string
+  identities: number
+  assignedUnits: number
+  completedUnits: number
+  remainingUnits: number
+  /** Null when there is no personal target — never an invented 100%. */
+  completionPct: number | null
+  estimatedEffortMinutes: number
+  /** Configured available minutes; null means "Capacity not configured". */
+  availableMinutes: number | null
+  /** Null until availability is configured — never an invented percentage. */
+  utilizationPct: number | null
+  capacityStatus: 'available' | 'near_capacity' | 'overloaded' | 'not_configured'
+  overdueTasks: number
+  sharedTarget: number
 }
 
 interface IdentityFact {
   id: string
   identityName: string
   channel: RevenueIdentityChannel
+  channelId: string | null
   profileId: string | null
   status: string
 }
@@ -112,8 +144,19 @@ export function assembleWorkSetup(input: {
   }>
   populations: ReturnType<typeof reconcilePopulations>
   overdueTasks: number
+  overdueByRep?: Map<string, number>
   revisions: Map<string, string>
+  /** Optional for small reconciliation fixtures; production always passes it. */
+  repSummaries?: Array<{ repId: string; repName: string; assigned: number; completed: number; remaining: number; sharedTarget: number }>
+  /** Configured available minutes per rep; absent means not configured. */
+  capacityByRep?: Record<string, number | null>
+  /** Optional so pure reconciliation fixtures stay small; production always passes it. */
+  catalog?: ActivityCatalog
 }): WorkSetupPayload {
+  const catalog = input.catalog ?? { channels: [], definitions: [], aliases: [] }
+  const effortByActivity = catalogKeyLabels(catalog)
+  const effortFor = (activityType: string): number => effortByActivity[activityType]?.effortMinutes ?? 0
+
   const lanesByIdentity = new Map<string, WorkSetupLane[]>()
   for (const lane of input.lanes) {
     const list = lanesByIdentity.get(lane.identityId) ?? []
@@ -124,10 +167,53 @@ export function assembleWorkSetup(input: {
       targetable: lane.targetable,
       completed: lane.completed,
       allocated: lane.allocations.reduce((sum, row) => sum + row.targetCount, 0),
+      effortMinutes: effortFor(lane.activityType),
       allocations: lane.allocations,
     })
     lanesByIdentity.set(lane.identityId, list)
   }
+
+  // Per-rep personal workload. Uses the canonical assigned/completed figures;
+  // completion % is null when there is no personal target, never invented.
+  const people: WorkSetupPerson[] = (input.repSummaries ?? []).map((rep) => {
+    const repLanes = input.lanes.filter((lane) => lane.allocations.some((allocation) => allocation.repId === rep.repId))
+    const assignedUnits = repLanes.reduce(
+      (sum, lane) => sum + (lane.allocations.find((allocation) => allocation.repId === rep.repId)?.targetCount ?? 0),
+      0,
+    )
+    const estimatedEffortMinutes = repLanes.reduce(
+      (sum, lane) =>
+        sum + (lane.allocations.find((allocation) => allocation.repId === rep.repId)?.targetCount ?? 0) * effortFor(lane.activityType),
+      0,
+    )
+    const availableMinutes = input.capacityByRep?.[rep.repId] ?? null
+    const utilizationPct = availableMinutes && availableMinutes > 0 ? Math.round((estimatedEffortMinutes / availableMinutes) * 100) : null
+    const capacityStatus: WorkSetupPerson['capacityStatus'] =
+      !availableMinutes || availableMinutes <= 0
+        ? 'not_configured'
+        : utilizationPct === null
+          ? 'not_configured'
+          : utilizationPct > 100
+            ? 'overloaded'
+            : utilizationPct >= 80
+              ? 'near_capacity'
+              : 'available'
+    return {
+      repId: rep.repId,
+      repName: rep.repName,
+      identities: new Set(repLanes.map((lane) => lane.identityId)).size,
+      assignedUnits,
+      completedUnits: rep.completed,
+      remainingUnits: Math.max(0, rep.remaining),
+      completionPct: rep.assigned > 0 ? Math.min(100, Math.round((rep.completed / rep.assigned) * 100)) : null,
+      estimatedEffortMinutes,
+      availableMinutes,
+      utilizationPct,
+      capacityStatus,
+      overdueTasks: input.overdueByRep?.get(rep.repId) ?? 0,
+      sharedTarget: rep.sharedTarget,
+    }
+  })
 
   const profileByIdentity = new Map<string, (typeof input.profiles)[number]>()
   for (const profile of input.profiles) {
@@ -166,6 +252,7 @@ export function assembleWorkSetup(input: {
       identityId: identity.id,
       identityName: identity.identityName,
       channel: identity.channel,
+      channelId: identity.channelId,
       profileId: identity.profileId ?? profile?.profileId ?? null,
       profileName: profile?.profileName ?? identity.profileId ?? null,
       status: identity.status,
@@ -179,6 +266,9 @@ export function assembleWorkSetup(input: {
       unallocated: Math.max(0, requirement - allocated),
       completed,
       remaining: Math.max(0, requirement - completed),
+      estimatedEffortMinutes: lanes
+        .filter((lane) => lane.targetable)
+        .reduce((sum, lane) => sum + lane.targetCount * effortFor(lane.activityType), 0),
       lanes,
       issues,
       revision: input.revisions.get(identity.id),
@@ -205,6 +295,7 @@ export function assembleWorkSetup(input: {
     completedActions: input.populations.completed,
     remainingAllocated: Math.max(0, input.populations.requirementAssigned - input.populations.completed),
     remainingOrganization: Math.max(0, input.populations.tracked - input.populations.completed),
+    estimatedEffortMinutes: rows.reduce((sum, row) => sum + row.estimatedEffortMinutes, 0),
     overdueTasks: input.overdueTasks,
     activePeople: assignedRepIds.size,
     activeAccounts: rows.filter((row) => row.status === 'active').length,
@@ -222,6 +313,8 @@ export function assembleWorkSetup(input: {
       email: defaultTargetsForChannel('email'),
       other: defaultTargetsForChannel('other'),
     },
+    catalog,
+    people,
   }
 }
 
@@ -232,13 +325,14 @@ export async function loadWorkSetup(
 ): Promise<WorkSetupPayload> {
   const team = await loadTeamDay()
   const businessDate = input.businessDate ?? team.businessDate
-  const [ledger, canonical, repRows, identityRows, overdueByRep, revisionRows] = await Promise.all([
+  const catalog = await loadActivityCatalog(client).catch(() => ({ channels: [], definitions: [], aliases: [] }) as ActivityCatalog)
+  const [ledger, canonical, repRows, identityRows, overdueByRep, revisionRows, capacityRows] = await Promise.all([
     getAccountabilityLedger(client, { orgId: input.orgId, businessDate }),
     loadCanonicalProfileAssignments(input.orgId, { client }),
     client.from('reps').select('id, name').eq('organization_id', input.orgId).order('name').limit(2000),
     client
       .from('revenue_identities')
-      .select('id, identity_name, channel, profile_id, status')
+      .select('id, identity_name, channel, channel_id, profile_id, status')
       .eq('organization_id', input.orgId)
       .limit(5000),
     countOverdueAssignedByRep(client, input.orgId, null).catch(() => new Map<string, number>()),
@@ -255,6 +349,9 @@ export async function loadWorkSetup(
           [input.orgId],
         )
       : Promise.resolve({ data: [], error: null }),
+    Promise.resolve(
+      client.from('rep_capacity_settings').select('rep_id, available_minutes').eq('organization_id', input.orgId).limit(500),
+    ).catch(() => ({ data: [], error: null })),
   ])
   if (repRows.error) throw repRows.error
   if (identityRows.error) throw identityRows.error
@@ -270,6 +367,7 @@ export async function loadWorkSetup(
     id: row.id as string,
     identityName: (row.identity_name as string) || 'Unnamed account',
     channel: normalizeChannel(row.channel as string),
+    channelId: (row.channel_id as string | null) ?? null,
     profileId: (row.profile_id as string | null) ?? null,
     status: (row.status as string) || 'active',
   }))
@@ -304,6 +402,12 @@ export async function loadWorkSetup(
     })),
     populations: ledger.populations,
     overdueTasks,
+    overdueByRep,
     revisions,
+    repSummaries: ledger.reps,
+    capacityByRep: Object.fromEntries(
+      ((capacityRows?.data ?? []) as Array<{ rep_id: string; available_minutes: number | null }>).map((row) => [row.rep_id, row.available_minutes]),
+    ),
+    catalog,
   })
 }

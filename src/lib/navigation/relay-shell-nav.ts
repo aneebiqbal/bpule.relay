@@ -205,6 +205,10 @@ export const NAV_DOMAINS: RelayPrimaryDomain[] = [
       { id: 'people-roles', label: 'People & Roles', href: '/admin/people', group: 'Operations' },
       // Admin configures who works what and how much; Team reviews progress.
       { id: 'admin-targets', label: 'Work Setup', href: '/admin/targets', group: 'Operations' },
+      // Channel + activity catalog feeding Work Setup; no separate system.
+      { id: 'admin-channels', label: 'Channels', href: '/admin/channels', group: 'Operations' },
+      // Departure / reassignment transfer of operational ownership.
+      { id: 'admin-handoff', label: 'Handoffs', href: '/admin/handoff', group: 'Operations' },
       { id: 'revenue-intelligence', label: 'Revenue Intelligence', href: '/admin/revenue-intelligence', group: 'Intelligence' },
       // Engineering / quality tooling lives behind one secondary entry, never
       // beside the daily operating surfaces.

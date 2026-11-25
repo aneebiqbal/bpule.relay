@@ -1,6 +1,7 @@
 import type { DbClient } from '@/lib/db/types'
 import { personNameFromProfile } from '@/lib/profiles/person-name'
 import { activityLabel } from '@/lib/responsibility/activity-registry'
+import { CanonicalActivityResolver, loadActivityCatalog } from '@/lib/execution/activity-catalog'
 import {
   computeProfileProgress,
   type PlanLane,
@@ -192,6 +193,11 @@ export async function loadDailyPlanProgress(
     contributionsByLane.set(row.revenue_identity_id, list)
   }
 
+  // One canonical label source for every surface. Unknown keys keep their raw
+  // text — the resolver never invents an "other" meaning.
+  const resolver = new CanonicalActivityResolver(await loadActivityCatalog(client))
+  const laneMetadata = resolver.getActivityDisplayMetadata([...new Set(plans.map((row) => row.activity_type))])
+
   const out: IdentityPlanProgress[] = []
   for (const identity of identities) {
     if (query.identityId && identity.id !== query.identityId) continue
@@ -245,7 +251,7 @@ export async function loadDailyPlanProgress(
       expectedByNow: Math.round(progress.target * 0.5),
       lanes: progress.lanes.map((lane) => ({
         ...lane,
-        label: activityLabel(lane.activityType),
+        label: laneMetadata[lane.activityType]?.label ?? activityLabel(lane.activityType),
       })),
     })
   }
