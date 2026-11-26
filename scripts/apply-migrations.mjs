@@ -21,25 +21,6 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 
-// Fail closed: schema changes require the owner-level DDL connection. Reusing
-// the restricted app/service role produced "permission denied for schema public"
-// on a production deploy attempt, so it is now an explicit configuration error.
-const url = process.env.RELAY_DDL_DATABASE_URL ?? process.env.MIGRATION_DATABASE_URL
-if (!url) {
-  console.error(
-    'RELAY_DDL_DATABASE_URL (owner-level DDL connection) is required to apply migrations.\n' +
-      'The app/service roles are DML-only and cannot create tables or alter existing ones.',
-  )
-  process.exit(1)
-}
-if (url === process.env.SERVICE_DATABASE_URL || url === process.env.DATABASE_URL) {
-  console.error(
-    'RELAY_DDL_DATABASE_URL must not be the restricted SERVICE_DATABASE_URL/DATABASE_URL.\n' +
-      'Provide the owner connection (avnadmin / postgres) used for schema changes.',
-  )
-  process.exit(1)
-}
-
 // Same TLS policy as src/lib/db/ssl.ts: Aiven presents a private CA. Verification
 // turns on when DATABASE_SSL_CA is present; otherwise we keep the historical
 // insecure mode so a deployment without the CA still connects.
@@ -55,8 +36,6 @@ function resolveSsl() {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const migrationsDir = join(root, 'supabase', 'migrations')
-const pool = new pg.Pool({ connectionString: url, max: 1, ssl: resolveSsl() })
-
 const FILE_PATTERN = /^(\d+)_.*\.sql$/
 
 // Non-additive / historical data changes are excluded by policy unless an
@@ -75,6 +54,56 @@ function skippedByPolicy(file, version) {
   if (file === '20261110080000_responsibility_reconciliation_v49.sql') return process.env.RELAY_INCLUDE_V49 !== '1'
   return false
 }
+function migrationFiles() {
+  return readdirSync(migrationsDir).filter((name) => FILE_PATTERN.test(name)).sort()
+}
+
+// Schema changes require the owner-level DDL connection. Without it, the runner
+// first checks READ-ONLY whether anything is actually pending; it only proceeds
+// when there is genuinely nothing to do, otherwise it fails closed with the
+// exact credential request.
+const url = process.env.RELAY_DDL_DATABASE_URL ?? process.env.MIGRATION_DATABASE_URL
+let pool
+if (!url) {
+  const readOnlyUrl = process.env.SERVICE_DATABASE_URL ?? process.env.DATABASE_URL
+  if (!readOnlyUrl) {
+    console.error('RELAY_DDL_DATABASE_URL (or a read-only DATABASE_URL to check pending work) is required')
+    process.exit(1)
+  }
+  const readOnlyPool = new pg.Pool({ connectionString: readOnlyUrl, max: 1, ssl: resolveSsl() })
+  try {
+    const recorded = new Set(
+      (await readOnlyPool.query('select version from supabase_migrations.schema_migrations')).rows.map((row) => row.version),
+    )
+    const pending = migrationFiles().filter((file) => {
+      const version = file.match(FILE_PATTERN)[1]
+      return !recorded.has(version) && !skippedByPolicy(file, version)
+    })
+    if (pending.length === 0) {
+      console.log('No pending migrations: schema is up to date; skipping DDL step.')
+      await readOnlyPool.end()
+      process.exit(0)
+    }
+    console.error(
+      `${pending.length} pending migration(s) require an owner-level DDL connection: ${pending.slice(0, 5).join(', ')}${pending.length > 5 ? ', …' : ''}\n` +
+        'Set RELAY_DDL_DATABASE_URL (CI secret or VPS .env.production). The app/service roles are DML-only.',
+    )
+    await readOnlyPool.end()
+    process.exit(1)
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    await readOnlyPool.end().catch(() => {})
+    process.exit(1)
+  }
+}
+if (url === process.env.SERVICE_DATABASE_URL || url === process.env.DATABASE_URL) {
+  console.error(
+    'RELAY_DDL_DATABASE_URL must not be the restricted SERVICE_DATABASE_URL/DATABASE_URL.\n' +
+      'Provide the owner connection (avnadmin / postgres) used for schema changes.',
+  )
+  process.exit(1)
+}
+pool = new pg.Pool({ connectionString: url, max: 1, ssl: resolveSsl() })
 
 async function main() {
   const privilege = await pool.query(
