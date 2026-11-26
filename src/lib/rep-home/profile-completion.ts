@@ -157,6 +157,8 @@ export function buildProfilesToday(
   profileTotalsByActivity?: Map<string, number>,
   /** `${identityId}:${activityType}` → this rep's allocated share. */
   allocationsByRep?: Map<string, number>,
+  /** Canonical display labels from the catalog; falls back to legacy labels. */
+  activityLabels?: Record<string, string>,
 ): ProfileToday[] {
   // Group by the canonical person, not the sender account: a person who sells
   // on two channels must see one card whose total is the sum of both lanes.
@@ -205,7 +207,7 @@ export function buildProfilesToday(
       entry.allocatedTarget += allocated
       entry.targets.push({
         activityType,
-        label: activityLabel(activityType),
+        label: activityLabels?.[target.activityType] ?? activityLabel(activityType),
         targetCount: target.targetCount,
         completedCount: target.completedCount,
         allocatedTarget: allocated,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DbClient } from '@/lib/db/types'
-import { verifyPendingJobs, isJobSpecificUrl } from '@/lib/job-discovery/verify'
+import { verifyPendingJobs, isJobSpecificUrl, PERSISTABLE_VERIFICATION_STATUSES } from '@/lib/job-discovery/verify'
 
 const NOW = new Date('2026-11-20T12:00:00.000Z')
 
@@ -76,7 +76,10 @@ describe('verifyPendingJobs', () => {
     const { db, updates } = fakeDb([{ id: 'j1', apply_url: 'https://employer.example.com/careers' }])
     const result = await verifyPendingJobs(db, { now: NOW, limit: 1, fetchFn: fetchWithUrl(200, 'https://employer.example.com/careers') })
     expect(result.verified).toBe(0)
-    expect(updates[0].params[0]).toBe('reachable_unconfirmed')
+    // Persisted status must satisfy the table CHECK; the nuanced reason is
+    // retained in evidence rather than an out-of-contract column value.
+    expect(PERSISTABLE_VERIFICATION_STATUSES).toContain(updates[0].params[0])
+    expect(updates[0].params[0]).toBe('verification_needed')
     const evidence = JSON.parse(String(updates[0].params[3]))
     expect(evidence.at(-1).type).toBe('reachable_unconfirmed')
   })
@@ -88,7 +91,8 @@ describe('verifyPendingJobs', () => {
       expect(result.failed).toBe(1)
       expect(result.verified).toBe(0)
       expect(result.closed).toBe(0)
-      expect(updates[0].params[0]).toBe('verification_blocked')
+      expect(PERSISTABLE_VERIFICATION_STATUSES).toContain(updates[0].params[0])
+      expect(updates[0].params[0]).toBe('verification_needed')
       const evidence = JSON.parse(String(updates[0].params[3]))
       expect(evidence.at(-1).type).toBe('verification_blocked')
     }

@@ -2018,6 +2018,42 @@ export class SupabaseStore implements ScoutStore {
       }
     }
 
+    // Reply handling is credited separately and only for a persisted outbound
+    // reply (a received reply is not proof the rep handled it). Its own
+    // definition keeps it out of DM/application lanes; exactly-once via the
+    // message id.
+    if (type === 'reply' && inserted?.id) {
+      try {
+        const businessDate = await this.businessDate()
+        const executable = await listExecutableIdentitiesForRep(this.client, this.orgId, this.rep.id, businessDate)
+        const executableIds = new Set(executable.map((row) => row.id))
+        const { data: replyPlans } = await this.client
+          .from('daily_target_plans')
+          .select('revenue_identity_id')
+          .eq('activity_type', 'reply_handled')
+          .eq('active', true)
+        const replyIdentityIds = (replyPlans ?? [])
+          .map((row) => row.revenue_identity_id as string)
+          .filter((id) => executableIds.has(id))
+        for (const identityId of replyIdentityIds) {
+          try {
+            await this.client.rpc('record_activity_event', {
+              p_rep_id: this.rep.id,
+              p_identity_id: identityId,
+              p_activity_type: 'reply_handled',
+              p_org_id: this.orgId,
+              p_source_event_id: `reply:${inserted.id}:${identityId}`,
+              p_date: businessDate,
+            })
+          } catch {
+            // Non-fatal per-target
+          }
+        }
+      } catch {
+        // Reply credit must never block the send
+      }
+    }
+
     return { allowed: true, todaySends: todaySends + 1, limit: policy.dailyLimit, messageId: inserted.id as string }
   }
 

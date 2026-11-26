@@ -1,6 +1,8 @@
 import type { DbClient } from '@/lib/db/types'
 import { ACTIVITY_LABELS } from '@/lib/accountability/default-targets'
 import { saveResponsibilityChain } from '@/lib/profiles/assignment'
+import { CanonicalActivityResolver, loadActivityCatalog } from '@/lib/execution/activity-catalog'
+import { businessDateForOrg } from '@/lib/org-clock/load'
 
 /**
  * The ONE assignment + target write path for Admin → Work Setup.
@@ -277,6 +279,11 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
   if (!identity.profile_id) return fail('This account is not linked to a profile. Link it before assigning work.')
   if (identity.status === 'archived') return fail('An archived account cannot carry executable work.')
 
+  // Requirements become effective on the ORGANIZATION's business date, never
+  // the server-local date; otherwise a lane created late in the day is
+  // invisible to Rep Today while credits already count against it.
+  const businessDate = await businessDateForOrg(input.orgId).catch(() => new Date().toISOString().slice(0, 10))
+
   const profileId = identity.profile_id as string
 
   const namedRepIds = [
@@ -314,6 +321,34 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
       }
     }
 
+    // The account's channel decides which activities are configurable. Custom
+    // channels therefore need no code change: their definitions are data.
+    const identityRow = await c
+      .from('revenue_identities')
+      .select('channel, channel_id')
+      .eq('id', input.identityId)
+      .maybeSingle()
+    const identity = (identityRow.data ?? null) as { channel: string | null; channel_id?: string | null } | null
+    const catalog = await loadActivityCatalog(c).catch(() => ({ channels: [], definitions: [], aliases: [] }))
+    const resolver = new CanonicalActivityResolver(catalog)
+    const channel = resolver.channelForIdentity({
+      channel: identity?.channel ?? null,
+      channelId: identity?.channel_id ?? null,
+    })
+    const definitions = new Map<string, { label: string; targetable: boolean }>()
+    for (const definition of channel ? resolver.listChannelActivities(channel.id) : []) {
+      definitions.set(definition.key, { label: definition.label, targetable: definition.targetable })
+    }
+    // Pre-catalog databases and test fakes: fall back to the historical lane
+    // set so an unchanged Work Setup save keeps working. Production with the
+    // migration applied always resolves real definitions.
+    if (definitions.size === 0) {
+      for (const key of WORK_SETUP_ACTIVITIES) {
+        definitions.set(key, { label: ACTIVITY_LABELS[key] ?? key, targetable: key !== 'proposal' })
+      }
+    }
+    const activityLabel = (key: string): string => definitions.get(key)?.label ?? label(key)
+
     // 1. Seats. Replace-and-reconcile is idempotent, so an unchanged save is a
     //    no-op and never disturbs acknowledgements.
     const chain = await saveResponsibilityChain(c, {
@@ -335,14 +370,15 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
     if (input.targets) {
       const seen = new Set<string>()
       for (const lane of input.targets) {
-        if (!WORK_SETUP_ACTIVITIES.includes(lane.activityType)) {
-          throw new Error(`${lane.activityType} is not a valid activity.`)
+        const definition = definitions.get(lane.activityType)
+        if (!definition) {
+          throw new Error(`${lane.activityType} is not an enabled activity on this account's channel.`)
         }
         const targetCount = Math.round(Number(lane.targetCount))
         if (!Number.isFinite(targetCount) || targetCount < 0) {
-          throw new Error(`${label(lane.activityType)} must be zero or a positive number.`)
+          throw new Error(`${activityLabel(lane.activityType)} must be zero or a positive number.`)
         }
-        if (seen.has(lane.activityType)) throw new Error(`Duplicate ${label(lane.activityType)} lane.`)
+        if (seen.has(lane.activityType)) throw new Error(`Duplicate ${activityLabel(lane.activityType)} lane.`)
         seen.add(lane.activityType)
 
         const { data: existing } = await c
@@ -370,7 +406,7 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
         const writing = id
           ? await c
               .from('daily_target_plans')
-              .update({ target_count: targetCount, active: true, targetable: lane.activityType !== 'proposal', updated_at: new Date().toISOString() })
+              .update({ target_count: targetCount, active: true, targetable: definition.targetable, updated_at: new Date().toISOString() })
               .eq('id', id)
               .select('id')
               .single()
@@ -381,7 +417,8 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
                 revenue_identity_id: input.identityId,
                 activity_type: lane.activityType,
                 target_count: targetCount,
-                targetable: lane.activityType !== 'proposal',
+                targetable: definition.targetable,
+                effective_from: businessDate,
                 active: true,
                 created_by: input.actorRepId,
               })
@@ -445,12 +482,12 @@ export async function saveWorkSetup(client: DbClient, input: WorkSetupInput): Pr
           .data?.[0] as { id: string; target_count: number } | undefined
         if (!planId) {
           if (shares.size === 0) continue
-          throw new Error(`Set the ${label(activityType)} target before allocating it.`)
+          throw new Error(`Set the ${activityLabel(activityType)} target before allocating it.`)
         }
         const total = [...shares.values()].reduce((sum, value) => sum + value, 0)
         const laneTarget = targetByActivity.get(activityType) ?? planId.target_count
         if (total > laneTarget) {
-          throw new Error(`${label(activityType)} allocations total ${total}, above the lane target of ${laneTarget}.`)
+          throw new Error(`${activityLabel(activityType)} allocations total ${total}, above the lane target of ${laneTarget}.`)
         }
 
         const replaced = await replacePlanAllocations(c, {

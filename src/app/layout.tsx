@@ -1,24 +1,36 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+// Self-hosted IBM Plex (SIL OFL 1.1). Vendored so builds never depend on a
+// live Google Fonts fetch; see src/app/fonts/OFL-IBM-Plex.txt.
+import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
 import { siteConfig, canonicalUrl } from "@/lib/site-config";
 import { resolveDbProvider } from "@/lib/db/types";
 import { resolveAuthProvider } from "@/lib/auth/contract";
 import "./globals.css";
 
-const plexSans = IBM_Plex_Sans({
+const plexSans = localFont({
   variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  style: ["normal", "italic"],
   display: "swap",
+  src: [
+    { path: "./fonts/ibm-plex-sans-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "./fonts/ibm-plex-sans-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/ibm-plex-sans-latin-400-italic.woff2", weight: "400", style: "italic" },
+    { path: "./fonts/ibm-plex-sans-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/ibm-plex-sans-latin-500-italic.woff2", weight: "500", style: "italic" },
+    { path: "./fonts/ibm-plex-sans-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/ibm-plex-sans-latin-600-italic.woff2", weight: "600", style: "italic" },
+    { path: "./fonts/ibm-plex-sans-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
 });
 
-const plexMono = IBM_Plex_Mono({
+const plexMono = localFont({
   variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
   display: "swap",
+  src: [
+    { path: "./fonts/ibm-plex-mono-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/ibm-plex-mono-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/ibm-plex-mono-latin-600-normal.woff2", weight: "600", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {

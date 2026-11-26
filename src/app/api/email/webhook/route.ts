@@ -91,9 +91,11 @@ async function updateConversationOnReply(supabase: ReturnType<typeof createServi
     }).catch(() => 'failed')
   }
 
+  // A legitimate inbound email is proof the lead is alive: restore it just as
+  // the LinkedIn reply paths do, instead of leaving a replied lead archived.
   await supabase
     .from('leads')
-    .update({ status: 'replied' })
+    .update({ status: 'replied', archived: false, archived_at: null })
     .eq('id', leadId)
     .eq('organization_id', organizationId)
 

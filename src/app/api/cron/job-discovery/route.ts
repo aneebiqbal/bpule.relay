@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { requireCronSecret } from '@/lib/supabase/service'
+import { createServiceSupabase, requireCronSecret } from '@/lib/supabase/service'
 import { runJobDiscovery } from '@/lib/job-discovery/ingest'
+import { runQueuedManualSync } from '@/lib/job-discovery/sync-requests'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -25,6 +26,18 @@ export async function GET(request: Request) {
   const maxSources = Math.min(Math.max(Number(url.searchParams.get('max') ?? '4') || 4, 1), 8)
   const timeoutMs = Math.min(Math.max(Number(url.searchParams.get('timeout') ?? '8000') || 8000, 1000), 20_000)
 
+  // A manual Sync Now request is executed here, off the request path. Forced so
+  // a refresh really re-reads the enabled sources rather than waiting out each
+  // source's polling interval.
+  const manual = await runQueuedManualSync(createServiceSupabase(), (options) =>
+    runJobDiscovery({
+      sourceIds: options.sourceIds,
+      force: options.force,
+      maxSources: 8,
+      timeoutMs: 20_000,
+    }),
+  )
+
   const result = await runJobDiscovery({ sourceIds, maxSources, timeoutMs })
-  return NextResponse.json(result, { status: result.ok ? 200 : 423 })
+  return NextResponse.json({ ...result, manual: manual ?? null }, { status: result.ok ? 200 : 423 })
 }

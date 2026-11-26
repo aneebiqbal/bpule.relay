@@ -23,6 +23,7 @@ export interface InventoryJob {
   source_url: string | null
   eligibility: JobEligibility | null
   requirements?: unknown
+  quality_classification?: string | null
 }
 
 const ENGINEERING = /engineer|software|developer|devops|sre|site reliability|data|machine learning|security|backend|frontend|full.?stack|mobile|qa|test automation|architect/i
@@ -56,6 +57,9 @@ function applyUrlQuality(url: string | null): string {
 }
 
 export function bucketFor(job: InventoryJob, canonical: boolean, now: Date): { bucket: string; reason: string; include: boolean } {
+  if (job.quality_classification === 'suspected_scam') {
+    return { bucket: 'quarantined', reason: 'Conservative quality screen flagged this listing for review.', include: false }
+  }
   if (job.closed_at || job.verification_status === 'closed' || job.verification_status === 'expired') {
     return { bucket: 'closed', reason: 'Closed or expired at the source', include: false }
   }
@@ -109,7 +113,8 @@ export async function reindexJobInventory(db: DbClient, options: ReindexOptions 
   const jobs = await db.raw!<InventoryJob[]>(
     `select id, source_id, company, title, description, location_raw, remote, skills, employment_type,
             posted_at, last_seen_at, last_verified_at, verification_status, closed_at,
-            duplicate_group_id, apply_url, source_url, eligibility, requirements
+            duplicate_group_id, apply_url, source_url, eligibility, requirements,
+            quality_classification
      from jobs
      where (?::text[] is null or source_id = any(?::text[]))`,
     [options.sourceIds ?? null, options.sourceIds ?? null],
@@ -178,6 +183,7 @@ export async function reindexJobInventory(db: DbClient, options: ReindexOptions 
       last_seen_at: job.last_seen_at,
       last_verified_at: job.last_verified_at,
       verification_status: job.verification_status,
+      quality_classification: job.quality_classification ?? null,
       closed_at: job.closed_at,
       duplicate_group_id: job.duplicate_group_id,
       apply_url_quality: applyUrlQuality(job.apply_url),

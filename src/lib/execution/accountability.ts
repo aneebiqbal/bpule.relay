@@ -506,6 +506,8 @@ export interface AccountabilityLedger {
   businessDate: string
   populations: AccountabilityPopulations
   rows: AccountabilityLedgerRow[]
+  /** Canonical personal expectations for the same business date. */
+  reps: RepDailySummary[]
 }
 
 /**
@@ -526,6 +528,7 @@ export async function getAccountabilityLedger(
   return {
     businessDate: input.businessDate,
     populations: reconcilePopulations(summary),
+    reps: summary.reps.map((rep) => ({ ...rep, repName: repNameById.get(rep.repId) ?? rep.repName })),
     rows: summary.lanes.map((lane) => ({
       businessDate: input.businessDate,
       planId: lane.planId,

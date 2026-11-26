@@ -13,6 +13,7 @@ import type { DbClient } from '@/lib/db/types'
 import { adapterFor } from './adapters'
 import { classifyRemoteEligibility } from './eligibility'
 import { isSafeApplicationUrl } from './url'
+import { screenJobQuality } from './quality'
 import type { DiscoveryJob, IngestionSummary } from './types'
 
 const LOCK_KEY = 'job-discovery-v2'
@@ -26,6 +27,12 @@ export interface RunOptions {
   timeoutMs?: number
   fetchFn?: typeof fetch
   now?: Date
+  /**
+   * Ignore each source's polling interval. Manual "Sync Now" uses this so a
+   * refresh really re-reads the enabled sources; scheduled ticks stay
+   * interval-bound to respect provider rate limits.
+   */
+  force?: boolean
 }
 
 export interface RunResult {
@@ -85,16 +92,22 @@ async function releaseLock(db: DbClient): Promise<void> {
   await db.raw!('delete from job_discovery_locks where lock_key = ?', [LOCK_KEY])
 }
 
-async function loadDueSources(db: DbClient, sourceIds: string[] | undefined, maxSources: number, now: Date): Promise<SourceRow[]> {
+async function loadDueSources(
+  db: DbClient,
+  sourceIds: string[] | undefined,
+  maxSources: number,
+  now: Date,
+  ignoreInterval = false,
+): Promise<SourceRow[]> {
   const result = await db.raw!<SourceRow[]>(
     `select id, kind, config, cursor, interval_secs
      from job_sources
      where enabled = true
        and (?::text[] is null or id = any(?::text[]))
-       and (last_run_at is null or last_run_at <= (?::timestamptz - (interval_secs || ' seconds')::interval))
+       and (?::boolean or last_run_at is null or last_run_at <= (?::timestamptz - (interval_secs || ' seconds')::interval))
      order by last_run_at asc nulls first
      limit ?`,
-    [sourceIds ?? null, sourceIds ?? null, now, maxSources],
+    [sourceIds ?? null, sourceIds ?? null, ignoreInterval, now, maxSources],
   )
   if (result.error) throw new Error(result.error.message)
   return result.data ?? []
@@ -107,7 +120,7 @@ export async function runJobDiscovery(options: RunOptions = {}): Promise<RunResu
     return { ok: false, locked: true, summaries: [] }
   }
   try {
-    const sources = await loadDueSources(db, options.sourceIds, options.maxSources ?? 4, now)
+    const sources = await loadDueSources(db, options.sourceIds, options.maxSources ?? 4, now, options.force === true)
     const summaries: IngestionSummary[] = []
     for (const source of sources) {
       summaries.push(await runSource(db, source, options))
@@ -227,6 +240,17 @@ async function upsertJobs(
       employmentType: job.employmentType,
       applyUrl: job.applyUrl,
     })
+    // Conservative deterministic screen. A suspected scam is quarantined by the
+    // feed projection; it is never deleted or silently dropped.
+    const quality = screenJobQuality({
+      title: job.title,
+      company: job.company ?? null,
+      description: job.description,
+      applyUrl: isSafeApplicationUrl(job.applyUrl) ? (job.applyUrl ?? null) : null,
+      salaryMin: job.salaryMin ?? null,
+      salaryMax: job.salaryMax ?? null,
+      sourceId: source.id,
+    })
     const key = dedupeKey(job)
     const previous = existing.get(job.sourceJobId)
     const evidence = appendEvidence(previous?.verification_evidence, {
@@ -271,6 +295,8 @@ async function upsertJobs(
       attribution: job.attribution ? JSON.stringify(job.attribution) : null,
       raw: job.raw === undefined || job.raw === null ? null : JSON.stringify(job.raw),
       eligibility: JSON.stringify(eligibility),
+      quality_classification: quality.classification,
+      quality_reasons: JSON.stringify(quality.reasons),
       verification_status: verifiedStatus,
       verification_evidence: JSON.stringify(evidence),
       first_seen_at: now,
@@ -291,6 +317,7 @@ async function upsertJobs(
     'salary_min', 'salary_max', 'salary_currency', 'salary_period', 'salary_raw',
     'description', 'excerpt', 'skills', 'categories', 'posted_at', 'expires_at',
     'apply_url', 'source_url', 'attribution', 'raw', 'eligibility',
+    'quality_classification', 'quality_reasons',
     'verification_status', 'verification_evidence', 'first_seen_at', 'last_seen_at',
     'last_checked_at', 'last_verified_at', 'content_hash', 'content_changed_at', 'source_updated_at',
     'dedupe_key', 'updated_at',
@@ -305,7 +332,17 @@ async function upsertJobs(
     'skills=excluded.skills', 'categories=excluded.categories', 'posted_at=excluded.posted_at',
     'expires_at=excluded.expires_at', 'apply_url=excluded.apply_url', 'source_url=excluded.source_url',
     'attribution=excluded.attribution', 'raw=excluded.raw', 'eligibility=excluded.eligibility',
-    'verification_status=excluded.verification_status', 'verification_evidence=excluded.verification_evidence',
+    'quality_classification=excluded.quality_classification', 'quality_reasons=excluded.quality_reasons',
+    // A source still returning a listing does not reopen one that verification
+    // confirmed closed/expired. Only changed content earns a fresh evaluation;
+    // otherwise a 404-closed job would silently re-enter the active feed.
+    `verification_status=case
+       when jobs.verification_status in ('closed','expired')
+        and jobs.content_hash is not distinct from excluded.content_hash
+       then jobs.verification_status
+       else excluded.verification_status
+     end`,
+    'verification_evidence=excluded.verification_evidence',
     'last_seen_at=excluded.last_seen_at', 'last_checked_at=excluded.last_checked_at',
     'last_verified_at=coalesce(excluded.last_verified_at, jobs.last_verified_at)',
     'content_hash=excluded.content_hash',

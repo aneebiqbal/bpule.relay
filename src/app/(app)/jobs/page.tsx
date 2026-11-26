@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createScoutStore } from '@/lib/store'
 import { getAuthContext } from '@/lib/auth/organization'
-import { listJobs, listApplications, listDocuments, listSources, listPreparedJobs, ensureJobMatches, type JobsView, type JobFilters, type PreparedCard } from '@/lib/job-discovery/service'
+import { listJobs, listApplications, listDocuments, listSources, listPreparedJobs, ensureJobMatches, resolveFreshnessWindow, getJobsFeedStatus, type JobsView, type JobFilters, type PreparedCard } from '@/lib/job-discovery/service'
 import { JobsWorkspace } from '@/components/jobs/jobs-workspace'
 
 export const dynamic = 'force-dynamic'
@@ -28,6 +28,9 @@ export default async function JobsPage({
     const value = Number(params[key])
     return Number.isFinite(value) ? value : undefined
   }
+  // An explicit window always wins (0 = all open). Absent on a fresh feed, the
+  // product default applies so the page and the service agree on what is shown.
+  const freshnessParam = num('freshnessDays')
   const filters: JobFilters = {
     title: typeof params.title === 'string' ? params.title : undefined,
     company: typeof params.company === 'string' ? params.company : undefined,
@@ -37,7 +40,7 @@ export default async function JobsPage({
     maxSalary: num('maxSalary'),
     seniority: typeof params.seniority === 'string' ? params.seniority : undefined,
     employmentType: typeof params.employmentType === 'string' ? params.employmentType : undefined,
-    freshnessDays: num('freshnessDays'),
+    freshnessDays: resolveFreshnessWindow(view, freshnessParam),
     verificationStatus: typeof params.verificationStatus === 'string' ? params.verificationStatus : undefined,
     matchCategory: typeof params.matchCategory === 'string' ? params.matchCategory : undefined,
     sort: (typeof params.sort === 'string' ? params.sort : undefined) as JobFilters['sort'],
@@ -71,6 +74,7 @@ export default async function JobsPage({
         offset,
       })
 
+  const feedStatus = await getJobsFeedStatus(store.getSupabaseClient())
   const [applications, documents, sources] = await Promise.all([
     view === 'applications' ? listApplications(store.getSupabaseClient(), auth.orgId, profileId) : Promise.resolve([]),
     view === 'documents' ? listDocuments(store.getSupabaseClient(), auth.orgId, profileId ?? '') : Promise.resolve([]),
@@ -94,6 +98,7 @@ export default async function JobsPage({
       prepared={prepared}
       sources={sources as unknown as Array<Record<string, unknown>>}
       isAdmin={Boolean(auth.isAdmin || auth.isOwner)}
+      lastSyncAt={feedStatus.lastSyncAt}
     />
   )
 }

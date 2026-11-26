@@ -9,6 +9,20 @@ import type { DbClient } from '@/lib/db/types'
  * closes a job — only an explicit 404/410 does.
  */
 
+/**
+ * Every value this module may persist. Kept identical to the `jobs`
+ * `verification_status` CHECK constraint; richer outcomes (generic page,
+ * bot-blocked) live in `verification_evidence.type` instead of the column.
+ */
+export const PERSISTABLE_VERIFICATION_STATUSES = [
+  'verified_open',
+  'recently_seen',
+  'verification_needed',
+  'closed',
+  'expired',
+  'source_unavailable',
+] as const
+
 export interface VerifyOptions {
   now?: Date
   limit?: number
@@ -122,7 +136,9 @@ export async function verifyPendingJobs(db: DbClient, options: VerifyOptions = {
           entry = { at: now.toISOString(), type: 'verified_open', http_status: outcome.status, final_url: outcome.finalUrl }
           result.verified++
         } else {
-          status = { verification_status: 'reachable_unconfirmed', last_verified_at: now.toISOString() }
+          // Reachable but not the job's own page. Persist as needs-verification;
+          // the precise reason lives in verification_evidence.type.
+          status = { verification_status: 'verification_needed', last_verified_at: now.toISOString() }
           entry = { at: now.toISOString(), type: 'reachable_unconfirmed', http_status: outcome.status, final_url: outcome.finalUrl }
           result.failed++
         }
@@ -132,7 +148,7 @@ export async function verifyPendingJobs(db: DbClient, options: VerifyOptions = {
         result.closed++
       } else if (outcome.status === 403 || outcome.status === 429) {
         // Bot protection: reachable, but we cannot confirm the job is open.
-        status = { verification_status: 'verification_blocked', last_verified_at: now.toISOString() }
+        status = { verification_status: 'verification_needed', last_verified_at: now.toISOString() }
         entry = { at: now.toISOString(), type: 'verification_blocked', http_status: outcome.status, final_url: outcome.finalUrl }
         result.failed++
       } else {
