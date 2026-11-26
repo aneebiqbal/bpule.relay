@@ -59,6 +59,23 @@ const pool = new pg.Pool({ connectionString: url, max: 1, ssl: resolveSsl() })
 
 const FILE_PATTERN = /^(\d+)_.*\.sql$/
 
+// Non-additive / historical data changes are excluded by policy unless an
+// operator explicitly opts in. v4.9 reconciles real production ownership rows;
+// it must never ride along with a routine additive release.
+// Match FILE names exactly: version prefixes are not unique (two migrations
+// share the 20261110080000 prefix).
+const POLICY_SKIP_FILES = new Set(['20261110080000_responsibility_reconciliation_v49.sql'])
+const skippedVersions = new Set()
+for (const version of (process.env.RELAY_SKIP_MIGRATIONS ?? '').split(',')) {
+  const trimmed = version.trim()
+  if (trimmed) skippedVersions.add(trimmed)
+}
+function skippedByPolicy(file, version) {
+  if (skippedVersions.has(version)) return true
+  if (file === '20261110080000_responsibility_reconciliation_v49.sql') return process.env.RELAY_INCLUDE_V49 !== '1'
+  return false
+}
+
 async function main() {
   const privilege = await pool.query(
     `select has_schema_privilege(current_user, 'public', 'CREATE') as can_create,
@@ -109,6 +126,11 @@ async function main() {
 
   for (const name of files) {
     const version = name.match(FILE_PATTERN)[1]
+    if (skippedByPolicy(name, version)) {
+      console.log(`skipped by policy ${name} (set RELAY_INCLUDE_V49=1 to apply it explicitly)`)
+      skipped += 1
+      continue
+    }
     if (recorded.has(version)) {
       skipped += 1
       continue
