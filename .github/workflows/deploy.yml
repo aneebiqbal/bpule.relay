@@ -119,9 +119,25 @@ jobs:
           set -a
           . .env.production
           set +a
-          # Prefer the CI-provided owner connection; fall back to one stored in
-          # the VPS environment file so no credential is required in GitHub.
+          # Prefer the CI-provided owner connection; fall back to an owner-level
+          # DSN stored in the VPS environment under a conventional name. Values
+          # are never printed.
           DDL_URL="${DDL_URL:-${RELAY_DDL_DATABASE_URL:-}}"
+          if [ -z "$DDL_URL" ] && [ -f "$BASE/relay/.env.ddl" ]; then
+            set -a
+            . "$BASE/relay/.env.ddl"
+            set +a
+          fi
+          if [ -z "$DDL_URL" ]; then
+            for candidate in MIGRATION_DATABASE_URL DDL_DATABASE_URL OWNER_DATABASE_URL AVNADMIN_DATABASE_URL ADMIN_DATABASE_URL; do
+              eval "value=\${$candidate:-}"
+              if [ -n "$value" ]; then
+                DDL_URL="$value"
+                echo "DDL credential discovered from $candidate"
+                break
+              fi
+            done
+          fi
           if [ -z "$DDL_URL" ]; then
             echo "RELAY_DDL_DATABASE_URL was not provided; refusing schema changes." >&2
             exit 1
