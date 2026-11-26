@@ -63,7 +63,10 @@ p50/p95 navigation ms: OWNER /dashboard 42/61, /chats 39/48, /tasks 44/51, /lead
 ## Migration runbook
 
 1. Take an Aiven backup; record current `schema_migrations` count (200) and DB size (~397 MB).
-2. Apply the nine migrations in filename order via `scripts/apply-pending-migrations.sh` using the owner/service connection (DDL requires elevated role).
+2. Apply the nine migrations in filename order with the **owner-level** connection in `RELAY_DDL_DATABASE_URL`:
+   `node scripts/apply-migrations.mjs` (the runner fails closed without it and refuses to reuse `DATABASE_URL`/`SERVICE_DATABASE_URL`).
+   CI reads the same value from the `RELAY_DDL_DATABASE_URL` repository secret.
+   > Incident 2026-11-26: an earlier deploy attempt ran migrations with the restricted app role and failed **0 applied / production unchanged**. The runner now preflights `has_schema_privilege(current_user,'public','CREATE')`.
 3. Verify: new tables exist; `has_table_privilege('relay_service',…,'INSERT')` true; seed counts 5 channels / 16 activities / 8 aliases; app login + `/api/admin/channels` load.
 4. Deploy code **after** schema verification. All migrations are additive; if code deploy fails, the schema remains forward-compatible (old code ignores new tables). Do not restore the whole database for a code rollback.
 5. Decide `v49` separately with its own backup point.

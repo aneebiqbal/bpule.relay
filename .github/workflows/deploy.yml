@@ -92,11 +92,15 @@ jobs:
       - name: Activate release
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
+          # Owner-level DDL connection for schema migrations. The app/service
+          # roles are DML-only; without this the migration step fails closed.
+          RELAY_DDL_DATABASE_URL: ${{ secrets.RELAY_DDL_DATABASE_URL }}
         run: |
-          ssh deploy@"$VPS_HOST" bash -s -- "$GITHUB_SHA" <<'REMOTE'
+          ssh deploy@"$VPS_HOST" bash -s -- "$GITHUB_SHA" "$RELAY_DDL_DATABASE_URL" <<'REMOTE'
           set -euo pipefail
 
           SHA="$1"
+          DDL_URL="$2"
           BASE=/home/deploy/apps
           RELEASE="$BASE/relay-releases/$SHA"
           CURRENT="$BASE/relay-current"
@@ -115,6 +119,11 @@ jobs:
           set -a
           . .env.production
           set +a
+          if [ -z "$DDL_URL" ]; then
+            echo "RELAY_DDL_DATABASE_URL was not provided; refusing schema changes." >&2
+            exit 1
+          fi
+          export RELAY_DDL_DATABASE_URL="$DDL_URL"
           node scripts/apply-migrations.mjs
 
           # Scheduled workers (discovery / verification / inventory /

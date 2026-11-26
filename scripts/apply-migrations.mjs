@@ -6,7 +6,11 @@
  * no `psql` binary and no repository checkout beyond this script and the
  * `supabase/migrations` directory.
  *
- *   SERVICE_DATABASE_URL=... node scripts/apply-migrations.mjs
+ *   RELAY_DDL_DATABASE_URL=... node scripts/apply-migrations.mjs
+ *
+ * The DDL connection must be an owner-level role. The restricted app/service
+ * roles are DML-only on Aiven, so this script FAILS CLOSED unless a dedicated
+ * owner URL is supplied (and refuses to reuse the app/service credentials).
  *
  * Each migration runs in ONE transaction together with its version insert, so a
  * failure rolls back instead of leaving half the schema behind. Already-recorded
@@ -17,9 +21,22 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 
-const url = process.env.SERVICE_DATABASE_URL ?? process.env.DATABASE_URL
+// Fail closed: schema changes require the owner-level DDL connection. Reusing
+// the restricted app/service role produced "permission denied for schema public"
+// on a production deploy attempt, so it is now an explicit configuration error.
+const url = process.env.RELAY_DDL_DATABASE_URL ?? process.env.MIGRATION_DATABASE_URL
 if (!url) {
-  console.error('SERVICE_DATABASE_URL (or DATABASE_URL) is required')
+  console.error(
+    'RELAY_DDL_DATABASE_URL (owner-level DDL connection) is required to apply migrations.\n' +
+      'The app/service roles are DML-only and cannot create tables or alter existing ones.',
+  )
+  process.exit(1)
+}
+if (url === process.env.SERVICE_DATABASE_URL || url === process.env.DATABASE_URL) {
+  console.error(
+    'RELAY_DDL_DATABASE_URL must not be the restricted SERVICE_DATABASE_URL/DATABASE_URL.\n' +
+      'Provide the owner connection (avnadmin / postgres) used for schema changes.',
+  )
   process.exit(1)
 }
 
@@ -43,6 +60,20 @@ const pool = new pg.Pool({ connectionString: url, max: 1, ssl: resolveSsl() })
 const FILE_PATTERN = /^(\d+)_.*\.sql$/
 
 async function main() {
+  const privilege = await pool.query(
+    `select has_schema_privilege(current_user, 'public', 'CREATE') as can_create,
+            current_user as role`,
+  )
+  const guard = privilege.rows[0]
+  console.log(`migration role: ${guard.role} (schema public CREATE=${guard.can_create})`)
+  if (!guard.can_create) {
+    console.error(
+      `Role "${guard.role}" cannot create in schema public. Re-run with RELAY_DDL_DATABASE_URL pointing at the owner role.`,
+    )
+    await pool.end()
+    process.exit(1)
+  }
+
   // relay_service is DML-only on Aiven: no CREATE on the database or schema.
   // Only bootstrap when absent, so a fully-migrated production database does
   // not require DDL privileges to be read and verified.
