@@ -67,6 +67,10 @@ p50/p95 navigation ms: OWNER /dashboard 42/61, /chats 39/48, /tasks 44/51, /lead
    `node scripts/apply-migrations.mjs` (the runner fails closed without it and refuses to reuse `DATABASE_URL`/`SERVICE_DATABASE_URL`).
    CI reads the same value from the `RELAY_DDL_DATABASE_URL` repository secret.
    > Incident 2026-11-26: an earlier deploy attempt ran migrations with the restricted app role and failed **0 applied / production unchanged**. The runner now preflights `has_schema_privilege(current_user,'public','CREATE')`.
+   >
+   > The owner DDL URL may come from the `RELAY_DDL_DATABASE_URL` repository secret **or** from `/home/deploy/apps/relay/.env.production` on the VPS (the latter keeps credentials off CI).
+   >
+   > `20261110080000_responsibility_reconciliation_v49.sql` is excluded by policy (exact filename match); set `RELAY_INCLUDE_V49=1` to apply it deliberately.
 3. Verify: new tables exist; `has_table_privilege('relay_service',…,'INSERT')` true; seed counts 5 channels / 16 activities / 8 aliases; app login + `/api/admin/channels` load.
 4. Deploy code **after** schema verification. All migrations are additive; if code deploy fails, the schema remains forward-compatible (old code ignores new tables). Do not restore the whole database for a code rollback.
 5. Decide `v49` separately with its own backup point.
