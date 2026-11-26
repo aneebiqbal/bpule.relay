@@ -18,6 +18,7 @@ import {
   type ProfilePerformanceRow,
 } from '@/lib/team/admin-command-summary'
 import { buildTeamProfiles } from '@/lib/team/profiles'
+import { reconcilePopulations } from '@/lib/execution/accountability'
 import { profileCompletionStatus } from '@/lib/rep-home/profile-completion'
 import { qualifyCanonicalScore } from '@/lib/scoring/qualification'
 import type { ManagerActivityItem } from '@/lib/team/manager-home-summary'
@@ -311,6 +312,10 @@ export async function loadAdminCommandCenter(): Promise<{
     }).length
 
     const canonicalSummary = accountabilitySummary ?? null
+    // Required = Allocated + Unallocated, computed from SEATED personal
+    // expectations. Never reuse tracked-only lanes as if they were unallocated
+    // requirement; that made the headline numbers fail to reconcile.
+    const canonicalPopulations = canonicalSummary ? reconcilePopulations(canonicalSummary) : null
     // The canonical accountability projection is the authority. The teamLive sum
     // is only a fallback for a failed read, and is labelled as such by the UI.
     const teamTarget = canonicalSummary
@@ -451,10 +456,13 @@ export async function loadAdminCommandCenter(): Promise<{
       yesterday,
       teamTarget,
       teamCompleted,
-      orgRequirement: canonicalSummary?.requirement ?? teamTarget,
+      // Canonical reconciliation: Required = Allocated + Unallocated, where
+      // "allocated" is the seated personal expectation (never tracked-only
+      // lanes). Tracked work is reported separately so the two never blur.
+      orgRequirement: canonicalPopulations?.requirement ?? teamTarget,
       orgTracked: canonicalSummary?.tracked ?? teamTarget,
-      orgAssigned: canonicalSummary?.assigned ?? 0,
-      orgUnallocated: canonicalSummary?.unallocated ?? 0,
+      orgAssigned: canonicalPopulations?.requirementAssigned ?? 0,
+      orgUnallocated: canonicalPopulations?.requirementUnallocated ?? 0,
       inboxCounts: inboxCounts ?? undefined,
     })
 

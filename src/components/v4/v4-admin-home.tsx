@@ -273,10 +273,19 @@ export function V4AdminHome({
                   ? `${data.teamCompleted} of ${data.teamTarget} required actions completed · ${Math.max(0, data.teamTarget - data.teamCompleted)} remaining`
                   : 'Assign daily targets to track today’s progress.'}
               </p>
-              {data.orgAssigned > 0 && (
-                <p className="mt-1 text-[12px] text-stone tabular-nums">
-                  {data.orgAssigned} allocated · {data.orgUnallocated} shared unallocated · {data.orgTracked} tracked
-                </p>
+              {data.orgRequirement > 0 && (
+                <div className="mt-2 rounded-lg bg-bone-raised px-3 py-2 text-[12px] tabular-nums text-graphite ring-1 ring-line">
+                  <span className="font-medium text-ink">{data.orgRequirement}</span> required ={' '}
+                  <span className="font-medium text-ink">{data.orgAssigned}</span> allocated +{' '}
+                  <span className={cn('font-medium', data.orgUnallocated > 0 ? 'text-status-warning' : 'text-ink')}>
+                    {data.orgUnallocated}
+                  </span>{' '}
+                  unallocated
+                  <span className="ml-2 text-stone">
+                    · {data.teamCompleted} completed · tracked incl. non-targetable {data.orgTracked}
+                  </span>
+                  <Link href="/admin/targets" className="ml-2 font-medium text-ink hover:underline">Work Setup</Link>
+                </div>
               )}
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-graphite">
                 <span className="text-stone">New today:</span>
