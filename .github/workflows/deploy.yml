@@ -138,11 +138,14 @@ jobs:
               fi
             done
           fi
-          if [ -z "$DDL_URL" ]; then
-            echo "RELAY_DDL_DATABASE_URL was not provided; refusing schema changes." >&2
-            exit 1
+          if [ -n "$DDL_URL" ]; then
+            export RELAY_DDL_DATABASE_URL="$DDL_URL"
+          else
+            # No owner credential: the runner performs a READ-ONLY pending check.
+            # It exits 0 when the schema is current and fails closed (with the
+            # exact request) only when real DDL work remains.
+            echo "No owner DDL URL provided; verifying migration state read-only."
           fi
-          export RELAY_DDL_DATABASE_URL="$DDL_URL"
           node scripts/apply-migrations.mjs
 
           # Scheduled workers (discovery / verification / inventory /
