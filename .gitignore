@@ -39,6 +39,25 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.local.example
+.env.local
+.env.production
+.env.development
+.env.test
+
+# e2e
+e2e/
+
+# playwright
+playwright-report/
+
+e2e-results.json
+e2e/test-results/
+e2e/.auth/  
+e2e/screenshots/
+e2e/artifacts/
+e2e/audit-reports/
+e2e/screenshots/
+e2e/playwright-report/
 
 # vercel
 .vercel
