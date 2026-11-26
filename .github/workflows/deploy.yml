@@ -174,5 +174,13 @@ jobs:
           done
 
           echo "Relay health check failed"
+          echo "--- pm2 status ---"
+          pm2 list || true
+          echo "--- pm2 logs ---"
+          pm2 logs relay --lines 80 --nostream || true
+          echo "--- curl probe ---"
+          curl -v http://127.0.0.1:3000/login 2>&1 | tail -20 || true
+          echo "--- port probe ---"
+          (ss -ltnp 2>/dev/null | grep ':3000' || true)
           exit 1
           REMOTE
