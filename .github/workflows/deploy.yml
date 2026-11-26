@@ -96,11 +96,11 @@ jobs:
           # roles are DML-only; without this the migration step fails closed.
           RELAY_DDL_DATABASE_URL: ${{ secrets.RELAY_DDL_DATABASE_URL }}
         run: |
-          ssh deploy@"$VPS_HOST" bash -s -- "$GITHUB_SHA" "$RELAY_DDL_DATABASE_URL" <<'REMOTE'
+          ssh deploy@"$VPS_HOST" bash -s -- "$GITHUB_SHA" "${RELAY_DDL_DATABASE_URL:-}" <<'REMOTE'
           set -euo pipefail
 
           SHA="$1"
-          DDL_URL="$2"
+          DDL_URL="${2:-}"
           BASE=/home/deploy/apps
           RELEASE="$BASE/relay-releases/$SHA"
           CURRENT="$BASE/relay-current"
@@ -119,6 +119,9 @@ jobs:
           set -a
           . .env.production
           set +a
+          # Prefer the CI-provided owner connection; fall back to one stored in
+          # the VPS environment file so no credential is required in GitHub.
+          DDL_URL="${DDL_URL:-${RELAY_DDL_DATABASE_URL:-}}"
           if [ -z "$DDL_URL" ]; then
             echo "RELAY_DDL_DATABASE_URL was not provided; refusing schema changes." >&2
             exit 1
