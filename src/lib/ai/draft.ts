@@ -741,7 +741,7 @@ function finishDraft(
   attempts: number,
   callLog: DraftCallLog[],
 ): DraftResult {
-  const sanitized = sanitizeDraft(result.output.draft, input.facts)
+  const sanitized = sanitizeDraft(normalizeClientGreeting(result.output.draft, input), input.facts)
   const passed = result.passed && sanitized.strippedNumbers.length === 0 && !sanitized.requestedCall
 
   return {
@@ -900,7 +900,7 @@ function demoDraft(input: DraftInput, userPrompt: string): DraftResult {
   void priceFact
   void userPrompt
 
-  const sanitized = sanitizeDraft(draft, input.facts)
+  const sanitized = sanitizeDraft(normalizeClientGreeting(draft, input), input.facts)
 
   return {
     leadId: input.leadId,
@@ -967,6 +967,35 @@ function extractCompanyFromUserPrompt(prompt: string): string | null {
 function extractEvidenceFromUserPrompt(prompt: string): string | null {
   const m = prompt.match(/Evidence: (.+)/)
   return m?.[1]?.trim() ?? null
+}
+
+/**
+ * BUG-47: the greeting must include the client's first name on EVERY draft
+ * (unless the sender configures a different greeting). Models vary openers, so
+ * normalization happens here once, after generation, for both model and demo
+ * paths. Unknown names fall back to "there" rather than an empty greeting.
+ */
+export function normalizeClientGreeting(draft: string, input: DraftInput): string {
+  const trimmed = draft.trim()
+  if (!trimmed) return draft
+  const name =
+    firstName(input.extracted.name) ||
+    firstName(input.lead?.contactName) ||
+    'there'
+  const greeting = input.styleCard?.greeting || 'Hey'
+  const opening = trimmed.match(/^(hey|hi|hello|dear)\b[\s,–—-]*/i)
+  if (opening) {
+    let rest = trimmed.slice(opening[0].length).replace(/^[\s,–—-]+/, '')
+    // Strip the model's own name token ("Hi Aneeb — ...", "Hello Aneeb, ...").
+    const rawName = firstName(input.extracted.name) || firstName(input.lead?.contactName)
+    if (rawName) {
+      rest = rest.replace(new RegExp(`^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b[\\s,–—-]*`, 'i'), '')
+    }
+    const body = rest ? rest.charAt(0).toLowerCase() + rest.slice(1) : ''
+    return `${greeting} ${name}${body ? ` — ${body}` : ''}`
+  }
+  const body = trimmed.charAt(0).toLowerCase() + trimmed.slice(1)
+  return `${greeting} ${name} — ${body}`
 }
 
 function firstName(name: string | null | undefined): string {

@@ -1819,6 +1819,10 @@ export function buildMockStore(ctx: StoreContext): ScoutStore {
         if (updates.status) job.status = updates.status
       }
     },
+    async creditUpworkJobSaved(_jobId: string, _repId: string): Promise<void> {
+      // Demo store: extraction credit is a no-op; the UI still shows the save.
+    },
+
     async submitUpworkApplication(input) {
       const existing = upworkApplications.find((a) => a.jobId === input.jobId)
       if (existing) return { application: existing, created: false }

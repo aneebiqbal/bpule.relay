@@ -81,12 +81,25 @@ export async function POST(request: Request) {
 
     emit({ type: 'status', message: 'Extracting prospect intelligence' })
 
+    // BUG-43: provider chains retry per host, but a whole-chain/dependency
+    // hiccup still surfaced as a hard error. One transparent outer retry with
+    // a status message makes transient failures self-healing.
+    const produceWithRetry = async <T>(fn: () => Promise<T>): Promise<T> => {
+      try {
+        return await fn()
+      } catch (error) {
+        emit({ type: 'status', message: 'Transient extraction failure — retrying once…' })
+        await new Promise((resolve) => setTimeout(resolve, 600))
+        return await fn()
+      }
+    }
+
     try {
       let canonicalResult: OrchestratorResult
 
       if (V3_CANONICAL) {
         // V3 is canonical: V3 bridge runs its own extraction + decision pipeline
-        const v3Result = await produceV3Intelligence(rawText, {
+        const v3Result = await produceWithRetry(() => produceV3Intelligence(rawText, {
           onStatus: (msg) => emit({ type: 'status', message: msg }),
           reuseIfUnchanged: store
             ? async (reuseKey) => {
@@ -96,7 +109,7 @@ export async function POST(request: Request) {
                 return v3Packet ?? null
               }
             : undefined,
-        })
+        }))
         canonicalResult = {
           intelligence: v3Result.intelligence,
           gatePassed: true,
@@ -107,7 +120,7 @@ export async function POST(request: Request) {
         }
       } else {
         // Legacy V2 path
-        canonicalResult = await produceCanonicalIntelligence(rawText, {
+        canonicalResult = await produceWithRetry(() => produceCanonicalIntelligence(rawText, {
           onStatus: (msg) => emit({ type: 'status', message: msg }),
           forceReanalyze: body.forceReanalyze === true,
           reuseIfUnchanged: store
@@ -117,7 +130,7 @@ export async function POST(request: Request) {
                 return canonical ?? null
               }
             : undefined,
-        })
+        }))
       }
 
       const canonical = canonicalResult.intelligence

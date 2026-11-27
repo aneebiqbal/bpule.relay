@@ -7,7 +7,7 @@ import {
   Send, Reply, MessageSquare, X, Copy, Check, Trophy, Clock,
   Building2, ExternalLink, AlertTriangle, Sparkles,
   XCircle, Target, CalendarDays, Flame,
-  ChevronDown, ChevronUp, Mail, Archive,
+  ChevronDown, ChevronUp, Mail, Archive, ArrowLeft,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -315,6 +315,14 @@ export function LeadWorkspace({ lead: initialLead, dailyLimit, todaySends, now =
 
   return (
     <div className="space-y-6">
+      {mode === 'followup' && (
+        <Link
+          href="/chats?view=followups"
+          className="inline-flex items-center gap-1.5 text-[12px] font-medium text-graphite transition-colors hover:text-ink"
+        >
+          <ArrowLeft className="size-3.5" aria-hidden /> Back to follow-ups
+        </Link>
+      )}
       {/* Contact Header */}
       <div className="rounded-2xl border border-line bg-bone-raised/20 p-5">
         <div className="flex items-start justify-between gap-4">

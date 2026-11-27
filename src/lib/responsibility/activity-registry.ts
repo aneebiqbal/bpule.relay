@@ -13,6 +13,7 @@
 
 export type ActivityKey =
   | 'prospect_extracted'
+  | 'job_extracted'
   | 'connection_sent'
   | 'dm_sent'
   | 'followup_sent'
@@ -71,6 +72,19 @@ export const ACTIVITY_REGISTRY: Record<ActivityKey, ActivityDefinition> = {
     completionAuthority: 'action_events.action_type=LEAD_EXTRACTED',
     destination: '/prospect',
     sourceEventTypes: ['LEAD_EXTRACTED'],
+  },
+  // BUG-44: saving an Upwork extraction is real work and counts immediately;
+  // applying later is a SECOND action, never a retroactive merge of both.
+  job_extracted: {
+    key: 'job_extracted',
+    channel: 'upwork',
+    label: 'Jobs extracted',
+    shortLabel: 'Saved',
+    targetable: true,
+    defaultWeight: 1,
+    completionAuthority: 'action_events.action_type=UPWORK_JOB_EXTRACTED|UPWORK_JOB_SAVED',
+    destination: '/upwork/new',
+    sourceEventTypes: ['UPWORK_JOB_EXTRACTED', 'UPWORK_JOB_SAVED'],
   },
   connection_sent: {
     key: 'connection_sent',
@@ -235,8 +249,6 @@ export const INTERNAL_EVENT_TYPES: readonly string[] = [
   'RECOMMENDATION_SHOWN',
   'RECOMMENDATION_ACTED',
   'PROFILE_RECOMMENDED',
-  'UPWORK_JOB_EXTRACTED',
-  'UPWORK_JOB_SAVED',
   'UPWORK_DELETED',
   'LEAD_REFERRED',
   'OPPORTUNITY_CREATED',

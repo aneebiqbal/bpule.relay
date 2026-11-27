@@ -3358,6 +3358,7 @@ export class SupabaseStore implements ScoutStore {
         idempotencyKey: `upwork_extracted:${job.id}`,
       })
     } catch { }
+    await this.creditUpworkExtraction(job.id, this.rep.id)
     return job
   }
 
@@ -3545,6 +3546,44 @@ export class SupabaseStore implements ScoutStore {
     return { application, created: !existing }
   }
 
+  /**
+   * BUG-44: saving/extracting an Upwork listing counts immediately as its own
+   * action. Applying later remains a SECOND, independently counted action.
+   * Idempotent on the job id so the create path and the SAVED transition cannot
+   * double-count.
+   */
+  private async creditUpworkExtraction(jobId: string, repId: string): Promise<void> {
+    try {
+      const businessDate = await this.businessDate()
+      const executable = await listExecutableIdentitiesForRep(this.client, this.orgId, repId, businessDate)
+      const executableIds = new Set(executable.map((row) => row.id))
+      const { data: plans } = await this.client
+        .from('daily_target_plans')
+        .select('revenue_identity_id')
+        .eq('activity_type', 'job_extracted')
+        .eq('active', true)
+      const identityIds = (plans ?? [])
+        .map((row) => row.revenue_identity_id as string)
+        .filter((id) => executableIds.has(id))
+      for (const identityId of identityIds) {
+        try {
+          await this.client.rpc('record_activity_event', {
+            p_rep_id: repId,
+            p_identity_id: identityId,
+            p_activity_type: 'job_extracted',
+            p_org_id: this.orgId,
+            p_source_event_id: `activity:upwork_extract:${jobId}:${identityId}`,
+            p_date: businessDate,
+          })
+        } catch {
+          // Non-fatal per-target
+        }
+      }
+    } catch {
+      // Accountability increment must never block saving the job
+    }
+  }
+
   /** Daily target + canonical progress. One application counts once. */
   private async creditUpworkApplication(jobId: string, repId: string): Promise<void> {
     try {
@@ -3597,6 +3636,11 @@ export class SupabaseStore implements ScoutStore {
     } catch {
       // Accountability increment must never block the apply
     }
+  }
+
+  /** Public idempotency-safe hook for the lifecycle route's SAVED transition. */
+  async creditUpworkJobSaved(jobId: string, repId: string): Promise<void> {
+    await this.creditUpworkExtraction(jobId, repId)
   }
 
   async getUpworkApplication(jobId: string): Promise<UpworkApplication | null> {

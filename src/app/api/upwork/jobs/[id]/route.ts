@@ -120,6 +120,10 @@ export async function PATCH(
   }
 
   await store.updateUpworkJob(id, { status: next })
+  if (next === 'SAVED') {
+    // BUG-44: the save itself is an action, counted immediately and once.
+    await store.creditUpworkJobSaved(id, authCtx.repId)
+  }
 
   if (next) {
     const eventFor: Partial<Record<UpworkJobStatus,

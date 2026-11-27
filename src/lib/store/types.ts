@@ -638,6 +638,8 @@ export interface ScoutStore {
     boostConnects?: number
   }): Promise<{ application: UpworkApplication; created: boolean }>
   getUpworkApplication(jobId: string): Promise<UpworkApplication | null>
+  /** BUG-44: idempotent immediate credit for saving an Upwork extraction. */
+  creditUpworkJobSaved(jobId: string, repId: string): Promise<void>
   listUpworkApplications(filter?: {
     repIds?: string[]
     identityIds?: string[]

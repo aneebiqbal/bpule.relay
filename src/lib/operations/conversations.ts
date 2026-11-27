@@ -9,6 +9,7 @@ import type { DbClient } from '@/lib/db/types'
 import { chunkedIn } from '@/lib/supabase/chunked-in'
 import { leadLabel } from '@/lib/operations/labels'
 import { MEETING_OR_LATER_STAGES } from '@/lib/sales/stage-vocabulary'
+import { evaluateFollowUpPolicy } from '@/lib/conversation/follow-up-policy'
 import { ageLabel } from '@/components/operations/ops-primitives'
 
 export type ConversationState = 'waiting_on_rep' | 'waiting_on_prospect' | 'follow_up_due' | 'meeting' | 'closed'
@@ -49,6 +50,8 @@ export interface ConversationStateInput {
   lastSentAt: string | null
   lastReplyAt: string | null
   nextFollowupAt: string | null
+  /** Live count from conversation_states; the snapshot alone can go stale. */
+  followupCount?: number | null
   wonAt: string | null
   lostAt: string | null
 }
@@ -127,9 +130,25 @@ export function deriveConversationRow(
     state?.stage === 'lost' ||
     Boolean(state?.wonAt || state?.lostAt)
   const inboundIsLatest = Boolean(lastIn && (!lastOut || Date.parse(lastIn) > Date.parse(lastOut)))
-  const followUpDue = Boolean(
+  let followUpDue = Boolean(
     !inboundIsLatest && state?.nextFollowupAt && Date.parse(state.nextFollowupAt) <= now,
   )
+  // BUG-46: the stored next_followup_at is a snapshot and can outlive its
+  // meaning (e.g. all follow-ups already used, later status changes). Re-decide
+  // from the canonical policy using live count + timestamps; a stale "past"
+  // snapshot must never resurrect a follow-up with no send behind it.
+  if (!inboundIsLatest && state) {
+    const policy = evaluateFollowUpPolicy({
+      leadStatus: lead.status,
+      lastOutboundAt: lastOut,
+      lastInboundAt: lastIn,
+      followupCount: state.followupCount ?? 0,
+      channel: 'linkedin',
+    })
+    if (policy.eligible) followUpDue = true
+    else if (policy.nextFollowupAt) followUpDue = Date.parse(policy.nextFollowupAt) <= now
+    else followUpDue = false
+  }
 
   let conv: ConversationState
   if (closed) conv = 'closed'

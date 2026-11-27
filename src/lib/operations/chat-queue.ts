@@ -210,13 +210,14 @@ interface StateRowRaw {
   last_sent_at: string | null
   last_reply_at: string | null
   next_followup_at: string | null
+  followup_count: number | null
   won_at: string | null
   lost_at: string | null
   intent?: string | null
 }
 
 async function loadStates(client: DbClient, orgId: string, leadIds: string[]): Promise<StateRowRaw[]> {
-  const base = 'lead_id, stage, last_sent_at, last_reply_at, next_followup_at, won_at, lost_at'
+  const base = 'lead_id, stage, last_sent_at, last_reply_at, next_followup_at, followup_count, won_at, lost_at'
   try {
     return await chunkedIn<StateRowRaw>(leadIds, (chunk) =>
       client
@@ -416,7 +417,7 @@ export async function loadChatQueue(
         status: lead.status,
       },
       s
-        ? { stage: s.stage, lastSentAt: s.last_sent_at, lastReplyAt: s.last_reply_at, nextFollowupAt: s.next_followup_at, wonAt: s.won_at, lostAt: s.lost_at }
+        ? { stage: s.stage, lastSentAt: s.last_sent_at, lastReplyAt: s.last_reply_at, nextFollowupAt: s.next_followup_at, followupCount: s.followup_count as number | null, wonAt: s.won_at, lostAt: s.lost_at }
         : null,
       lead.owner_rep_id ? repName.get(lead.owner_rep_id) ?? null : null,
       now,
